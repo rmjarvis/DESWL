@@ -64,6 +64,19 @@ scale = image_cat['scale']
 nimages = len(image_cat)  # 138
 print 'nimages = ',nimages
 
+# Make the new srclist:
+# Take the existing one and just update the image names.
+with open(coadd_srclist,'r') as src:
+    src_rows = [ line.split() for line in src ]
+src_cols = zip(*src_rows)
+out_path = [ os.path.join(out_dir,os.path.basename(file)) for file in image_path ]
+src_cols[0] = list(out_path[1:])
+src_rows = zip(*src_cols)
+out_src_file = os.path.join(out_dir,os.path.basename(coadd_srclist))
+with open(out_src_file,'w') as out_src:
+    for row in src_rows:
+        out_src.write('%s %s %s %s\n'%(row))
+
 # Read the image files and make blank ones.
 # In principal, we could read the files and get the bounds from that, but 
 # that's slow.  So we just use the known bounds and use that for everything.
@@ -413,7 +426,7 @@ for k in range(1,nimages):
     new_hdu = pyfits.HDUList()
     im.write(hdu_list=new_hdu, compression='rice')
     hdu_list[se_hdu] = new_hdu[1]
-    out_file = os.path.join(out_dir,os.path.basename(file))
+    out_file = out_path[k]
     im.write(out_file)
     print 'Wrote file ',out_file
 

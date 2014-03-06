@@ -317,8 +317,13 @@ new_hdu = pyfits.HDUList()
 coadd_im.write(hdu_list=new_hdu, compression='rice')
 hdu_list[coadd_hdu] = new_hdu[1]
 out_coadd_file = os.path.join(out_dir,os.path.basename(coadd_file))
-coadd_im.write(out_coadd_file)
+print 'out_coadd_file = ',out_coadd_file
+# This next line require astropy v0.3.1.  There was a bug in earlier versions that didn't 
+# output the correct WCS header items when doing rice compression.
+hdu_list.writeto(out_coadd_file, clobber=True)
 print 'Wrote output coadd_file ',out_coadd_file
+
+# We will use the bounds of the coadd image below...
 # GalSim doesn't currently convert easily between BoundsI and BoundsD...
 coadd_bounds = galsim.BoundsD(coadd_im.bounds.xmin, coadd_im.bounds.xmax,
                               coadd_im.bounds.ymin, coadd_im.bounds.ymax)
@@ -427,7 +432,7 @@ for k in range(1,nimages):
     im.write(hdu_list=new_hdu, compression='rice')
     hdu_list[se_hdu] = new_hdu[1]
     out_file = out_path[k]
-    im.write(out_file)
+    hdu_list.writeto(out_file, clobber=True)
     print 'Wrote file ',out_file
 
 

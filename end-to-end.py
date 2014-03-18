@@ -110,7 +110,7 @@ print 'nobj = ',nobj
 assert nobj == len(meds_cat)
 min_flux = 1.e100
 
-flags = coadd_cat['FLAGS']
+input_flags = coadd_cat['FLAGS']
 mag = coadd_cat['MAG_AUTO']
 flux = coadd_cat['FLUX_AUTO']
 ixx = coadd_cat['X2WIN_IMAGE']
@@ -121,7 +121,7 @@ hlr = coadd_cat['FLUX_RADIUS'] * 1.18 # This is approximate, since FLUX_RADIUS i
 e1 = (ixx-iyy)/(ixx+iyy)
 e2 = 2.*ixy/(ixx+iyy)
 
-print 'nobj with flags != 0 = ',(flags != 0).sum()
+print 'nobj with flags != 0 = ',(input_flags != 0).sum()
 print 'nobj with mag > 24 = ',(mag > 24).sum()
 print 'nobj with flux <= 0 = ',(flux <= 0).sum()
 print 'nobj with ixx <= 0 = ',(ixx <= 0).sum()
@@ -130,19 +130,40 @@ print 'nobj with hlr <= 0 = ',(hlr <= 0).sum()
 print 'nobj with hlr > 8 = ',(hlr > 8).sum()
 print 'nobj with e > 0.8 = ',(e1*e1 + e2*e2 > 0.8**2).sum()
 
-mask = ( (flags != 0) |                         # Ignore anything with an input flag
-         (mag > 24) | (flux <= 0) |             # Ignore faint things, or those with negative flux
-         (ixx <= 0) | (iyy <= 0) | (hlr <= 0) | # Ignore negative sizes
-         (hlr > 8) |                            # Ignore very large objects
-         (e1*e1 + e2*e2 > 0.8**2) )             # Ignore very high ellipticities
+# Set flags indicating why an object was masked:
+flags = numpy.zeros(len(coadd_cat), dtype=int)
+flags[ input_flags != 0 ] |= 1                      # 1 = input flag
+flags[ (mag > 24) | (flux <= 0) ] |= 2              # 2 = too faint
+flags[ (ixx <= 0) | (iyy <= 0) | (hlr <= 0)  ] |= 4 # 4 = bad size
+flags[ hlr > 8 ] |= 8                               # 8 = too large
+flags[ e1*e2 + e2*e2 > 0.8**2 ] |= 16               # 16 = too elliptical
 
-print 'nobj passing all masks = ',(mask == 0).sum()
+print 'nobj passing all masks = ',(flags == 0).sum()
 
 nf_pm1 = 0
 nf_tot = 0
 
+# Use spread model to decide which things we will call stars.
+is_star = coadd_cat['SPREAD_MODEL'] < 0.003
+
+# Set up a place to store the truth values.  Initialize with -999
+true_g1 = numpy.empty(len(coadd_cat))
+true_g2 = numpy.empty(len(coadd_cat))
+true_hlr = numpy.empty(len(coadd_cat))
+true_g1[:] = -999.
+true_g2[:] = -999.
+true_hlr[:] = -999.
+nexp = numpy.zeros(len(coadd_cat), dtype=int)
+psf_fwhm = numpy.zeros(len(coadd_cat))
+psf_g1 = numpy.zeros(len(coadd_cat))
+psf_g2 = numpy.zeros(len(coadd_cat))
+wcs_scale = numpy.zeros(len(coadd_cat))
+wcs_g1 = numpy.zeros(len(coadd_cat))
+wcs_g2 = numpy.zeros(len(coadd_cat))
+wcs_theta = numpy.zeros(len(coadd_cat))
+
 for k in range(len(coadd_cat)):
-    if mask[k]: continue
+    if flags[k] != 0: continue
     coadd_info = coadd_cat[k]
     meds_info = meds_cat[k]
 
@@ -160,8 +181,7 @@ for k in range(len(coadd_cat)):
 
     # Determine if this is a star
     spread = coadd_info['SPREAD_MODEL']
-    is_star = spread < 0.003
-    print 'spread = ',spread,' is_star? ',is_star
+    print 'spread = ',spread,' is_star? ',is_star[k]
 
     print 'mag = ',coadd_info['MAG_AUTO']
     assert coadd_info['MAG_AUTO'] <= 24
@@ -172,7 +192,7 @@ for k in range(len(coadd_cat)):
     if flux < min_flux: 
         min_flux = flux
 
-    if not is_star:
+    if not is_star[k]:
         # Get the parameters for building the galaxy
         ixx = coadd_info['X2WIN_IMAGE']
         ixy = coadd_info['XYWIN_IMAGE']
@@ -197,7 +217,11 @@ for k in range(len(coadd_cat)):
         e2 = 2.*ixy/(ixx+iyy)
         print 'e1,e2 = ',e1,e2
         assert e1*e1 + e2*e2 <= 0.8
-        gal.applyShear(e1=e1, e2=e2)
+        shear = galsim.Shear(e1=e1, e2=e2)
+        gal.applyShear(shear)
+        true_g1[k] = shear.g1
+        true_g2[k] = shear.g2
+        true_hlr[k] = hlr
 
     # Figure out in which images this object was observed
     ncutout = meds_info['ncutout']
@@ -234,7 +258,7 @@ for k in range(len(coadd_cat)):
     # Draw the object on each image
     for id in (id for id in file_id if id >= 0):
         assert id < nimages
-        print 'id = ',id,'  ',image_path[id]
+        #print 'id = ',id,'  ',image_path[id]
         # The image onto which we will draw the object
         im = images[id]
 
@@ -243,7 +267,7 @@ for k in range(len(coadd_cat)):
         ix = int(math.floor(image_pos.x + 0.5))
         iy = int(math.floor(image_pos.y + 0.5))
         offset = image_pos - galsim.PositionD(ix,iy)
-        print 'image_pos = ',image_pos
+        #print 'image_pos = ',image_pos
         #print 'ix,iy,offset = ',ix,iy,offset
 
         # Build the PSF
@@ -273,13 +297,14 @@ for k in range(len(coadd_cat)):
         #print 'fwhm = ',fwhm
         #print 'e1,e2 = ',e1,e2
         psf = galsim.Gaussian(fwhm = fwhm)
-        psf.applyShear(e1=e1,e2=e2)
+        psf_shear = galsim.Shear(e1=e1, e2=e2)
+        psf.applyShear(psf_shear)
 
         # Build the pixel
         pix = im.wcs.toWorld(galsim.Pixel(1.0), image_pos=image_pos)
 
         # Build the final object
-        if is_star:
+        if is_star[k]:
             final = galsim.Convolve([psf, pix])
         else:
             final = galsim.Convolve([psf, pix, gal])
@@ -298,6 +323,31 @@ for k in range(len(coadd_cat)):
         bounds = stamp.bounds & im.bounds
         if not bounds.isDefined(): continue
         im[bounds] += stamp[bounds]
+
+        # Only add to the averages if we actually added the image.  So do this after the 
+        # above if not bounds.isDefined() line.
+        # Also, only do it for the single-eposures.  Not the coadd.
+        if id > 0:
+            psf_fwhm[k] += fwhm
+            psf_g1[k] += psf_shear.g1
+            psf_g2[k] += psf_shear.g2
+            wcs_decomp = local_wcs.getDecomposition()  # scale, shear, theta, flip
+            #print 'wcs_decomp = ',wcs_decomp
+            wcs_scale[k] += wcs_decomp[0]
+            wcs_g1[k] += wcs_decomp[1].g1
+            wcs_g2[k] += wcs_decomp[1].g2
+            wcs_theta[k] += wcs_decomp[2].rad()
+            # flip is always true
+            assert wcs_decomp[3] == True
+            nexp[k] += 1
+    if nexp[k] > 0:
+        psf_fwhm[k] /= nexp[k]
+        psf_g1[k] /= nexp[k]
+        psf_g2[k] /= nexp[k]
+        wcs_scale[k] /= nexp[k]
+        wcs_g1[k] /= nexp[k]
+        wcs_g2[k] /= nexp[k]
+        wcs_theta[k] /= nexp[k]
     
 print 'fraction of f values between -1 and 1 = ',nf_pm1,'/',nf_tot,'=',float(nf_pm1)/nf_tot
 
@@ -315,6 +365,9 @@ print 'Original coadd file = ',coadd_file
 hdu_list = pyfits.open(coadd_file)
 new_hdu = pyfits.HDUList()
 coadd_im.write(hdu_list=new_hdu, compression='rice')
+# Need to copy over the header item SEXMGZPT
+new_hdu[1].header['SEXMGZPT'] = hdu_list[coadd_hdu].header['SEXMGZPT']
+# Now overwrite the original hdu with the new one.
 hdu_list[coadd_hdu] = new_hdu[1]
 out_coadd_file = os.path.join(out_dir,os.path.basename(coadd_file))
 print 'out_coadd_file = ',out_coadd_file
@@ -331,6 +384,31 @@ coadd_bounds = galsim.BoundsD(coadd_im.bounds.xmin, coadd_im.bounds.xmax,
 # like that would be more problematic than missing some objects near the border.
 coadd_bounds = coadd_bounds.addBorder(20.)
 print 'using coadd_bounds = ',coadd_bounds
+
+# Write the truth file
+out_truth_file = os.path.join(out_dir,'end2end-truth.fits')
+columns = [ pyfits.Column(name='id', format='J', array=coadd_cat['NUMBER']),
+            pyfits.Column(name='flags', format='J', array=flags),
+            pyfits.Column(name='is_star', format='I', array=is_star),
+            pyfits.Column(name='true_g1', format='D', array=true_g1),
+            pyfits.Column(name='true_g2', format='D', array=true_g2),
+            pyfits.Column(name='true_hlr', format='D', array=true_hlr),
+            pyfits.Column(name='ra', format='D', array=coadd_cat['ALPHAWIN_J2000']),
+            pyfits.Column(name='dec', format='D', array=coadd_cat['DELTAWIN_J2000']),
+            pyfits.Column(name='mag', format='D', array=coadd_cat['MAG_AUTO']),
+            pyfits.Column(name='flux', format='D', array=coadd_cat['FLUX_AUTO']),
+            pyfits.Column(name='nexp', format='I', array=nexp),
+            pyfits.Column(name='mean_psf_g1', format='D', array=psf_g1),
+            pyfits.Column(name='mean_psf_g2', format='D', array=psf_g2),
+            pyfits.Column(name='mean_psf_fwhm', format='D', array=psf_fwhm),
+            pyfits.Column(name='mean_wcs_g1', format='D', array=wcs_g1),
+            pyfits.Column(name='mean_wcs_g2', format='D', array=wcs_g2),
+            pyfits.Column(name='mean_wcs_scale', format='D', array=wcs_scale),
+            pyfits.Column(name='mean_wcs_theta', format='D', array=wcs_theta),
+            ]
+coldefs = pyfits.ColDefs(columns)
+table = pyfits.new_table(coldefs)
+table.writeto(out_truth_file, clobber=True)
 
 # Do the final processing on each single epoch image and write them to disk.
 for k in range(1,nimages):

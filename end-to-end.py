@@ -3,6 +3,7 @@ from galsim import pyfits
 import os
 import math
 import numpy
+import shutil
 
 # Setup various file and directory names:
 work_dir = '/direct/astro+astronfs03/workarea/mjarvis'
@@ -412,6 +413,9 @@ columns = [ pyfits.Column(name='id', format='J', array=coadd_cat['NUMBER']),
 coldefs = pyfits.ColDefs(columns)
 table = pyfits.new_table(coldefs)
 table.writeto(out_truth_file, clobber=True)
+
+# Also, it turns out to be useful to have the coadd catalog in this directory as well:
+shutil.copy2(coaddcat_file, out_dir)
 
 # Do the final processing on each single epoch image and write them to disk.
 for image_num in range(1,nimages):

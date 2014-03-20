@@ -508,17 +508,24 @@ for image_num in range(1,nimages):
     im.addNoise(noise)
     #print 'Added noise'
 
-    # Write the image to disk
-    # We keep the original weight and badpix images, and just replace the actual image.
-    print 'des_root = ',des_root
-    print 'out_dir = ',out_dir
+    # Add in the sky level, which is estimated in the background map by sextractor
+    sky_im = galsim.fits.read(sky_path[image_num])
+    im += sky_im
+
+    # Start with the original file so we copy all the headers and such.
     hdu_list = pyfits.open(file)
+
+    # Copy in the correct image
     new_hdu = pyfits.HDUList()
     im.write(hdu_list=new_hdu, compression='rice')
     hdu_list[se_hdu] = new_hdu[1]
-    out_file = out_path[k]
-    hdu_list.writeto(out_file, clobber=True)
-    print 'Wrote file ',out_file
 
+    # We leave everything else the same.  Notably the badpix image.
+    # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.
+    #print 'des_root = ',des_root
+    #print 'out_dir = ',out_dir
+    out_file = out_path[image_num]
+    hdu_list.writeto(out_file, clobber=True)
+    print '   Wrote file ',out_file
 
 print 'Done writing single-epoch files'

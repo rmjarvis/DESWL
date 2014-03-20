@@ -8,9 +8,12 @@ import numpy
 work_dir = '/direct/astro+astronfs03/workarea/mjarvis'
 tile_name = 'DES0436-5748'
 out_dir = os.path.join(work_dir,tile_name)
+print 'tile = ',tile_name
+print 'out_dir = ',out_dir
 
 meds_dir = os.path.join('/astro/u/astrodat/data/DES/meds/011/20130820000021_DES0436-5748')
 meds_file = tile_name + '-r-meds-011.fits.fz'
+print 'meds_file = ',meds_file
 
 # Open the current meds file:
 meds = pyfits.open(os.path.join(meds_dir,meds_file))
@@ -162,10 +165,10 @@ wcs_g1 = numpy.zeros(len(coadd_cat))
 wcs_g2 = numpy.zeros(len(coadd_cat))
 wcs_theta = numpy.zeros(len(coadd_cat))
 
-for k in range(len(coadd_cat)):
-    if flags[k] != 0: continue
-    coadd_info = coadd_cat[k]
-    meds_info = meds_cat[k]
+for obj_num in range(len(coadd_cat)):
+    if flags[obj_num] != 0: continue
+    coadd_info = coadd_cat[obj_num]
+    meds_info = meds_cat[obj_num]
 
     print 'coadd id ',coadd_info['NUMBER']
     assert coadd_info['NUMBER'] == meds_info['number']
@@ -177,22 +180,22 @@ for k in range(len(coadd_cat)):
     ra = coadd_info['ALPHAWIN_J2000'] * galsim.degrees
     dec = coadd_info['DELTAWIN_J2000'] * galsim.degrees
     world_pos = galsim.CelestialCoord(ra,dec)
-    print 'world_pos = ',ra,dec,world_pos
+    #print 'world_pos = ',ra,dec,world_pos
 
     # Determine if this is a star
     spread = coadd_info['SPREAD_MODEL']
-    print 'spread = ',spread,' is_star? ',is_star[k]
+    #print 'spread = ',spread,' is_star? ',is_star[obj_num]
 
-    print 'mag = ',coadd_info['MAG_AUTO']
+    #print 'mag = ',coadd_info['MAG_AUTO']
     assert coadd_info['MAG_AUTO'] <= 24
 
     flux = coadd_info['FLUX_AUTO']
-    print 'flux = ',flux,type(flux)
+    #print 'flux = ',flux,type(flux)
     assert flux > 0
     if flux < min_flux: 
         min_flux = flux
 
-    if not is_star[k]:
+    if not is_star[obj_num]:
         # Get the parameters for building the galaxy
         ixx = coadd_info['X2WIN_IMAGE']
         ixy = coadd_info['XYWIN_IMAGE']
@@ -200,7 +203,7 @@ for k in range(len(coadd_cat)):
         hlr = coadd_info['FLUX_RADIUS'] * 1.18 
         # This is approximate, since FLUX_RADIUS is based on a Gaussian sigma, not half-light 
         # radius.  But close enough.
-        print 'hlr = ',hlr,type(hlr)
+        #print 'hlr = ',hlr,type(hlr)
         assert ixx > 0. and iyy > 0. and hlr > 0.
         assert hlr <= 8
 
@@ -215,13 +218,13 @@ for k in range(len(coadd_cat)):
         gal = galsim.Exponential(half_light_radius = float(hlr), flux = float(flux))
         e1 = (ixx-iyy)/(ixx+iyy)
         e2 = 2.*ixy/(ixx+iyy)
-        print 'e1,e2 = ',e1,e2
+        #print 'e1,e2 = ',e1,e2
         assert e1*e1 + e2*e2 <= 0.8
         shear = galsim.Shear(e1=e1, e2=e2)
         gal.applyShear(shear)
-        true_g1[k] = shear.g1
-        true_g2[k] = shear.g2
-        true_hlr[k] = hlr
+        true_g1[obj_num] = shear.g1
+        true_g2[obj_num] = shear.g2
+        true_hlr[obj_num] = hlr
 
     # Figure out in which images this object was observed
     ncutout = meds_info['ncutout']
@@ -304,7 +307,7 @@ for k in range(len(coadd_cat)):
         pix = im.wcs.toWorld(galsim.Pixel(1.0), image_pos=image_pos)
 
         # Build the final object
-        if is_star[k]:
+        if is_star[obj_num]:
             final = galsim.Convolve([psf, pix])
         else:
             final = galsim.Convolve([psf, pix, gal])
@@ -328,26 +331,26 @@ for k in range(len(coadd_cat)):
         # above if not bounds.isDefined() line.
         # Also, only do it for the single-eposures.  Not the coadd.
         if id > 0:
-            psf_fwhm[k] += fwhm
-            psf_g1[k] += psf_shear.g1
-            psf_g2[k] += psf_shear.g2
+            psf_fwhm[obj_num] += fwhm
+            psf_g1[obj_num] += psf_shear.g1
+            psf_g2[obj_num] += psf_shear.g2
             wcs_decomp = local_wcs.getDecomposition()  # scale, shear, theta, flip
             #print 'wcs_decomp = ',wcs_decomp
-            wcs_scale[k] += wcs_decomp[0]
-            wcs_g1[k] += wcs_decomp[1].g1
-            wcs_g2[k] += wcs_decomp[1].g2
-            wcs_theta[k] += wcs_decomp[2].rad()
+            wcs_scale[obj_num] += wcs_decomp[0]
+            wcs_g1[obj_num] += wcs_decomp[1].g1
+            wcs_g2[obj_num] += wcs_decomp[1].g2
+            wcs_theta[obj_num] += wcs_decomp[2].rad()
             # flip is always true
             assert wcs_decomp[3] == True
-            nexp[k] += 1
-    if nexp[k] > 0:
-        psf_fwhm[k] /= nexp[k]
-        psf_g1[k] /= nexp[k]
-        psf_g2[k] /= nexp[k]
-        wcs_scale[k] /= nexp[k]
-        wcs_g1[k] /= nexp[k]
-        wcs_g2[k] /= nexp[k]
-        wcs_theta[k] /= nexp[k]
+            nexp[obj_num] += 1
+    if nexp[obj_num] > 0:
+        psf_fwhm[obj_num] /= nexp[obj_num]
+        psf_g1[obj_num] /= nexp[obj_num]
+        psf_g2[obj_num] /= nexp[obj_num]
+        wcs_scale[obj_num] /= nexp[obj_num]
+        wcs_g1[obj_num] /= nexp[obj_num]
+        wcs_g2[obj_num] /= nexp[obj_num]
+        wcs_theta[obj_num] /= nexp[obj_num]
     
 print 'fraction of f values between -1 and 1 = ',nf_pm1,'/',nf_tot,'=',float(nf_pm1)/nf_tot
 
@@ -411,16 +414,16 @@ table = pyfits.new_table(coldefs)
 table.writeto(out_truth_file, clobber=True)
 
 # Do the final processing on each single epoch image and write them to disk.
-for k in range(1,nimages):
-    im = images[k]
-    file = image_path[k]
+for image_num in range(1,nimages):
+    im = images[image_num]
+    file = image_path[image_num]
     print 'Finalize ',file
 
     # Get the catalog name.
     cat_file = file.replace('.fits.fz','_cat.fits')
     cat = pyfits.open(cat_file)[2].data  # 2 not 1!  hdu 1 has a bunch of meta data.
-    print 'catalog = ',cat_file
-    print 'nobj in cat = ',len(cat)
+    #print 'catalog = ',cat_file
+    print '   nobj in cat = ',len(cat)
 
     # Draw the objects in each image that weren't part of the coadd.
     # PSFEx will need these objects to get a good model of the PSF.
@@ -495,11 +498,11 @@ for k in range(1,nimages):
 
         nadded += 1
 
-    print 'Added ',nadded,' more objects from the single epoch catalog.'
+    print '   Added ',nadded,' more objects from the single epoch catalog.'
 
     # Add the noise
     im.addNoise(noise)
-    print 'Added noise'
+    #print 'Added noise'
 
     # Write the image to disk
     # We keep the original weight and badpix images, and just replace the actual image.
@@ -514,3 +517,4 @@ for k in range(1,nimages):
     print 'Wrote file ',out_file
 
 
+print 'Done writing single-epoch files'

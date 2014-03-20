@@ -357,8 +357,9 @@ print 'fraction of f values between -1 and 1 = ',nf_pm1,'/',nf_tot,'=',float(nf_
 
 # We will add a little bit of noise to the images.
 print 'min_flux = ',min_flux
-print 'add noise with sigma = ',min_flux/1000.
-noise = galsim.GaussianNoise(ud, sigma = min_flux/1000.)
+noise_sigma = min_flux/1000.
+print 'add noise with sigma = ',noise_sigma
+noise = galsim.GaussianNoise(ud, sigma = noise_sigma)
 
 # For the coadd image, we just need to add noise and write the file to disk.
 coadd_im = images[0]
@@ -519,6 +520,16 @@ for image_num in range(1,nimages):
     new_hdu = pyfits.HDUList()
     im.write(hdu_list=new_hdu, compression='rice')
     hdu_list[se_hdu] = new_hdu[1]
+
+    # Rescale the weight image to have the correct mean noise level.  We still let the
+    # weight map be variable, but the nosie we add is constant.  (We can change this is 
+    # we want using galsim.VariableGaussianNoise.)  However, it was requested that the 
+    # mean level be accurate.  So we rescale the map to have the right mean.
+    wt_im = galsim.fits.read(hdu_list=hdu_list[se_wt_hdu], compression='rice')
+    wt_im *= (1./noise_sigma**2) / wt_im.array.mean()
+    new_hdu = pyfits.HDUList()
+    wt_im.write(hdu_list=new_hdu, compression='rice')
+    hdu_list[se_wt_hdu] = new_hdu[1]
 
     # We leave everything else the same.  Notably the badpix image.
     # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.

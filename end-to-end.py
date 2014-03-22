@@ -4,6 +4,7 @@ import os
 import math
 import numpy
 import shutil
+import subprocess
 
 # Setup various file and directory names:
 work_dir = '/direct/astro+astronfs03/workarea/mjarvis'
@@ -367,19 +368,38 @@ coadd_im.addNoise(noise)
 print 'Added noise to coadd image'
 coadd_file = image_path[0]
 print 'Original coadd file = ',coadd_file
+
+# We will build a new hdulist for the new file and copy what we need from the old one.
+# Also, we write this in uncompressed form and then fpack it to make sure that the 
+# final result is funpack-able.
 hdu_list = pyfits.open(coadd_file)
-new_hdu = pyfits.HDUList()
-coadd_im.write(hdu_list=new_hdu, compression='rice')
-# Need to copy over the header item SEXMGZPT
-new_hdu[1].header['SEXMGZPT'] = hdu_list[coadd_hdu].header['SEXMGZPT']
-# Now overwrite the original hdu with the new one.
-hdu_list[coadd_hdu] = new_hdu[1]
+new_hdu_list = pyfits.HDUList()
+# Copy the primary hdu
+#new_hdu_list.append(hdu_list[0])
+
+assert coadd_hdu == 1
+coadd_im.write(hdu_list=new_hdu_list)
+# copy over the header item SEXMGZPT
+new_hdu_list[0].header['SEXMGZPT'] = hdu_list[coadd_hdu].header['SEXMGZPT']
+
+# Next is the weight image
+assert coadd_wt_hdu == 2
+coadd_wt_im = galsim.fits.read(hdu_list=hdu_list[coadd_wt_hdu], compression='rice')
+coadd_wt_im *= (1./noise_sigma**2) / coadd_wt_im.array.mean()
+print 'coadd_wt_im.mean = ',coadd_wt_im.array.mean(),' should = ',1./noise_sigma**2
+coadd_wt_im.write(hdu_list=new_hdu_list)
+
 out_coadd_file = os.path.join(out_dir,os.path.basename(coadd_file))
 print 'out_coadd_file = ',out_coadd_file
-# This next line require astropy v0.3.1.  There was a bug in earlier versions that didn't 
-# output the correct WCS header items when doing rice compression.
-hdu_list.writeto(out_coadd_file, clobber=True)
+assert out_coadd_file.endswith('.fz')
+if os.path.isfile(out_coadd_file): os.remove(out_coadd_file)
+out_coadd_file = out_coadd_file[:-3]
+if os.path.isfile(out_coadd_file): os.remove(out_coadd_file)
+new_hdu_list.writeto(out_coadd_file, clobber=True)
 print 'Wrote output coadd_file ',out_coadd_file
+
+# Run fpack on the file
+subprocess.Popen(['fpack','-D','-Y',out_coadd_file], close_fds=True).communicate()
 
 # We will use the bounds of the coadd image below...
 # GalSim doesn't currently convert easily between BoundsI and BoundsD...
@@ -513,30 +533,77 @@ for image_num in range(1,nimages):
     sky_im = galsim.fits.read(sky_path[image_num])
     im += sky_im
 
-    # Start with the original file so we copy all the headers and such.
+    # We will build a new hdulist for the new file and copy what we need from the old one.
+    # Also, we write this in uncompressed form and then fpack it to make sure that the 
+    # final result is funpack-able.
     hdu_list = pyfits.open(file)
+    #print 'hdu_list = ',hdu_list
+    #for h in hdu_list:
+        #print 'hdu = ',h.data
+    new_hdu_list = pyfits.HDUList()
 
-    # Copy in the correct image
-    new_hdu = pyfits.HDUList()
-    im.write(hdu_list=new_hdu, compression='rice')
-    hdu_list[se_hdu] = new_hdu[1]
+    # First is the image hdu.  We use the new image that we built.
+    assert se_hdu==1
+    #print 'im = ',im
+    #print im.array
+    im.write(hdu_list=new_hdu_list)
+    #print 'after write im: ',new_hdu_list
+    #print new_hdu_list[0].header
+    #print new_hdu_list[0].data
+
+    # Leave the badpix image the same.
+    # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.
+    assert se_badpix_hdu==2
+    badpix_im = galsim.fits.read(hdu_list=hdu_list[se_badpix_hdu], compression='rice')
+    badpix_im = galsim.ImageS(badpix_im)
+    #print 'badpix_im = ',badpix_im
+    #print badpix_im.array
+    #print badpix_im.array.astype(numpy.int32)
+    #print 'max = ',badpix_im.array.max()
+    badpix_im.write(hdu_list=new_hdu_list)
+    #print 'after write badpix_im: ',new_hdu_list
+    #print new_hdu_list[1].header
+    #print new_hdu_list[1].data
 
     # Rescale the weight image to have the correct mean noise level.  We still let the
     # weight map be variable, but the nosie we add is constant.  (We can change this is 
     # we want using galsim.VariableGaussianNoise.)  However, it was requested that the 
     # mean level be accurate.  So we rescale the map to have the right mean.
+    assert se_wt_hdu==3
     wt_im = galsim.fits.read(hdu_list=hdu_list[se_wt_hdu], compression='rice')
     wt_im *= (1./noise_sigma**2) / wt_im.array.mean()
-    new_hdu = pyfits.HDUList()
-    wt_im.write(hdu_list=new_hdu, compression='rice')
-    hdu_list[se_wt_hdu] = new_hdu[1]
+    #print 'wt_im = ',wt_im
+    #print wt_im.array
+    wt_im.write(hdu_list=new_hdu_list)
+    #print 'after write wt_im: ',new_hdu_list
+    #print new_hdu_list[2].header
+    #print new_hdu_list[2].data
 
-    # We leave everything else the same.  Notably the badpix image.
-    # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.
-    #print 'des_root = ',des_root
-    #print 'out_dir = ',out_dir
     out_file = out_path[image_num]
-    hdu_list.writeto(out_file, clobber=True)
+    #print 'out_file = ',out_file
+    if os.path.isfile(out_file): os.remove(out_file)
+    assert out_file.endswith('.fz')
+    out_file = out_file[:-3]
+    #print 'out_file => ',out_file
+    if os.path.isfile(out_file): os.remove(out_file)
+    new_hdu_list.writeto(out_file, clobber=True)
     print '   Wrote file ',out_file
+
+    # Run fpack on the file
+    subprocess.Popen(['fpack','-D','-Y',out_file], close_fds=True).communicate()
+    print '   Fpacked file ',out_file
+
+    # Check that the file can be read correctly.
+    f = pyfits.open(out_file + '.fz')
+    #print 'f = ',f
+    #print 'f[0] = ',f[0],f[0].data
+    #print 'f[1] = ',f[1],f[1].data
+    #print 'f[2] = ',f[2],f[2].data
+    #print 'f[3] = ',f[3],f[3].data
+    f[0].data  # Ignore the return value. Just check that it succeeds without raising an exception.
+    f[1].data
+    f[2].data
+    f[3].data
+
 
 print 'Done writing single-epoch files'

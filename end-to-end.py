@@ -3,14 +3,19 @@ from galsim import pyfits
 import os
 import math
 import numpy
+import shutil
+import subprocess
 
 # Setup various file and directory names:
 work_dir = '/direct/astro+astronfs03/workarea/mjarvis'
 tile_name = 'DES0436-5748'
 out_dir = os.path.join(work_dir,tile_name)
+print 'tile = ',tile_name
+print 'out_dir = ',out_dir
 
 meds_dir = os.path.join('/astro/u/astrodat/data/DES/meds/011/20130820000021_DES0436-5748')
 meds_file = tile_name + '-r-meds-011.fits.fz'
+print 'meds_file = ',meds_file
 
 # Open the current meds file:
 meds = pyfits.open(os.path.join(meds_dir,meds_file))
@@ -162,10 +167,10 @@ wcs_g1 = numpy.zeros(len(coadd_cat))
 wcs_g2 = numpy.zeros(len(coadd_cat))
 wcs_theta = numpy.zeros(len(coadd_cat))
 
-for k in range(len(coadd_cat)):
-    if flags[k] != 0: continue
-    coadd_info = coadd_cat[k]
-    meds_info = meds_cat[k]
+for obj_num in range(len(coadd_cat)):
+    if flags[obj_num] != 0: continue
+    coadd_info = coadd_cat[obj_num]
+    meds_info = meds_cat[obj_num]
 
     print 'coadd id ',coadd_info['NUMBER']
     assert coadd_info['NUMBER'] == meds_info['number']
@@ -177,22 +182,22 @@ for k in range(len(coadd_cat)):
     ra = coadd_info['ALPHAWIN_J2000'] * galsim.degrees
     dec = coadd_info['DELTAWIN_J2000'] * galsim.degrees
     world_pos = galsim.CelestialCoord(ra,dec)
-    print 'world_pos = ',ra,dec,world_pos
+    #print 'world_pos = ',ra,dec,world_pos
 
     # Determine if this is a star
     spread = coadd_info['SPREAD_MODEL']
-    print 'spread = ',spread,' is_star? ',is_star[k]
+    #print 'spread = ',spread,' is_star? ',is_star[obj_num]
 
-    print 'mag = ',coadd_info['MAG_AUTO']
+    #print 'mag = ',coadd_info['MAG_AUTO']
     assert coadd_info['MAG_AUTO'] <= 24
 
     flux = coadd_info['FLUX_AUTO']
-    print 'flux = ',flux,type(flux)
+    #print 'flux = ',flux,type(flux)
     assert flux > 0
     if flux < min_flux: 
         min_flux = flux
 
-    if not is_star[k]:
+    if not is_star[obj_num]:
         # Get the parameters for building the galaxy
         ixx = coadd_info['X2WIN_IMAGE']
         ixy = coadd_info['XYWIN_IMAGE']
@@ -200,7 +205,7 @@ for k in range(len(coadd_cat)):
         hlr = coadd_info['FLUX_RADIUS'] * 1.18 
         # This is approximate, since FLUX_RADIUS is based on a Gaussian sigma, not half-light 
         # radius.  But close enough.
-        print 'hlr = ',hlr,type(hlr)
+        #print 'hlr = ',hlr,type(hlr)
         assert ixx > 0. and iyy > 0. and hlr > 0.
         assert hlr <= 8
 
@@ -215,13 +220,13 @@ for k in range(len(coadd_cat)):
         gal = galsim.Exponential(half_light_radius = float(hlr), flux = float(flux))
         e1 = (ixx-iyy)/(ixx+iyy)
         e2 = 2.*ixy/(ixx+iyy)
-        print 'e1,e2 = ',e1,e2
+        #print 'e1,e2 = ',e1,e2
         assert e1*e1 + e2*e2 <= 0.8
         shear = galsim.Shear(e1=e1, e2=e2)
         gal.applyShear(shear)
-        true_g1[k] = shear.g1
-        true_g2[k] = shear.g2
-        true_hlr[k] = hlr
+        true_g1[obj_num] = shear.g1
+        true_g2[obj_num] = shear.g2
+        true_hlr[obj_num] = hlr
 
     # Figure out in which images this object was observed
     ncutout = meds_info['ncutout']
@@ -304,7 +309,7 @@ for k in range(len(coadd_cat)):
         pix = im.wcs.toWorld(galsim.Pixel(1.0), image_pos=image_pos)
 
         # Build the final object
-        if is_star[k]:
+        if is_star[obj_num]:
             final = galsim.Convolve([psf, pix])
         else:
             final = galsim.Convolve([psf, pix, gal])
@@ -328,33 +333,34 @@ for k in range(len(coadd_cat)):
         # above if not bounds.isDefined() line.
         # Also, only do it for the single-eposures.  Not the coadd.
         if id > 0:
-            psf_fwhm[k] += fwhm
-            psf_g1[k] += psf_shear.g1
-            psf_g2[k] += psf_shear.g2
+            psf_fwhm[obj_num] += fwhm
+            psf_g1[obj_num] += psf_shear.g1
+            psf_g2[obj_num] += psf_shear.g2
             wcs_decomp = local_wcs.getDecomposition()  # scale, shear, theta, flip
             #print 'wcs_decomp = ',wcs_decomp
-            wcs_scale[k] += wcs_decomp[0]
-            wcs_g1[k] += wcs_decomp[1].g1
-            wcs_g2[k] += wcs_decomp[1].g2
-            wcs_theta[k] += wcs_decomp[2].rad()
+            wcs_scale[obj_num] += wcs_decomp[0]
+            wcs_g1[obj_num] += wcs_decomp[1].g1
+            wcs_g2[obj_num] += wcs_decomp[1].g2
+            wcs_theta[obj_num] += wcs_decomp[2].rad()
             # flip is always true
             assert wcs_decomp[3] == True
-            nexp[k] += 1
-    if nexp[k] > 0:
-        psf_fwhm[k] /= nexp[k]
-        psf_g1[k] /= nexp[k]
-        psf_g2[k] /= nexp[k]
-        wcs_scale[k] /= nexp[k]
-        wcs_g1[k] /= nexp[k]
-        wcs_g2[k] /= nexp[k]
-        wcs_theta[k] /= nexp[k]
+            nexp[obj_num] += 1
+    if nexp[obj_num] > 0:
+        psf_fwhm[obj_num] /= nexp[obj_num]
+        psf_g1[obj_num] /= nexp[obj_num]
+        psf_g2[obj_num] /= nexp[obj_num]
+        wcs_scale[obj_num] /= nexp[obj_num]
+        wcs_g1[obj_num] /= nexp[obj_num]
+        wcs_g2[obj_num] /= nexp[obj_num]
+        wcs_theta[obj_num] /= nexp[obj_num]
     
 print 'fraction of f values between -1 and 1 = ',nf_pm1,'/',nf_tot,'=',float(nf_pm1)/nf_tot
 
 # We will add a little bit of noise to the images.
 print 'min_flux = ',min_flux
-print 'add noise with sigma = ',min_flux/1000.
-noise = galsim.GaussianNoise(ud, sigma = min_flux/1000.)
+noise_sigma = min_flux/1000.
+print 'add noise with sigma = ',noise_sigma
+noise = galsim.GaussianNoise(ud, sigma = noise_sigma)
 
 # For the coadd image, we just need to add noise and write the file to disk.
 coadd_im = images[0]
@@ -362,19 +368,38 @@ coadd_im.addNoise(noise)
 print 'Added noise to coadd image'
 coadd_file = image_path[0]
 print 'Original coadd file = ',coadd_file
+
+# We will build a new hdulist for the new file and copy what we need from the old one.
+# Also, we write this in uncompressed form and then fpack it to make sure that the 
+# final result is funpack-able.
 hdu_list = pyfits.open(coadd_file)
-new_hdu = pyfits.HDUList()
-coadd_im.write(hdu_list=new_hdu, compression='rice')
-# Need to copy over the header item SEXMGZPT
-new_hdu[1].header['SEXMGZPT'] = hdu_list[coadd_hdu].header['SEXMGZPT']
-# Now overwrite the original hdu with the new one.
-hdu_list[coadd_hdu] = new_hdu[1]
+new_hdu_list = pyfits.HDUList()
+# Copy the primary hdu
+#new_hdu_list.append(hdu_list[0])
+
+assert coadd_hdu == 1
+coadd_im.write(hdu_list=new_hdu_list)
+# copy over the header item SEXMGZPT
+new_hdu_list[0].header['SEXMGZPT'] = hdu_list[coadd_hdu].header['SEXMGZPT']
+
+# Next is the weight image
+assert coadd_wt_hdu == 2
+coadd_wt_im = galsim.fits.read(hdu_list=hdu_list[coadd_wt_hdu], compression='rice')
+coadd_wt_im *= (1./noise_sigma**2) / coadd_wt_im.array.mean()
+print 'coadd_wt_im.mean = ',coadd_wt_im.array.mean(),' should = ',1./noise_sigma**2
+coadd_wt_im.write(hdu_list=new_hdu_list)
+
 out_coadd_file = os.path.join(out_dir,os.path.basename(coadd_file))
 print 'out_coadd_file = ',out_coadd_file
-# This next line require astropy v0.3.1.  There was a bug in earlier versions that didn't 
-# output the correct WCS header items when doing rice compression.
-hdu_list.writeto(out_coadd_file, clobber=True)
+assert out_coadd_file.endswith('.fz')
+if os.path.isfile(out_coadd_file): os.remove(out_coadd_file)
+out_coadd_file = out_coadd_file[:-3]
+if os.path.isfile(out_coadd_file): os.remove(out_coadd_file)
+new_hdu_list.writeto(out_coadd_file, clobber=True)
 print 'Wrote output coadd_file ',out_coadd_file
+
+# Run fpack on the file
+subprocess.Popen(['fpack','-D','-Y',out_coadd_file], close_fds=True).communicate()
 
 # We will use the bounds of the coadd image below...
 # GalSim doesn't currently convert easily between BoundsI and BoundsD...
@@ -410,17 +435,20 @@ coldefs = pyfits.ColDefs(columns)
 table = pyfits.new_table(coldefs)
 table.writeto(out_truth_file, clobber=True)
 
+# Also, it turns out to be useful to have the coadd catalog in this directory as well:
+shutil.copy2(coaddcat_file, out_dir)
+
 # Do the final processing on each single epoch image and write them to disk.
-for k in range(1,nimages):
-    im = images[k]
-    file = image_path[k]
+for image_num in range(1,nimages):
+    im = images[image_num]
+    file = image_path[image_num]
     print 'Finalize ',file
 
     # Get the catalog name.
     cat_file = file.replace('.fits.fz','_cat.fits')
     cat = pyfits.open(cat_file)[2].data  # 2 not 1!  hdu 1 has a bunch of meta data.
-    print 'catalog = ',cat_file
-    print 'nobj in cat = ',len(cat)
+    #print 'catalog = ',cat_file
+    print '   nobj in cat = ',len(cat)
 
     # Draw the objects in each image that weren't part of the coadd.
     # PSFEx will need these objects to get a good model of the PSF.
@@ -495,22 +523,87 @@ for k in range(1,nimages):
 
         nadded += 1
 
-    print 'Added ',nadded,' more objects from the single epoch catalog.'
+    print '   Added ',nadded,' more objects from the single epoch catalog.'
 
     # Add the noise
     im.addNoise(noise)
-    print 'Added noise'
+    #print 'Added noise'
 
-    # Write the image to disk
-    # We keep the original weight and badpix images, and just replace the actual image.
-    print 'des_root = ',des_root
-    print 'out_dir = ',out_dir
+    # Add in the sky level, which is estimated in the background map by sextractor
+    sky_im = galsim.fits.read(sky_path[image_num])
+    im += sky_im
+
+    # We will build a new hdulist for the new file and copy what we need from the old one.
+    # Also, we write this in uncompressed form and then fpack it to make sure that the 
+    # final result is funpack-able.
     hdu_list = pyfits.open(file)
-    new_hdu = pyfits.HDUList()
-    im.write(hdu_list=new_hdu, compression='rice')
-    hdu_list[se_hdu] = new_hdu[1]
-    out_file = out_path[k]
-    hdu_list.writeto(out_file, clobber=True)
-    print 'Wrote file ',out_file
+    #print 'hdu_list = ',hdu_list
+    #for h in hdu_list:
+        #print 'hdu = ',h.data
+    new_hdu_list = pyfits.HDUList()
+
+    # First is the image hdu.  We use the new image that we built.
+    assert se_hdu==1
+    #print 'im = ',im
+    #print im.array
+    im.write(hdu_list=new_hdu_list)
+    #print 'after write im: ',new_hdu_list
+    #print new_hdu_list[0].header
+    #print new_hdu_list[0].data
+
+    # Leave the badpix image the same.
+    # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.
+    assert se_badpix_hdu==2
+    badpix_im = galsim.fits.read(hdu_list=hdu_list[se_badpix_hdu], compression='rice')
+    badpix_im = galsim.ImageS(badpix_im)
+    #print 'badpix_im = ',badpix_im
+    #print badpix_im.array
+    #print badpix_im.array.astype(numpy.int32)
+    #print 'max = ',badpix_im.array.max()
+    badpix_im.write(hdu_list=new_hdu_list)
+    #print 'after write badpix_im: ',new_hdu_list
+    #print new_hdu_list[1].header
+    #print new_hdu_list[1].data
+
+    # Rescale the weight image to have the correct mean noise level.  We still let the
+    # weight map be variable, but the nosie we add is constant.  (We can change this is 
+    # we want using galsim.VariableGaussianNoise.)  However, it was requested that the 
+    # mean level be accurate.  So we rescale the map to have the right mean.
+    assert se_wt_hdu==3
+    wt_im = galsim.fits.read(hdu_list=hdu_list[se_wt_hdu], compression='rice')
+    wt_im *= (1./noise_sigma**2) / wt_im.array.mean()
+    #print 'wt_im = ',wt_im
+    #print wt_im.array
+    wt_im.write(hdu_list=new_hdu_list)
+    #print 'after write wt_im: ',new_hdu_list
+    #print new_hdu_list[2].header
+    #print new_hdu_list[2].data
+
+    out_file = out_path[image_num]
+    #print 'out_file = ',out_file
+    if os.path.isfile(out_file): os.remove(out_file)
+    assert out_file.endswith('.fz')
+    out_file = out_file[:-3]
+    #print 'out_file => ',out_file
+    if os.path.isfile(out_file): os.remove(out_file)
+    new_hdu_list.writeto(out_file, clobber=True)
+    print '   Wrote file ',out_file
+
+    # Run fpack on the file
+    subprocess.Popen(['fpack','-D','-Y',out_file], close_fds=True).communicate()
+    print '   Fpacked file ',out_file
+
+    # Check that the file can be read correctly.
+    f = pyfits.open(out_file + '.fz')
+    #print 'f = ',f
+    #print 'f[0] = ',f[0],f[0].data
+    #print 'f[1] = ',f[1],f[1].data
+    #print 'f[2] = ',f[2],f[2].data
+    #print 'f[3] = ',f[3],f[3].data
+    f[0].data  # Ignore the return value. Just check that it succeeds without raising an exception.
+    f[1].data
+    f[2].data
+    f[3].data
 
 
+print 'Done writing single-epoch files'

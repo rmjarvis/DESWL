@@ -150,6 +150,8 @@ nf_tot = 0
 
 # Use spread model to decide which things we will call stars.
 is_star = coadd_cat['SPREAD_MODEL'] < 0.003
+print 'nstars = ',is_star.sum()
+print 'nstars passing masks = ',is_star[flags==0].sum()
 
 # Set up a place to store the truth values.  Initialize with -999
 true_g1 = numpy.empty(len(coadd_cat))
@@ -167,12 +169,17 @@ wcs_g1 = numpy.zeros(len(coadd_cat))
 wcs_g2 = numpy.zeros(len(coadd_cat))
 wcs_theta = numpy.zeros(len(coadd_cat))
 
+do_print = False    # Allows the ability to turn on debug printing dynamically.
+
 for obj_num in range(len(coadd_cat)):
-    if flags[obj_num] != 0: continue
     coadd_info = coadd_cat[obj_num]
     meds_info = meds_cat[obj_num]
+    number = coadd_info['NUMBER']
 
-    print 'coadd id ',coadd_info['NUMBER']
+    if do_print: print '\ncoadd number ',number
+    if flags[obj_num] != 0: continue
+
+    print 'coadd number ',number
     assert coadd_info['NUMBER'] == meds_info['number']
 
     # Should already have skipped objects with flags
@@ -182,17 +189,17 @@ for obj_num in range(len(coadd_cat)):
     ra = coadd_info['ALPHAWIN_J2000'] * galsim.degrees
     dec = coadd_info['DELTAWIN_J2000'] * galsim.degrees
     world_pos = galsim.CelestialCoord(ra,dec)
-    #print 'world_pos = ',ra,dec,world_pos
+    if do_print: print 'world_pos = ',ra,dec,world_pos
 
     # Determine if this is a star
     spread = coadd_info['SPREAD_MODEL']
-    #print 'spread = ',spread,' is_star? ',is_star[obj_num]
+    if do_print: print 'spread = ',spread,' is_star? ',is_star[obj_num]
 
-    #print 'mag = ',coadd_info['MAG_AUTO']
+    if do_print: print 'mag = ',coadd_info['MAG_AUTO']
     assert coadd_info['MAG_AUTO'] <= 24
 
     flux = coadd_info['FLUX_AUTO']
-    #print 'flux = ',flux,type(flux)
+    if do_print: print 'flux = ',flux,type(flux)
     assert flux > 0
     if flux < min_flux: 
         min_flux = flux
@@ -205,7 +212,7 @@ for obj_num in range(len(coadd_cat)):
         hlr = coadd_info['FLUX_RADIUS'] * 1.18 
         # This is approximate, since FLUX_RADIUS is based on a Gaussian sigma, not half-light 
         # radius.  But close enough.
-        #print 'hlr = ',hlr,type(hlr)
+        if do_print: print 'hlr = ',hlr,type(hlr)
         assert ixx > 0. and iyy > 0. and hlr > 0.
         assert hlr <= 8
 
@@ -220,7 +227,7 @@ for obj_num in range(len(coadd_cat)):
         gal = galsim.Exponential(half_light_radius = float(hlr), flux = float(flux))
         e1 = (ixx-iyy)/(ixx+iyy)
         e2 = 2.*ixy/(ixx+iyy)
-        #print 'e1,e2 = ',e1,e2
+        if do_print: print 'e1,e2 = ',e1,e2
         assert e1*e1 + e2*e2 <= 0.8
         shear = galsim.Shear(e1=e1, e2=e2)
         gal.applyShear(shear)
@@ -232,7 +239,7 @@ for obj_num in range(len(coadd_cat)):
     ncutout = meds_info['ncutout']
     file_id = meds_info['file_id']  # An array of indices
 
-    if True:
+    if False:
         # Check that the MEDS treatment of the WCS is consistent with GalSim's.
         # MEDS uses X_IMAGE for the coadd image, and ALPHAMODEL, DELTAMODEL for the rest.
         # Also, the meds orig_row, orig_col use 0-based convention, the wcs uses 1-based.
@@ -241,21 +248,21 @@ for obj_num in range(len(coadd_cat)):
         y0 = coadd_info['Y_IMAGE']
         orig_row = meds_info['orig_row']
         orig_col = meds_info['orig_col']
-        #print 'x0, y0 = ',x0,y0
-        #print 'orig[0] = ',orig_col[0],orig_row[0]
+        if do_print: print 'x0, y0 = ',x0,y0
+        if do_print: print 'orig[0] = ',orig_col[0],orig_row[0]
         assert abs(x0 - (orig_col[0]+1)) < 1.e-2
         assert abs(y0 - (orig_row[0]+1)) < 1.e-2
         ra0 = coadd_info['ALPHAMODEL_J2000'] * galsim.degrees
         dec0 = coadd_info['DELTAMODEL_J2000'] * galsim.degrees
         world_pos0 = galsim.CelestialCoord(ra0,dec0)
-        #print 'world_pos0 = ',ra0,dec0,world_pos0
+        if do_print: print 'world_pos0 = ',ra0,dec0,world_pos0
         for k in range(1,ncutout):
-            #print 'k = ',k
+            if do_print: print 'k = ',k
             id = file_id[k]
-            #print 'id = ',id
+            if do_print: print 'id = ',id
             pos_k = image_wcs[id].toImage(world_pos0)
-            #print 'pos_k = ',pos_k
-            #print 'orign[',k,'] = ',orig_col[k],orig_row[k]
+            if do_print: print 'pos_k = ',pos_k
+            if do_print: print 'orign[',k,'] = ',orig_col[k],orig_row[k]
             assert abs(pos_k.x - (orig_col[k]+1)) < 1.e-2
             assert abs(pos_k.y - (orig_row[k]+1)) < 1.e-2
         # Despite all that, we will use the WIN values read in above from here on out.
@@ -263,7 +270,7 @@ for obj_num in range(len(coadd_cat)):
     # Draw the object on each image
     for id in (id for id in file_id if id >= 0):
         assert id < nimages
-        #print 'id = ',id,'  ',image_path[id]
+        if do_print: print 'file_id = ',id,'  ',image_path[id]
         # The image onto which we will draw the object
         im = images[id]
 
@@ -272,21 +279,21 @@ for obj_num in range(len(coadd_cat)):
         ix = int(math.floor(image_pos.x + 0.5))
         iy = int(math.floor(image_pos.y + 0.5))
         offset = image_pos - galsim.PositionD(ix,iy)
-        #print 'image_pos = ',image_pos
-        #print 'ix,iy,offset = ',ix,iy,offset
+        if do_print: print 'image_pos = ',image_pos
+        if do_print: print 'ix,iy,offset = ',ix,iy,offset
 
         # Build the PSF
         p = psf_params[id]
-        #print 'p = ',p
+        if do_print: print 'p = ',p
         # Get the normalized position for the Chebyshev polynomials
         x = 2. * (image_pos.x - im.bounds.xmin) / (im.bounds.xmax - im.bounds.xmin) - 1.
         y = 2. * (image_pos.y - im.bounds.ymin) / (im.bounds.ymax - im.bounds.ymin) - 1.
-        #print 'x,y = ',x,y
+        if do_print: print 'x,y = ',x,y
         f_size = p[0] + p[1]*x + p[2]*y + p[3]*(2.*x*x-1.) + p[4]*x*y + p[5]*(2.*y*y-1.)
         f_e1 = p[6] + p[7]*x + p[8]*y + p[9]*(2.*x*x-1.) + p[10]*x*y + p[11]*(2.*y*y-1.)
         f_e2 = p[12] + p[13]*x + p[14]*y + p[15]*(2.*x*x-1.) + p[16]*x*y + p[17]*(2.*y*y-1.)
 
-        #print 'f = ',f_size,f_e1,f_e2
+        if do_print: print 'f = ',f_size,f_e1,f_e2
         fwhm = 0.9 + 0.1 * f_size  # ranges from 0.8 to 1.0
         e1 = 0.05 * f_e1           # ranges from -0.05 to 0.05
         e2 = 0.05 * f_e2           # ranges from -0.05 to 0.05
@@ -299,8 +306,8 @@ for obj_num in range(len(coadd_cat)):
         if (-1 < f_e2 < 1): nf_pm1 += 1
         nf_tot += 3
 
-        #print 'fwhm = ',fwhm
-        #print 'e1,e2 = ',e1,e2
+        if do_print: print 'fwhm = ',fwhm
+        if do_print: print 'e1,e2 = ',e1,e2
         psf = galsim.Gaussian(fwhm = fwhm)
         psf_shear = galsim.Shear(e1=e1, e2=e2)
         psf.applyShear(psf_shear)
@@ -310,6 +317,7 @@ for obj_num in range(len(coadd_cat)):
 
         # Build the final object
         if is_star[obj_num]:
+            psf.setFlux(float(flux))
             final = galsim.Convolve([psf, pix])
         else:
             final = galsim.Convolve([psf, pix, gal])
@@ -322,11 +330,23 @@ for obj_num in range(len(coadd_cat)):
 
         # Draw the object
         local_wcs = im.wcs.local(image_pos)
-        #print 'local_wcs = ',local_wcs
+        if do_print: print 'local_wcs = ',local_wcs
         stamp = final.draw(wcs=local_wcs, use_true_center=False, offset=offset)
         stamp.setCenter(ix,iy)
         bounds = stamp.bounds & im.bounds
-        if not bounds.isDefined(): continue
+        if not bounds.isDefined(): 
+            print 'Skipping object on coadd because stamp bounds did not overlap image bounds'
+            print 'stamp.bounds = ',stamp.bounds
+            print 'im.bounds = ',im.bounds
+            print 'bounds = ',bounds
+            continue
+        if do_print:
+            print 'drew stamp'
+            print 'stamp.bounds = ',stamp.bounds
+            print 'im.bounds = ',im.bounds
+            print 'bounds = ',bounds
+            print 'stamp.flux = ',stamp.array.sum()
+            print 'stamp.max = ',stamp.array.max()
         im[bounds] += stamp[bounds]
 
         # Only add to the averages if we actually added the image.  So do this after the 
@@ -337,7 +357,7 @@ for obj_num in range(len(coadd_cat)):
             psf_g1[obj_num] += psf_shear.g1
             psf_g2[obj_num] += psf_shear.g2
             wcs_decomp = local_wcs.getDecomposition()  # scale, shear, theta, flip
-            #print 'wcs_decomp = ',wcs_decomp
+            if do_print: print 'wcs_decomp = ',wcs_decomp
             wcs_scale[obj_num] += wcs_decomp[0]
             wcs_g1[obj_num] += wcs_decomp[1].g1
             wcs_g2[obj_num] += wcs_decomp[1].g2
@@ -345,6 +365,7 @@ for obj_num in range(len(coadd_cat)):
             # flip is always true
             assert wcs_decomp[3] == True
             nexp[obj_num] += 1
+
     if nexp[obj_num] > 0:
         psf_fwhm[obj_num] /= nexp[obj_num]
         psf_g1[obj_num] /= nexp[obj_num]
@@ -447,7 +468,7 @@ for image_num in range(1,nimages):
     # Get the catalog name.
     cat_file = file.replace('.fits.fz','_cat.fits')
     cat = pyfits.open(cat_file)[2].data  # 2 not 1!  hdu 1 has a bunch of meta data.
-    #print 'catalog = ',cat_file
+    if do_print: print 'catalog = ',cat_file
     print '   nobj in cat = ',len(cat)
 
     # Draw the objects in each image that weren't part of the coadd.
@@ -469,10 +490,10 @@ for image_num in range(1,nimages):
         image_pos = galsim.PositionD(x,y)
         world_pos = im.wcs.toWorld(image_pos)
         coadd_pos = coadd_im.wcs.toImage(world_pos)
-        #print 'positions = ',image_pos,world_pos,coadd_pos
+        if do_print: print 'positions = ',image_pos,world_pos,coadd_pos
         if coadd_bounds.includes(coadd_pos):
             # Then we should have already drawn this object.
-            #print 'coadd_pos is in coadd_bounds'
+            if do_print: print 'coadd_pos is in coadd_bounds'
             continue
 
         if not is_star:
@@ -518,7 +539,8 @@ for image_num in range(1,nimages):
         stamp.setCenter(ix,iy)
 
         bounds = stamp.bounds & im.bounds
-        if not bounds.isDefined(): continue
+        if not bounds.isDefined(): 
+            continue
         im[bounds] += stamp[bounds]
 
         nadded += 1
@@ -527,7 +549,7 @@ for image_num in range(1,nimages):
 
     # Add the noise
     im.addNoise(noise)
-    #print 'Added noise'
+    if do_print: print 'Added noise'
 
     # Add in the sky level, which is estimated in the background map by sextractor
     sky_im = galsim.fits.read(sky_path[image_num])
@@ -537,33 +559,34 @@ for image_num in range(1,nimages):
     # Also, we write this in uncompressed form and then fpack it to make sure that the 
     # final result is funpack-able.
     hdu_list = pyfits.open(file)
-    #print 'hdu_list = ',hdu_list
-    #for h in hdu_list:
-        #print 'hdu = ',h.data
+    if do_print: 
+        print 'hdu_list = ',hdu_list
+        for h in hdu_list:
+            print 'hdu = ',h.data
     new_hdu_list = pyfits.HDUList()
 
     # First is the image hdu.  We use the new image that we built.
     assert se_hdu==1
-    #print 'im = ',im
-    #print im.array
+    if do_print: print 'im = ',im
+    if do_print: print im.array
     im.write(hdu_list=new_hdu_list)
-    #print 'after write im: ',new_hdu_list
-    #print new_hdu_list[0].header
-    #print new_hdu_list[0].data
+    if do_print: print 'after write im: ',new_hdu_list
+    if do_print: print new_hdu_list[0].header
+    if do_print: print new_hdu_list[0].data
 
     # Leave the badpix image the same.
     # TODO: It might be nice to add in artifacts in the image based on the bad pixel map.
     assert se_badpix_hdu==2
     badpix_im = galsim.fits.read(hdu_list=hdu_list[se_badpix_hdu], compression='rice')
     badpix_im = galsim.ImageS(badpix_im)
-    #print 'badpix_im = ',badpix_im
-    #print badpix_im.array
-    #print badpix_im.array.astype(numpy.int32)
-    #print 'max = ',badpix_im.array.max()
+    if do_print: print 'badpix_im = ',badpix_im
+    if do_print: print badpix_im.array
+    if do_print: print badpix_im.array.astype(numpy.int32)
+    if do_print: print 'max = ',badpix_im.array.max()
     badpix_im.write(hdu_list=new_hdu_list)
-    #print 'after write badpix_im: ',new_hdu_list
-    #print new_hdu_list[1].header
-    #print new_hdu_list[1].data
+    if do_print: print 'after write badpix_im: ',new_hdu_list
+    if do_print: print new_hdu_list[1].header
+    if do_print: print new_hdu_list[1].data
 
     # Rescale the weight image to have the correct mean noise level.  We still let the
     # weight map be variable, but the nosie we add is constant.  (We can change this is 
@@ -572,19 +595,19 @@ for image_num in range(1,nimages):
     assert se_wt_hdu==3
     wt_im = galsim.fits.read(hdu_list=hdu_list[se_wt_hdu], compression='rice')
     wt_im *= (1./noise_sigma**2) / wt_im.array.mean()
-    #print 'wt_im = ',wt_im
-    #print wt_im.array
+    if do_print: print 'wt_im = ',wt_im
+    if do_print: print wt_im.array
     wt_im.write(hdu_list=new_hdu_list)
-    #print 'after write wt_im: ',new_hdu_list
-    #print new_hdu_list[2].header
-    #print new_hdu_list[2].data
+    if do_print: print 'after write wt_im: ',new_hdu_list
+    if do_print: print new_hdu_list[2].header
+    if do_print: print new_hdu_list[2].data
 
     out_file = out_path[image_num]
-    #print 'out_file = ',out_file
+    if do_print: print 'out_file = ',out_file
     if os.path.isfile(out_file): os.remove(out_file)
     assert out_file.endswith('.fz')
     out_file = out_file[:-3]
-    #print 'out_file => ',out_file
+    if do_print: print 'out_file => ',out_file
     if os.path.isfile(out_file): os.remove(out_file)
     new_hdu_list.writeto(out_file, clobber=True)
     print '   Wrote file ',out_file
@@ -595,11 +618,11 @@ for image_num in range(1,nimages):
 
     # Check that the file can be read correctly.
     f = pyfits.open(out_file + '.fz')
-    #print 'f = ',f
-    #print 'f[0] = ',f[0],f[0].data
-    #print 'f[1] = ',f[1],f[1].data
-    #print 'f[2] = ',f[2],f[2].data
-    #print 'f[3] = ',f[3],f[3].data
+    if do_print: print 'f = ',f
+    if do_print: print 'f[0] = ',f[0],f[0].data
+    if do_print: print 'f[1] = ',f[1],f[1].data
+    if do_print: print 'f[2] = ',f[2],f[2].data
+    if do_print: print 'f[3] = ',f[3],f[3].data
     f[0].data  # Ignore the return value. Just check that it succeeds without raising an exception.
     f[1].data
     f[2].data

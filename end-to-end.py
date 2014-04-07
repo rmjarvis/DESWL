@@ -1,6 +1,7 @@
 import galsim
 from galsim import pyfits
 import os
+import sys
 import math
 import numpy
 import shutil
@@ -75,7 +76,15 @@ with open(coadd_srclist,'r') as src:
     src_rows = [ line.split() for line in src ]
 src_cols = zip(*src_rows)
 out_path = [ os.path.join(out_dir,os.path.basename(file)) for file in image_path ]
+# Copy over the sky file to our output directory to get everything in one place.
+for file in sky_path[1:]:
+    shutil.copy2(file, out_dir)
+sky_path = [ os.path.join(out_dir,os.path.basename(file)) for file in sky_path ]
+# We make new seg files now, so use out_dir for those paths as well.  But don't copy the originals.
+seg_path = [ os.path.join(out_dir,os.path.basename(file)) for file in seg_path ]
 src_cols[0] = list(out_path[1:])
+src_cols[1] = list(sky_path[1:])
+src_cols[2] = list(seg_path[1:])
 src_rows = zip(*src_cols)
 out_src_file = os.path.join(out_dir,os.path.basename(coadd_srclist))
 with open(out_src_file,'w') as out_src:
@@ -457,7 +466,9 @@ table = pyfits.new_table(coldefs)
 table.writeto(out_truth_file, clobber=True)
 
 # Also, it turns out to be useful to have the coadd catalog in this directory as well:
-shutil.copy2(coaddcat_file, out_dir)
+# Update: now we make our own, which means the truth catalog isn't correct anymore (need to 
+# match up objects by ra,dec).
+#shutil.copy2(coaddcat_file, out_dir)
 
 # Do the final processing on each single epoch image and write them to disk.
 for image_num in range(1,nimages):

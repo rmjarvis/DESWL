@@ -22,7 +22,7 @@ print 'truth has %d columns, %d entries'%(len(truth.columns), len(truth))
 
 # Some of the items are flagged.  Remove these.
 # Also select out just the galaxy objects.
-mask2 = (match['ok'] == 1) & (truth['flags'] == 0) & (truth['is_star'] == 0) & (xdata['flag'] == 0)
+mask = (match['ok'] == 1) & (truth['flags'] == 0) & (truth['is_star'] == 0) & (xdata['flag'] == 0)
 print 'number of objects in original catalog = ',len(orig_truth)
 print 'number of objects drawn = ',(orig_truth['flags'] == 0).sum()
 print 'number of stars drawn = ',((orig_truth['flags'] == 0) &orig_truth['is_star']).sum()
@@ -32,46 +32,46 @@ print 'number with good matches: ',match['ok'].sum()
 print 'number of these that are stars = ',(match['ok'] & truth['is_star']).sum()
 print 'number that were not actually drawn = ',(match['ok'] & (truth['flags'] != 0)).sum()
 print 'number that im3shape marked as failure = ',(match['ok'] & (xdata['flag'] != 0)).sum()
-print 'total passing all cuts = ',mask2.sum()
+print 'total passing all cuts = ',mask.sum()
 
 # Extract values that we want to plot
-tid = truth['id'][mask2]
-tg1 = truth['true_g1'][mask2]
-tg2 = truth['true_g2'][mask2]
-thlr = truth['true_hlr'][mask2]
-tra = truth['ra'][mask2]
-tdec = truth['dec'][mask2]
-tflux = truth['flux'][mask2]
-tmag = truth['mag'][mask2]
+tid = truth['id'][mask]
+tg1 = truth['true_g1'][mask]
+tg2 = truth['true_g2'][mask]
+thlr = truth['true_hlr'][mask]
+tra = truth['ra'][mask]
+tdec = truth['dec'][mask]
+tflux = truth['flux'][mask]
+tmag = truth['mag'][mask]
 
-xid = xdata['identifier'][mask2]
-xe1 = xdata['e1'][mask2]
-xe2 = xdata['e2'][mask2]
-xr = xdata['radius'][mask2]
-xra = xdata['ra'][mask2]
-xdec = xdata['dec'][mask2]
-xflux = xdata['bulge_flux'][mask2] + xdata['disc_flux'][mask2]
-xsnr = xdata['snr'][mask2]
+xid = xdata['identifier'][mask]
+xe1 = xdata['e1'][mask]
+xe2 = xdata['e2'][mask]
+xr = xdata['radius'][mask]
+xra = xdata['ra'][mask]
+xdec = xdata['dec'][mask]
+xflux = xdata['mean_flux'][mask]
+xsnr = xdata['snr'][mask]
 xmag = -2.5*np.log10(xflux)
 xmag[xflux <= 0] = 99
 xmag2 = -2.5*np.log10(xsnr)
 xmag2[xsnr <= 0] = 99
-xrr = xdata['radius_ratio'][mask2]
-xba = xdata['bulge_A'][mask2]
-xda = xdata['disc_A'][mask2]
-xbi = xdata['bulge_index'][mask2]
-xdi = xdata['disc_index'][mask2]
-xbf = xdata['bulge_flux'][mask2]
-xdf = xdata['disc_flux'][mask2]
-xfr = xdata['flux_ratio'][mask2]
-xlike = xdata['likelihood'][mask2]
+xrr = xdata['radius_ratio'][mask]
+xba = xdata['bulge_A'][mask]
+xda = xdata['disc_A'][mask]
+xbi = xdata['bulge_index'][mask]
+xdi = xdata['disc_index'][mask]
+xbf = xdata['bulge_flux'][mask]
+xdf = xdata['disc_flux'][mask]
+xfr = xdata['flux_ratio'][mask]
+xlike = xdata['likelihood'][mask]
 xlnlike = np.log(np.abs(xlike))
-xmmin = xdata['model_min'][mask2]
-xmmax = xdata['model_max'][mask2]
-xdeb = xdata['delta_e_bulge'][mask2]
-xdtb = xdata['delta_theta_bulge'][mask2]
-xraas = xdata['ra_as'][mask2]
-xdecas = xdata['dec_as'][mask2]
+xmmin = xdata['model_min'][mask]
+xmmax = xdata['model_max'][mask]
+xdeb = xdata['delta_e_bulge'][mask]
+xdtb = xdata['delta_theta_bulge'][mask]
+xraas = xdata['ra_as'][mask]
+xdecas = xdata['dec_as'][mask]
 print 'Extracted all data fields'
 
 m = 1.0
@@ -134,11 +134,9 @@ plt_scatter(tg1, xe2, 'True g1', 'im3shape e2')
 plt_scatter(thlr, xr, 'True hlr', 'im3shape radius')
 plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 10)
 plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 2.5)
-plt_scatter(tflux, xflux, 'True flux', 'im3shape bulge_flux + disc_flux')
-plt_scatter(tflux, xflux, 'True flux', 'im3shape bulge_flux + disc_flux', 
-            (abs(xflux) < 40) & (tflux < 1.e5))
-plt_scatter(tflux, xflux, 'True flux', 'im3shape bulge_flux + disc_flux',
-            (abs(xflux) < 4) & (tflux < 2.e4))
+plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux')
+plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux', (abs(xflux) < 1.e5) & (tflux < 1.e5))
+plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux', (abs(xflux) < 2.e4) & (tflux < 2.e4))
 plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr')
 plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr',
             (abs(xsnr) < 1.e5) & (tflux < 1.e5))

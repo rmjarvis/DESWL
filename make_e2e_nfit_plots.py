@@ -4,29 +4,45 @@ import matplotlib.pyplot as plt
 import pickle
 
 from matplotlib.backends.backend_pdf import PdfPages
-pp = PdfPages('e2e_nfit-02-2.pdf')
+pp = PdfPages('e2e_nfit-3.pdf')
 
-truth = pyfits.open('end2end-truth.fits')[1]
-nfit = pyfits.open('test-end-to-end-nfit-02.fits')[1]
+dir = 'DES0436-5748'
+orig_truth = pyfits.open(dir+'/end2end-truth.fits')[1].data
+sex_cat = pyfits.open(dir+'/DES0436-5748_r_cat.fits')[1].data
+match = pyfits.open(dir+'/match.fits')[1].data
+xdata = pyfits.open('test-end-to-end-nfit-03.fits')[1].data
 
-tdata = truth.data
-xdata = nfit.data
-print 'tdata has %d columns, %d entries'%(len(tdata.columns), len(tdata))
+print 'orig_truth has %d columns, %d entries'%(len(orig_truth.columns), len(orig_truth))
+print 'sex_cat has %d columns, %d entries'%(len(sex_cat.columns), len(sex_cat))
+print 'match has %d columns, %d entries'%(len(match.columns), len(match))
 print 'xdata has %d columns, %d entries'%(len(xdata.columns), len(xdata))
+
+truth = orig_truth[ match['index'] ]
+print 'truth has %d columns, %d entries'%(len(truth.columns), len(truth))
 
 # Some of the items are flagged.  Remove these.
 # Also select out just the galaxy objects.
-mask = (tdata['flags'] == 0) & (tdata['is_star'] == 0) & (xdata['exp_flags'] == 0)
+mask = (match['ok'] == 1) & (truth['flags'] == 0) & (truth['is_star'] == 0) & (xdata['exp_flags'] == 0)
+print 'number of objects in original catalog = ',len(orig_truth)
+print 'number of objects drawn = ',(orig_truth['flags'] == 0).sum()
+print 'number of stars drawn = ',((orig_truth['flags'] == 0) &orig_truth['is_star']).sum()
+print 'number detected by sextractor = ',len(sex_cat)
+print 'number detected by sextractor with FLAGS==0: ',(sex_cat['FLAGS'] == 0).sum()
+print 'number with good matches: ',match['ok'].sum()
+print 'number of these that are stars = ',(match['ok'] & truth['is_star']).sum()
+print 'number that were not actually drawn = ',(match['ok'] & (truth['flags'] != 0)).sum()
+print 'number that im3shape marked as failure = ',(match['ok'] & (xdata['exp_flags'] != 0)).sum()
+print 'total passing all cuts = ',mask.sum()
 
 # Extract values that we want to plot
-tid = tdata['id'][mask]
-tg1 = tdata['true_g1'][mask]
-tg2 = tdata['true_g2'][mask]
-thlr = tdata['true_hlr'][mask]
-tra = tdata['ra'][mask]
-tdec = tdata['dec'][mask]
-tflux = tdata['flux'][mask]
-tmag = tdata['mag'][mask]
+tid = truth['id'][mask]
+tg1 = truth['true_g1'][mask]
+tg2 = truth['true_g2'][mask]
+thlr = truth['true_hlr'][mask]
+tra = truth['ra'][mask]
+tdec = truth['dec'][mask]
+tflux = truth['flux'][mask]
+tmag = truth['mag'][mask]
 
 xid = xdata['number'][mask]
 xg1 = xdata['exp_g'][mask][:,0]
@@ -87,6 +103,7 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None):
         good1m = good1
         good2m = good2
         badm = bad
+    plt.axis([min(xval), max(xval), min(yval), max(yval)])
     plt.grid()
     plt.scatter(xval[badm],yval[badm],s=0.4,rasterized=True,color='red')
     plt.scatter(xval[good2m],yval[good2m],s=0.4,rasterized=True,color='blue')
@@ -114,11 +131,10 @@ plt_scatter(thlr, xr2, 'True hlr', 'nfit Irr')
 plt_scatter(thlr, xr2, 'True hlr', 'nfit Irr', xr2<10)
 plt_scatter(thlr, xr,'True hlr', 'sqrt(Irr)', xr2>0)
 plt_scatter(thlr, xr,'True hlr', 'sqrt(Irr)', (xr2>0) & (xr2<10))
-plt_scatter(thlr, xr,'True hlr', 'sqrt(Irr)', (xr2>0) & (xr2<1))
 plt_scatter(tflux, xflux, 'True flux', 'nfit flux')
 plt_scatter(tflux, xflux, 'True flux', 'nfit flux', xflux<1.e3)
 plt_scatter(tflux, xsnr, 'True flux', 'nfit snr')
-plt_scatter(tflux, xsnr, 'True flux', 'nfit snr', (xsnr<1.e3) & (tflux < 1.e4))
+plt_scatter(tflux, xsnr, 'True flux', 'nfit snr', xsnr<1.e4)
 plt_scatter(tmag, xmag, 'True mag', '-2.5 log10(flux)', xflux > 0)
 plt_scatter(tmag, xmag2, 'True mag', '-2.5 log10(snr)', xsnr > 0)
 
@@ -132,45 +148,36 @@ plt_scatter(xchi2, xsnr, 'chi2', 'snr', xchi2<1.e3)
 plt_scatter(xchi2, xdof, 'chi2', 'dof')
 plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e4)
 plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e3)
-plt_scatter(xaic, xbic, 'aic', 'bic')
-plt_scatter(xaic, xbic, 'aic', 'bic', xaic<1.e6)
-plt_scatter(xarate, xaic, 'arate', 'aic', xaic<1.e6)
-plt_scatter(xarate, xtau, 'arate', 'tau')
-plt_scatter(xarate, xr2, 'arate', 'Irr')
-plt_scatter(xarate, xr2, 'arate', 'Irr',xr2<10)
-plt_scatter(xp, xtau, 'P', 'tau')
-plt_scatter(xp, xarate, 'P', 'arate')
+#plt_scatter(xaic, xbic, 'aic', 'bic')
+#plt_scatter(xaic, xbic, 'aic', 'bic', xaic<1.e6)
+#plt_scatter(xarate, xaic, 'arate', 'aic', xaic<1.e6)
+#plt_scatter(xarate, xtau, 'arate', 'tau')
+#plt_scatter(xarate, xr2, 'arate', 'Irr')
+#plt_scatter(xarate, xr2, 'arate', 'Irr',xr2<10)
+#plt_scatter(xp, xtau, 'P', 'tau')
+#plt_scatter(xp, xarate, 'P', 'arate')
 plt_scatter(xp, xr2, 'P', 'Irr')
 plt_scatter(xp, xr2, 'P', 'Irr',xr2<10)
 plt_scatter(xq0, xq1, 'Q0', 'Q1')
+plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e4)
 plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e3)
-plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<300)
 plt_scatter(xp, xq, 'P', '|Q|')
-plt_scatter(xp, xq, 'P', '|Q|', xq<1.e3)
+plt_scatter(xp, xq, 'P', '|Q|', (xq<1.e4) & (xp<2.e3))
 plt_scatter(xr00, xr11, 'R00', 'R11')
-plt_scatter(xr00, xr11, 'R00', 'R11',xtrr<1.e6)
-plt_scatter(xr00, xr11, 'R00', 'R11',xtrr<1.e5)
-plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<1.e4) & (abs(xr11)<1.e4))
-plt_scatter(xr00, xr11, 'R00', 'R11',xr00**2+xr11**2<3.e3**2)
+plt_scatter(xr00, xr11, 'R00', 'R11',(xr00>-5.e5) & (xr11>-5.e5))
+plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e5) & (abs(xr11)<5.e5))
+plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<2.e5) & (abs(xr11)<2.e5))
+plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e4) & (abs(xr11)<5.e4))
 plt_scatter(xr00, xr01, 'R00', 'R01')
-plt_scatter(xr00, xr01, 'R00', 'R01',xtrr<1.e6)
+plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e6) & (abs(xr01)<1.e6))
 plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e5) & (abs(xr01)<1.e5))
-plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e4) & (abs(xr01)<1.e4))
 plt_scatter(xp, xtrr, 'P', 'Tr(R)')
-plt_scatter(xp, xtrr, 'P', 'Tr(R)',xtrr<1.e6)
-plt_scatter(xp, xtrr, 'P', 'Tr(R)',xtrr<1.e5)
-plt_scatter(xp, xtrr, 'P', 'Tr(R)',(xtrr<1.e5) & (xp<500))
+plt_scatter(xp, xtrr, 'P', 'Tr(R)',(abs(xtrr)<1.e5) & (xp<1.e3))
 plt_scatter(xp, xdetr, 'P', 'Det(R)')
-plt_scatter(xp, xdetr, 'P', 'Det(R)',xtrr<1.e5)
-plt_scatter(xp, xdetr, 'P', 'Det(R)',(xtrr<1.e5) & (xp<1.e4) & (abs(xdetr)<1.e8))
-plt_scatter(xp, xdetr, 'P', 'Det(R)',(xtrr<1.e5) & (xp<500) & (abs(xdetr)<1.e7))
+plt_scatter(xp, xdetr, 'P', 'Det(R)',(abs(xdetr)<1.e10) & (xp<1.e3))
 plt_scatter(xq, xtrr, '|Q|', 'Tr(R)')
-plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',xtrr<1.e6)
-plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',xtrr<1.e5)
-plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',(xtrr<1.e5) & (xq<1000))
+plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',(abs(xtrr)<1.e5) & (xq<1.e4))
 plt_scatter(xq, xdetr, '|Q|', 'Det(R)')
-plt_scatter(xq, xdetr, '|Q|', 'Det(R)',xtrr<1.e5)
-plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(xtrr<1.e5) & (xq<1.e4) & (abs(xdetr)<1.e8))
-plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(xtrr<1.e5) & (xq<1000) & (abs(xdetr)<1.e7))
+plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(abs(xdetr)<1.e10) & (xq<1.e4))
 
 pp.close()

@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import pickle
 
 from matplotlib.backends.backend_pdf import PdfPages
-pp = PdfPages('e2e_nfit-2.pdf')
+pp = PdfPages('e2e_nfit-02-2.pdf')
 
 truth = pyfits.open('end2end-truth.fits')[1]
-nfit = pyfits.open('test-end-to-end-nfit-01.fits')[1]
+nfit = pyfits.open('test-end-to-end-nfit-02.fits')[1]
 
 tdata = truth.data
 xdata = nfit.data

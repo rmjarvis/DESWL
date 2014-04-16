@@ -17,7 +17,9 @@ print 'sex_cat has %d columns, %d entries'%(len(sex_cat.columns), len(sex_cat))
 print 'match has %d columns, %d entries'%(len(match.columns), len(match))
 print 'xdata has %d columns, %d entries'%(len(xdata.columns), len(xdata))
 
-truth = orig_truth[ match['index'] ]
+# The im3shape entries are not in order.  The identifier column - 1 gives the actual index to
+# use for the truth entry.
+truth = orig_truth[ match['index'][xdata['identifier']-1] ]
 print 'truth has %d columns, %d entries'%(len(truth.columns), len(truth))
 
 # Some of the items are flagged.  Remove these.
@@ -118,7 +120,8 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None):
                         '%.2f  < |diff| < %.2f (N=%d)'%(tol1,tol2,good2.sum()),
                         '|diff| > %.2f (N=%d)'%(tol2,bad.sum()),
                    ],
-                   loc = 2 # upper left
+                   #loc = 2 # upper left
+                   loc = 4 # lower right
                    )
     if title is not None:
         plt.title(title)
@@ -152,28 +155,28 @@ plt_scatter(xba, xda, 'bulge_A', 'disc_A', (abs(xba) < 1.e2) & (abs(xda) < 1.e2)
 #plt_scatter(xbi, xdi, 'bulge_index', 'disc_index')  # bulge_index = 4, disc_index = 1
 plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux')
 plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 1.e2) & (abs(xdf) < 1.e2))
-plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 1.e1) & (abs(xdf) < 1.e1))
-plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 2.) & (abs(xdf) < 3.))
+plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 2.) & (abs(xdf) < 4.))
 plt_scatter(xflux, xfr, 'total flux', 'flux_ratio')
-plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', (abs(xbf) < 1.e2) & (abs(xdf) < 1.e2))
-plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', (abs(xbf) < 1.e1) & (abs(xdf) < 1.e1))
+plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e5)
+plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e4)
 plt_scatter(xsnr, xlike, 'snr', 'likelihood')
 plt_scatter(xsnr, xlike, 'snr', 'likelihood', abs(xlike) < 1.e6)
 plt_scatter(xsnr, xlike, 'snr', 'likelihood', (abs(xlike) < 1.e5) & (xsnr < 1.e4))
 plt_scatter(xmag2, xlnlike, '-2.5 log10(snr)', 'ln(abs(likelihood))', xsnr > 0)
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max')
-plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 0.004) & (abs(xmmax) < 0.15))
+plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 0.001) & (abs(xmmax) < 0.15))
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-4) & (abs(xmmax) < 0.03))
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-6) & (abs(xmmax) < 0.03))
 #plt_scatter(ideb, xdtb, 'delta_e_bulge', 'delta_theta_bulge')  # both = 0
 plt_scatter(xraas, xdecas, 'ra_as', 'dec_as')
 plt_scatter(xraas, xdecas, 'ra_as', 'dec_as', (abs(xraas) < 1) & (abs(xdecas) < 1))
 
+mmin_limit = 1.e-6
 plt_scatter(tg1, xe1, 'True g1', 'im3shape e1',
-            (abs(xmmin) < 1.e-7), title='|model_min| < 1.e-7')
+            (abs(xmmin) < mmin_limit), title='|model_min| < %f'%mmin_limit)
 plt_scatter(tg2, xe2, 'True g2', 'im3shape e2',
-            (abs(xmmin) < 1.e-7), title='|model_min| < 1.e-7')
+            (abs(xmmin) < mmin_limit), title='|model_min| < %f'%mmin_limit)
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max',
-            (abs(xmmin) < 1.e-7), title='|model_min| < 1.e-7, (N=%d)'%((abs(xmmin)<1.e-7).sum()))
+            (abs(xmmin) < mmin_limit), title='|model_min| < mmin_limit, (N=%d)'%((abs(xmmin)<mmin_limit).sum()))
 
 pp.close()

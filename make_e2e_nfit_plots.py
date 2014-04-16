@@ -2,9 +2,9 @@ import numpy as np
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import pickle
+import sys
 
 from matplotlib.backends.backend_pdf import PdfPages
-pp = PdfPages('e2e_nfit-3.pdf')
 
 dir = 'DES0436-5748'
 orig_truth = pyfits.open(dir+'/end2end-truth.fits')[1].data
@@ -31,7 +31,7 @@ print 'number detected by sextractor with FLAGS==0: ',(sex_cat['FLAGS'] == 0).su
 print 'number with good matches: ',match['ok'].sum()
 print 'number of these that are stars = ',(match['ok'] & truth['is_star']).sum()
 print 'number that were not actually drawn = ',(match['ok'] & (truth['flags'] != 0)).sum()
-print 'number that im3shape marked as failure = ',(match['ok'] & (xdata['exp_flags'] != 0)).sum()
+print 'number that nfit marked as failure = ',(match['ok'] & (xdata['exp_flags'] != 0)).sum()
 print 'total passing all cuts = ',mask.sum()
 
 # Extract values that we want to plot
@@ -78,6 +78,33 @@ xr11 = xdata['exp_R'][mask][:,1,1]
 xtrr = xr00+xr11
 xdetr = xr00*xr11-xr01*xr10
 print 'Extracted all data fields'
+
+def simple_plots():
+    """Make a few simple plots of truth vs meas
+    """
+    plt.clf()
+    plt.axis([-0.3,0.3,-0.3,0.3])
+    plt.grid()
+    plt.xlabel('True g1')
+    plt.ylabel('nfit e1')
+    plt.plot([-1.,-1.],[1.,1.],'c-')
+    plt.scatter(tg1,xg1,s=0.4,rasterized=True)
+    plt.savefig('nfit_e1.png')
+
+    plt.clf()
+    plt.axis([-0.3,0.3,-0.3,0.3])
+    plt.grid()
+    plt.xlabel('True g2')
+    plt.ylabel('nfit e2')
+    plt.plot([-1.,-1.],[1.,1.],'c-')
+    plt.scatter(tg2,xg2,s=0.4,rasterized=True)
+    plt.savefig('nfit_e2.png')
+
+simple_plots()
+sys.exit()
+
+
+pp = PdfPages('e2e_nfit-3.pdf')
 
 m1 = -1
 m2 = 1

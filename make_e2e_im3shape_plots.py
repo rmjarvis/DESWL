@@ -2,9 +2,9 @@ import numpy as np
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import pickle
+import sys
 
 from matplotlib.backends.backend_pdf import PdfPages
-pp = PdfPages('e2e_im3shape-3.pdf')
 
 dir = 'DES0436-5748'
 orig_truth = pyfits.open(dir+'/end2end-truth.fits')[1].data
@@ -76,6 +76,31 @@ xraas = xdata['ra_as'][mask]
 xdecas = xdata['dec_as'][mask]
 print 'Extracted all data fields'
 
+def simple_plots():
+    """Make a few simple plots of truth vs meas
+    """
+    plt.clf()
+    plt.axis([-0.3,0.3,-0.3,0.3])
+    plt.grid()
+    plt.xlabel('True g1')
+    plt.ylabel('im3shape e1')
+    plt.plot([-1.,-1.],[1.,1.],'c-')
+    plt.scatter(truth['true_g1'],xdata['e1'],s=0.4,rasterized=True)
+    plt.savefig('im3shape_e1.png')
+
+    plt.clf()
+    plt.axis([-0.3,0.3,-0.3,0.3])
+    plt.grid()
+    plt.xlabel('True g2')
+    plt.ylabel('im3shape e2')
+    plt.plot([-1.,-1.],[1.,1.],'c-')
+    plt.scatter(truth['true_g2'],xdata['e2'],s=0.4,rasterized=True)
+    plt.savefig('im3shape_e2.png')
+
+simple_plots()
+sys.exit()
+
+pp = PdfPages('e2e_im3shape-3.pdf')
 m = 1.0
 tol1 = 0.01
 tol2 = 0.05
@@ -84,6 +109,7 @@ tol2 = 0.05
 good1 = (abs(m*tg1 - xe1) < tol1) & (abs(m*tg2 - xe2) < tol1)
 good2 = (abs(m*tg1 - xe1) < tol2) & (abs(m*tg2 - xe2) < tol2) & ~good1
 bad = (~good1) & (~good2)
+
 
 def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None):
     """Make a scatter plot of two values with labels.

@@ -3,52 +3,74 @@ import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import pickle
 import sys
-
 from matplotlib.backends.backend_pdf import PdfPages
 
 dir = 'DES0436-5748'
-orig_truth = pyfits.open(dir+'/end2end-truth.fits')[1].data
-sex_cat = pyfits.open(dir+'/DES0436-5748_r_cat.fits')[1].data
-match = pyfits.open(dir+'/match.fits')[1].data
-xdata = pyfits.open('im3shape-end2end-v3.fits')[1].data
+truth_file = 'end2end-truth.fits'
+sex_file = 'DES0436-5748_r_cat.fits'
+match_file = 'match.fits'
+im3shape_file = 'im3shape-end2end-v3.fits'
 
-print 'orig_truth has %d columns, %d entries'%(len(orig_truth.columns), len(orig_truth))
-print 'sex_cat has %d columns, %d entries'%(len(sex_cat.columns), len(sex_cat))
-print 'match has %d columns, %d entries'%(len(match.columns), len(match))
+class Truth(object):
+    def __init__(self, dir, file_name, sex_name, match_name):
+        import astropy.io.fits as pyfits
+        import os
+        self.orig = pyfits.open(os.path.join(dir,file_name))[1].data
+        self.sex = pyfits.open(os.path.join(dir,sex_name))[1].data
+        self.match = pyfits.open(os.path.join(dir,match_name))[1].data
+
+        print 'orig_truth has %d columns, %d entries'%(len(self.orig.columns), len(self.orig))
+        print 'sex_cat has %d columns, %d entries'%(len(self.sex.columns), len(self.sex))
+        print 'match has %d columns, %d entries'%(len(self.match.columns), len(self.match))
+
+        self.index = self.match['index']
+
+        self.ok = ( (self.match['ok'] == 1) & 
+                    (self.orig['flags'][self.index] == 0) &
+                    (self.orig['is_star'][self.index] == 0) )
+        print 'number of objects in original catalog = ',len(self.orig)
+        print 'number of objects drawn = ',(self.orig['flags'] == 0).sum()
+        print 'number of stars drawn = ',((self.orig['flags'] == 0) & self.orig['is_star']).sum()
+        print 'number detected by sextractor = ',len(self.sex)
+        print 'number detected by sextractor with FLAGS==0: ',(self.sex['FLAGS'] == 0).sum()
+        print 'number with good matches: ',self.match['ok'].sum()
+        print 'number of these that are stars = ',(self.match['ok'] & self['is_star']).sum()
+        print 'number that were not drawn = ',(self.match['ok'] & (self['flags'] != 0)).sum()
+        print 'truth has %d entries listed as ok'%(len(self.ok))
+
+    def __getitem__(self, key): 
+        return self.orig[key][self.index]
+
+truth = Truth(dir, truth_file, sex_file, match_file)
+
+xdata = pyfits.open('im3shape-end2end-v3.fits')[1].data
 print 'xdata has %d columns, %d entries'%(len(xdata.columns), len(xdata))
 
 # The im3shape entries are not in order.  The identifier column - 1 gives the actual index to
 # use for the truth entry.
-truth = orig_truth[ match['index'][xdata['identifier']-1] ]
-print 'truth has %d columns, %d entries'%(len(truth.columns), len(truth))
+index = xdata['identifier']-1
+
+mask = (truth.ok[index] == 1) & (xdata['flag'] == 0)
+
 
 # Some of the items are flagged.  Remove these.
 # Also select out just the galaxy objects.
-mask = (match['ok'] == 1) & (truth['flags'] == 0) & (truth['is_star'] == 0) & (xdata['flag'] == 0)
-print 'number of objects in original catalog = ',len(orig_truth)
-print 'number of objects drawn = ',(orig_truth['flags'] == 0).sum()
-print 'number of stars drawn = ',((orig_truth['flags'] == 0) &orig_truth['is_star']).sum()
-print 'number detected by sextractor = ',len(sex_cat)
-print 'number detected by sextractor with FLAGS==0: ',(sex_cat['FLAGS'] == 0).sum()
-print 'number with good matches: ',match['ok'].sum()
-print 'number of these that are stars = ',(match['ok'] & truth['is_star']).sum()
-print 'number that were not actually drawn = ',(match['ok'] & (truth['flags'] != 0)).sum()
-print 'number that im3shape marked as failure = ',(match['ok'] & (xdata['flag'] != 0)).sum()
+print 'number that im3shape marked as failure = ',(truth.ok[index] & (xdata['flag'] != 0)).sum()
 print 'total passing all cuts = ',mask.sum()
 
 # Extract values that we want to plot
-tid = truth['id'][mask]
-tg1 = truth['true_g1'][mask]
-tg2 = truth['true_g2'][mask]
-thlr = truth['true_hlr'][mask]
-tra = truth['ra'][mask]
-tdec = truth['dec'][mask]
-tflux = truth['flux'][mask]
-tmag = truth['mag'][mask]
+tid = truth['id'][index][mask]
+tg1 = truth['true_g1'][index][mask]
+tg2 = truth['true_g2'][index][mask]
+thlr = truth['true_hlr'][index][mask]
+tra = truth['ra'][index][mask]
+tdec = truth['dec'][index][mask]
+tflux = truth['flux'][index][mask]
+tmag = truth['mag'][index][mask]
 
 xid = xdata['identifier'][mask]
-xe1 = xdata['e1'][mask]
-xe2 = xdata['e2'][mask]
+xg1 = xdata['e1'][mask]
+xg2 = xdata['e2'][mask]
 xr = xdata['radius'][mask]
 xra = xdata['ra'][mask]
 xdec = xdata['dec'][mask]
@@ -76,29 +98,29 @@ xraas = xdata['ra_as'][mask]
 xdecas = xdata['dec_as'][mask]
 print 'Extracted all data fields'
 
-def simple_plots():
+def simple_plots(name, tg1, tg2, xg1, xg2):
     """Make a few simple plots of truth vs meas
     """
     plt.clf()
     plt.axis([-0.3,0.3,-0.3,0.3])
     plt.grid()
     plt.xlabel('True g1')
-    plt.ylabel('im3shape e1')
+    plt.ylabel('{0} e1'.format(name))
     plt.plot([-1.,-1.],[1.,1.],'c-')
-    plt.scatter(truth['true_g1'],xdata['e1'],s=0.4,rasterized=True)
-    plt.savefig('im3shape_e1.png')
+    plt.scatter(tg1,xg1,s=0.4,rasterized=True)
+    plt.savefig('{0}_e1.png'.format(name))
 
     plt.clf()
     plt.axis([-0.3,0.3,-0.3,0.3])
     plt.grid()
     plt.xlabel('True g2')
-    plt.ylabel('im3shape e2')
+    plt.ylabel('{0} e2'.format(name))
     plt.plot([-1.,-1.],[1.,1.],'c-')
-    plt.scatter(truth['true_g2'],xdata['e2'],s=0.4,rasterized=True)
-    plt.savefig('im3shape_e2.png')
+    plt.scatter(tg2,xg2,s=0.4,rasterized=True)
+    plt.savefig('{0}_e2.png'.format(name))
 
-simple_plots()
-sys.exit()
+simple_plots('im3shape',tg1,tg2,xg1,xg2)
+#sys.exit()
 
 pp = PdfPages('e2e_im3shape-3.pdf')
 m = 1.0
@@ -106,8 +128,8 @@ tol1 = 0.01
 tol2 = 0.05
 
 # For v2, this is a first-pass effort to color code "good" shear values.
-good1 = (abs(m*tg1 - xe1) < tol1) & (abs(m*tg2 - xe2) < tol1)
-good2 = (abs(m*tg1 - xe1) < tol2) & (abs(m*tg2 - xe2) < tol2) & ~good1
+good1 = (abs(m*tg1 - xg1) < tol1) & (abs(m*tg2 - xg2) < tol1)
+good2 = (abs(m*tg1 - xg1) < tol2) & (abs(m*tg2 - xg2) < tol2) & ~good1
 bad = (~good1) & (~good2)
 
 
@@ -154,12 +176,12 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None):
     pp.savefig()
     print 'Plotted %s vs %s'%(ylabel, xlabel)
 
-plt_scatter(tg1, xe1, 'True g1', 'im3shape e1')
-plt_scatter(tg2, xe2, 'True g2', 'im3shape e2')
-plt_scatter(tg1, xe1, 'True g1', 'im3shape e1', m=m)
-plt_scatter(tg2, xe2, 'True g2', 'im3shape e2', m=m)
-plt_scatter(tg2, xe1, 'True g2', 'im3shape e1')
-plt_scatter(tg1, xe2, 'True g1', 'im3shape e2')
+plt_scatter(tg1, xg1, 'True g1', 'im3shape e1')
+plt_scatter(tg2, xg2, 'True g2', 'im3shape e2')
+plt_scatter(tg1, xg1, 'True g1', 'im3shape e1', m=m)
+plt_scatter(tg2, xg2, 'True g2', 'im3shape e2', m=m)
+plt_scatter(tg2, xg1, 'True g2', 'im3shape e1')
+plt_scatter(tg1, xg2, 'True g1', 'im3shape e2')
 plt_scatter(thlr, xr, 'True hlr', 'im3shape radius')
 plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 10)
 plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 2.5)
@@ -173,6 +195,8 @@ plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr',
             (abs(xsnr) < 1.e4) & (tflux < 1.e4))
 plt_scatter(tmag, xmag, 'True mag', '-2.5 log10(flux)', xflux > 0)
 plt_scatter(tmag, xmag2, 'True mag', '-2.5 log10(snr)', xsnr > 0)
+plt_scatter(tra, xra, 'True RA', 'im3shape RA')
+plt_scatter(tdec, xdec, 'True Dec', 'im3shape Dec')
 
 #plt_scatter(xr, xrr, 'radius', 'radius_ratio')  # radius_ratio = 1
 plt_scatter(xba, xda, 'bulge_A', 'disc_A')
@@ -195,14 +219,16 @@ plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-4) & (abs(
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-6) & (abs(xmmax) < 0.03))
 #plt_scatter(ideb, xdtb, 'delta_e_bulge', 'delta_theta_bulge')  # both = 0
 plt_scatter(xraas, xdecas, 'ra_as', 'dec_as')
-plt_scatter(xraas, xdecas, 'ra_as', 'dec_as', (abs(xraas) < 1) & (abs(xdecas) < 1))
+plt_scatter(xraas, xdecas, 'ra_as', 'dec_as', (abs(xraas-0.26) < 0.1) & (abs(xdecas+0.26) < 0.1))
 
 mmin_limit = 1.e-6
-plt_scatter(tg1, xe1, 'True g1', 'im3shape e1',
+plt_scatter(tg1, xg1, 'True g1', 'im3shape e1',
             (abs(xmmin) < mmin_limit), title='|model_min| < %f'%mmin_limit)
-plt_scatter(tg2, xe2, 'True g2', 'im3shape e2',
+plt_scatter(tg2, xg2, 'True g2', 'im3shape e2',
             (abs(xmmin) < mmin_limit), title='|model_min| < %f'%mmin_limit)
 plt_scatter(xmmin, xmmax, 'model_min', 'model_max',
             (abs(xmmin) < mmin_limit), title='|model_min| < mmin_limit, (N=%d)'%((abs(xmmin)<mmin_limit).sum()))
 
 pp.close()
+
+

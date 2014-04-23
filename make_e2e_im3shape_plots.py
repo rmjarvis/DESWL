@@ -136,7 +136,7 @@ def simple_plots(truth, meas):
     plt.savefig('{0}_e2.png'.format(meas.name))
 
 
-def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None):
+def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None, bin=False):
     """Make a scatter plot of two values with labels.
     If mask is not None, it is applied to xval, yval, and the color-coding good1, good2, bad.
     If m is not None, the line y=mx is drawn.
@@ -176,6 +176,33 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None):
                    )
     if title is not None:
         plt.title(title)
+
+    if bin:
+        nbins = 20
+        bins = np.linspace(min(xval), max(xval), nbins+1)
+        bin_index = np.digitize(xval, bins) - 1
+        bin_mean = [yval[bin_index == i].mean() for i in range(nbins)]
+        center = bins[:-1] + np.diff(bins)/2.
+        counts = [ (bin_index==i).sum() for i in range(nbins) ]
+        bin_err = [yval[bin_index == i].std() / np.sqrt(counts[i]) for i in range(nbins)]
+        plt.errorbar(center, bin_mean, yerr=bin_err, color='blue')
+        plt.scatter(center, bin_mean, s=1.5, color='blue')
+
+        if (abs(max(xval)) < 0.3 * abs(max(yval))) and (abs(min(xval)) < 0.3 * abs(min(yval))):
+            print 'Plotted %s vs %s'%(ylabel, xlabel)
+
+            pp.savefig()
+            plt.clf()
+            plt.axis([min(xval), max(xval), 1.5*min(xval), 1.5*max(xval)])
+            plt.grid()
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            if title is not None:
+                plt.title(title)
+            plt.scatter(xval[good1m],yval[good1m],s=0.4,rasterized=True)
+            plt.errorbar(center, bin_mean, yerr=bin_err, color='blue')
+            plt.scatter(center, bin_mean, s=1.5, color='blue')
+
     pp.savefig()
     print 'Plotted %s vs %s'%(ylabel, xlabel)
 
@@ -403,8 +430,60 @@ def do_extra_nfit_plots(truth, meas):
     plt_scatter(xq, xdetr, '|Q|', 'Det(R)')
     plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(abs(xdetr)<1.e10) & (xq<1.e4))
 
+def do_sys_plots(truth, meas):
 
+    tg1_raw = truth.g1[meas.index]
+    tg2_raw = truth.g2[meas.index]
+    xg1_raw = meas.g1
+    xg2_raw = meas.g2
 
+    global tol1, tol2, good1, good2, bad
+    tol1 = 0.01
+    tol2 = 0.05
+    mask1 = truth.ok[meas.index] & meas.ok
+    mask = mask1 & (abs(tg1_raw - xg1_raw) < tol1) & (abs(tg2_raw - xg2_raw) < tol1)
+
+    tg1 = truth.g1[meas.index][mask]
+    tg2 = truth.g2[meas.index][mask]
+    xg1 = meas.g1[mask]
+    xg2 = meas.g2[mask]
+
+    good1 = np.array([ True for x in tg1 ])
+    good2 = np.array([ False for x in tg1 ])
+    bad = np.array([ False for x in tg1 ])
+
+    tid = truth.id[meas.index][mask]
+    tg1 = truth.g1[meas.index][mask]
+    tg2 = truth.g2[meas.index][mask]
+    thlr = truth.r[meas.index][mask]
+    psf_g1 = truth['mean_psf_g1'][mask]
+    psf_g2 = truth['mean_psf_g2'][mask]
+    psf_fwhm = truth['mean_psf_fwhm'][mask]
+    wcs_g1 = truth['mean_wcs_g1'][mask]
+    wcs_g2 = truth['mean_wcs_g2'][mask]
+    wcs_scale = truth['mean_wcs_scale'][mask]
+    wcs_theta = truth['mean_wcs_theta'][mask]
+
+    xid = meas.id[mask]
+    xg1 = meas.g1[mask]
+    xg2 = meas.g2[mask]
+    xr = meas.r[mask]
+
+    plt_scatter(psf_g1, xg1-tg1, 'mean psf g1', 'dg1', bin=True)
+    plt_scatter(psf_g2, xg1-tg1, 'mean psf g2', 'dg1', bin=True)
+    plt_scatter(psf_fwhm, xg1-tg1, 'mean psf fwhm', 'dg1', bin=True)
+    plt_scatter(psf_g2, xg2-tg2, 'mean psf g2', 'dg2', bin=True)
+    plt_scatter(psf_g1, xg2-tg2, 'mean psf g1', 'dg2', bin=True)
+    plt_scatter(psf_fwhm, xg2-tg2, 'mean psf fwhm', 'dg2', bin=True)
+
+    plt_scatter(wcs_g1, xg1-tg1, 'mean wcs g1', 'dg1', bin=True)
+    plt_scatter(wcs_g2, xg1-tg1, 'mean wcs g2', 'dg1', bin=True)
+    plt_scatter(wcs_scale, xg1-tg1, 'mean wcs scale', 'dg1', bin=True)
+    plt_scatter(wcs_theta, xg1-tg1, 'mean wcs theta', 'dg1', bin=True)
+    plt_scatter(wcs_g2, xg2-tg2, 'mean wcs g2', 'dg2', bin=True)
+    plt_scatter(wcs_g1, xg2-tg2, 'mean wcs g1', 'dg2', bin=True)
+    plt_scatter(wcs_scale, xg2-tg2, 'mean wcs scale', 'dg2', bin=True)
+    plt_scatter(wcs_theta, xg2-tg2, 'mean wcs theta', 'dg2', bin=True)
 
 
 # Start the main program
@@ -414,8 +493,9 @@ if True:
     im3shape = Im3Shape(im3shape_file)
     simple_plots(truth, im3shape)
     pp = PdfPages('e2e_im3shape-3.pdf')
-    #do_basic_plots(truth, im3shape)
-    #do_extra_im3shape_plots(truth, im3shape)
+    do_basic_plots(truth, im3shape)
+    do_extra_im3shape_plots(truth, im3shape)
+    do_sys_plots(truth, im3shape)
     pp.close()
 
 if True:
@@ -424,5 +504,6 @@ if True:
     pp = PdfPages('e2e_nfit-3.pdf')
     do_basic_plots(truth, nfit)
     do_extra_nfit_plots(truth, nfit)
+    do_sys_plots(truth, nfit)
     pp.close()
 

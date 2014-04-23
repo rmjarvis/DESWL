@@ -10,6 +10,7 @@ truth_file = 'end2end-truth.fits'
 sex_file = 'DES0436-5748_r_cat.fits'
 match_file = 'match.fits'
 im3shape_file = 'im3shape-end2end-v3.fits'
+nfit_file = 'test-end-to-end-nfit-03.fits'
 
 class Truth(object):
     def __init__(self, dir, file_name, sex_name, match_name):
@@ -57,7 +58,7 @@ class Truth(object):
 class Im3Shape(object):
     def __init__(self, file_name):
         import astropy.io.fits as pyfits
-        self.data = pyfits.open(im3shape_file)[1].data
+        self.data = pyfits.open(file_name)[1].data
         print 'im3shape has %d columns, %d entries'%(len(self.data.columns), len(self.data))
 
         self.name = 'im3shape'
@@ -77,6 +78,32 @@ class Im3Shape(object):
         self.snr = self.data['snr']
         self.ra = self.data['ra']
         self.dec = self.data['dec']
+
+    def __getitem__(self, key): 
+        return self.data[key]
+
+class NFit(object):
+    def __init__(self, file_name):
+        import astropy.io.fits as pyfits
+        self.data = pyfits.open(file_name)[1].data
+        print 'nfit has %d columns, %d entries'%(len(self.data.columns), len(self.data))
+
+        self.name = 'nfit'
+
+        # The nfit entries are in order, but we can still use the same structure for indexing them.
+        self.index = self.data['number']-1
+
+        self.ok = (self.data['exp_flags'] == 0)
+
+        # pull out the basic information that should be in all catalogs
+        self.id = self.data['number']
+        self.g1 = -self.data['exp_g'][:,0]
+        self.g2 = self.data['exp_g'][:,1]
+        r2 = self.data['exp_pars'][:,4]
+        self.r = np.sqrt(r2)
+        self.r[r2<0] = -1
+        self.flux = self.data['exp_pars'][:,5]
+        self.snr = self.data['exp_s2n_w']
 
     def __getitem__(self, key): 
         return self.data[key]
@@ -293,18 +320,109 @@ def do_extra_im3shape_plots(truth, meas):
                 (abs(xmmin) < mmin_limit),
                 title='|model_min| < %f, (N=%d)'%(mmin_limit,(abs(xmmin)<mmin_limit).sum()))
 
+def do_extra_nfit_plots(truth, meas):
+
+    mask = truth.ok[meas.index] & meas.ok
+    tg1 = truth.g1[meas.index][mask]
+    tg2 = truth.g2[meas.index][mask]
+    xg1 = meas.g1[mask]
+    xg2 = meas.g2[mask]
+
+    xid = meas.id[mask]
+    xr = meas.r[mask]
+    xflux = meas.flux[mask]
+    xsnr = meas.snr[mask]
+    xmag = -2.5*np.log10(xflux)
+    xmag[xflux <= 0] = 99
+    xmag2 = -2.5*np.log10(xsnr)
+    xmag2[xsnr <= 0] = 99
+
+    xcenx = meas['exp_pars'][mask][:,0]
+    xceny = meas['exp_pars'][mask][:,1]
+    xcen = np.sqrt(xcenx**2+xceny**2)
+    xe1 = -meas['exp_pars'][mask][:,2]
+    xe2 = meas['exp_pars'][mask][:,3]
+    xr2 = meas['exp_pars'][mask][:,4]
+    xchi2 = meas['exp_chi2per'][mask]
+    xdof = meas['exp_dof'][mask]
+    xaic = meas['exp_aic'][mask]
+    xbic = meas['exp_bic'][mask]
+    xarate = meas['exp_arate'][mask]
+    xtau = meas['exp_tau'][mask]
+    xp = meas['exp_P'][mask]
+    xq0 = meas['exp_Q'][mask][:,0]
+    xq1 = meas['exp_Q'][mask][:,1]
+    xq = np.sqrt(xq0**2+xq1**2)
+    xr00 = meas['exp_R'][mask][:,0,0]
+    xr01 = meas['exp_R'][mask][:,0,1]
+    xr10 = meas['exp_R'][mask][:,1,0]
+    xr11 = meas['exp_R'][mask][:,1,1]
+    xtrr = xr00+xr11
+    xdetr = xr00*xr11-xr01*xr10
+    print 'Extracted all data fields'
+
+    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y')
+    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<1)
+    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.2)
+    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.05)
+    plt_scatter(xchi2, xsnr, 'chi2', 'snr')
+    plt_scatter(xchi2, xsnr, 'chi2', 'snr', xchi2<1.e4)
+    plt_scatter(xchi2, xsnr, 'chi2', 'snr', xchi2<1.e3)
+    plt_scatter(xchi2, xdof, 'chi2', 'dof')
+    plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e4)
+    plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e3)
+    #plt_scatter(xaic, xbic, 'aic', 'bic')
+    #plt_scatter(xaic, xbic, 'aic', 'bic', xaic<1.e6)
+    #plt_scatter(xarate, xaic, 'arate', 'aic', xaic<1.e6)
+    #plt_scatter(xarate, xtau, 'arate', 'tau')
+    #plt_scatter(xarate, xr2, 'arate', 'Irr')
+    #plt_scatter(xarate, xr2, 'arate', 'Irr',xr2<10)
+    #plt_scatter(xp, xtau, 'P', 'tau')
+    #plt_scatter(xp, xarate, 'P', 'arate')
+    plt_scatter(xp, xr2, 'P', 'Irr')
+    plt_scatter(xp, xr2, 'P', 'Irr',xr2<10)
+    plt_scatter(xq0, xq1, 'Q0', 'Q1')
+    plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e4)
+    plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e3)
+    plt_scatter(xp, xq, 'P', '|Q|')
+    plt_scatter(xp, xq, 'P', '|Q|', (xq<1.e4) & (xp<2.e3))
+    plt_scatter(xr00, xr11, 'R00', 'R11')
+    plt_scatter(xr00, xr11, 'R00', 'R11',(xr00>-5.e5) & (xr11>-5.e5))
+    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e5) & (abs(xr11)<5.e5))
+    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<2.e5) & (abs(xr11)<2.e5))
+    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e4) & (abs(xr11)<5.e4))
+    plt_scatter(xr00, xr01, 'R00', 'R01')
+    plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e6) & (abs(xr01)<1.e6))
+    plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e5) & (abs(xr01)<1.e5))
+    plt_scatter(xp, xtrr, 'P', 'Tr(R)')
+    plt_scatter(xp, xtrr, 'P', 'Tr(R)',(abs(xtrr)<1.e5) & (xp<1.e3))
+    plt_scatter(xp, xdetr, 'P', 'Det(R)')
+    plt_scatter(xp, xdetr, 'P', 'Det(R)',(abs(xdetr)<1.e10) & (xp<1.e3))
+    plt_scatter(xq, xtrr, '|Q|', 'Tr(R)')
+    plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',(abs(xtrr)<1.e5) & (xq<1.e4))
+    plt_scatter(xq, xdetr, '|Q|', 'Det(R)')
+    plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(abs(xdetr)<1.e10) & (xq<1.e4))
 
 
+
+
+
+# Start the main program
 truth = Truth(dir, truth_file, sex_file, match_file)
-im3shape = Im3Shape(im3shape_file)
 
-simple_plots(truth, im3shape)
+if True:
+    im3shape = Im3Shape(im3shape_file)
+    simple_plots(truth, im3shape)
+    pp = PdfPages('e2e_im3shape-3.pdf')
+    #do_basic_plots(truth, im3shape)
+    #do_extra_im3shape_plots(truth, im3shape)
+    pp.close()
 
-pp = PdfPages('e2e_im3shape-3.pdf')
-
-do_basic_plots(truth, im3shape)
-do_extra_im3shape_plots(truth, im3shape)
-
-pp.close()
-
+if True:
+    nfit = NFit(nfit_file)
+    simple_plots(truth, nfit)
+    pp = PdfPages('e2e_nfit-3.pdf')
+    do_basic_plots(truth, nfit)
+    do_extra_nfit_plots(truth, nfit)
+    pp.close()
 

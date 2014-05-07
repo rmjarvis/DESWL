@@ -5,12 +5,16 @@ import pickle
 import sys
 from matplotlib.backends.backend_pdf import PdfPages
 
-dir = 'DES0436-5748'
+dir = 'e2e_v3'
 truth_file = 'end2end-truth.fits'
 sex_file = 'DES0436-5748_r_cat.fits'
 match_file = 'match.fits'
-im3shape_file = 'im3shape-end2end-v3.fits'
+im3shape_file = 'im3shape-end2end-v3b.fits'
 nfit_file = 'test-end-to-end-nfit-03.fits'
+output_im3shape_file = 'e2e_im3shape-3b.pdf'
+output_nfit_file = 'e2e_nfit-3.pdf'
+do_im3shape = True
+do_nfit = False
 
 class Truth(object):
     def __init__(self, dir, file_name, sex_name, match_name):
@@ -152,6 +156,15 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None, bin=F
         good1m = good1
         good2m = good2
         badm = bad
+    if False:
+        print 'xval = ',xval
+        print 'yval = ',yval
+        print 'xlabel = ',xlabel
+        print 'ylabel = ',ylabel
+        print 'mask = ',mask
+        print 'm = ',m
+        print 'title = ',title
+        print 'bin = ',bin
     plt.axis([min(xval), max(xval), min(yval), max(yval)])
     plt.grid()
     baddot = plt.scatter(xval[badm],yval[badm],s=0.4,rasterized=True,color='red')
@@ -171,8 +184,8 @@ def plt_scatter(xval, yval, xlabel, ylabel, mask=None, m=None, title=None, bin=F
                         '%.2f  < |diff| < %.2f (N=%d)'%(tol1,tol2,good2.sum()),
                         '|diff| > %.2f (N=%d)'%(tol2,bad.sum()),
                    ],
-                   #loc = 2 # upper left
-                   loc = 4 # lower right
+                   loc = 2 # upper left
+                   #loc = 4 # lower right
                    )
     if title is not None:
         plt.title(title)
@@ -335,8 +348,6 @@ def do_extra_im3shape_plots(truth, meas):
     plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-6) & (abs(xmmax) < 0.03))
     #plt_scatter(ideb, xdtb, 'delta_e_bulge', 'delta_theta_bulge')  # both = 0
     plt_scatter(xraas, xdecas, 'ra_as', 'dec_as')
-    plt_scatter(xraas, xdecas, 'ra_as', 'dec_as',
-                (abs(xraas-0.26) < 0.1) & (abs(xdecas+0.26) < 0.1))
 
     mmin_limit = 1.e-6
     plt_scatter(tg1, xg1, 'True g1', 'im3shape e1',
@@ -489,19 +500,19 @@ def do_sys_plots(truth, meas):
 # Start the main program
 truth = Truth(dir, truth_file, sex_file, match_file)
 
-if True:
+if do_im3shape:
     im3shape = Im3Shape(im3shape_file)
     simple_plots(truth, im3shape)
-    pp = PdfPages('e2e_im3shape-3.pdf')
+    pp = PdfPages(output_im3shape_file)
     do_basic_plots(truth, im3shape)
     do_extra_im3shape_plots(truth, im3shape)
     do_sys_plots(truth, im3shape)
     pp.close()
 
-if True:
+if do_nfit:
     nfit = NFit(nfit_file)
     simple_plots(truth, nfit)
-    pp = PdfPages('e2e_nfit-3.pdf')
+    pp = PdfPages(output_nfit_file)
     do_basic_plots(truth, nfit)
     do_extra_nfit_plots(truth, nfit)
     do_sys_plots(truth, nfit)

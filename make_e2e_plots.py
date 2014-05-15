@@ -2,24 +2,24 @@ import numpy as np
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import pickle
+import os
 import sys
 from matplotlib.backends.backend_pdf import PdfPages
 
-dir = 'e2e_v3'
+dir = 'e2e_v4'
 truth_file = 'end2end-truth.fits'
 sex_file = 'DES0436-5748_r_cat.fits'
 match_file = 'match.fits'
-im3shape_file = 'im3shape-end2end-v3b.fits'
-nfit_file = 'test-end-to-end-nfit-03.fits'
-output_im3shape_file = 'e2e_im3shape-3b.pdf'
-output_nfit_file = 'e2e_nfit-3.pdf'
+im3shape_file = 'end2end-im3shape-v4.fits'
+nfit_file = 'test-end-to-end-nfit-04.fits'
+output_im3shape_file = 'e2e_im3shape-4.pdf'
+output_nfit_file = 'e2e_nfit-4.pdf'
 do_im3shape = True
 do_nfit = False
 
 class Truth(object):
     def __init__(self, dir, file_name, sex_name, match_name):
         import astropy.io.fits as pyfits
-        import os
         self.orig = pyfits.open(os.path.join(dir,file_name))[1].data
         self.sex = pyfits.open(os.path.join(dir,sex_name))[1].data
         self.match = pyfits.open(os.path.join(dir,match_name))[1].data
@@ -501,18 +501,18 @@ def do_sys_plots(truth, meas):
 truth = Truth(dir, truth_file, sex_file, match_file)
 
 if do_im3shape:
-    im3shape = Im3Shape(im3shape_file)
+    im3shape = Im3Shape(os.path.join(dir,im3shape_file))
     simple_plots(truth, im3shape)
-    pp = PdfPages(output_im3shape_file)
+    pp = PdfPages(os.path.join(dir,output_im3shape_file))
     do_basic_plots(truth, im3shape)
     do_extra_im3shape_plots(truth, im3shape)
     do_sys_plots(truth, im3shape)
     pp.close()
 
 if do_nfit:
-    nfit = NFit(nfit_file)
+    nfit = NFit(os.path.join(dir,nfit_file))
     simple_plots(truth, nfit)
-    pp = PdfPages(output_nfit_file)
+    pp = PdfPages(os.path.join(dir,output_nfit_file))
     do_basic_plots(truth, nfit)
     do_extra_nfit_plots(truth, nfit)
     do_sys_plots(truth, nfit)

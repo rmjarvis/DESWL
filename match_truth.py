@@ -2,9 +2,9 @@ import numpy
 import astropy.io.fits as pyfits
 from scipy.spatial import KDTree
 
-dir = 'DES0436-5748'
+dir = 'e2e_v4'
 truth = pyfits.open(dir+'/end2end-truth.fits')[1].data
-new = pyfits.open(dir+'/'+dir+'_r_cat.fits')[1].data
+new = pyfits.open(dir+'/DES0436-5748_r_cat.fits')[1].data
 
 print 'truth has %d columns, %d entries'%(len(truth.columns), len(truth))
 print 'new has %d columns, %d entries'%(len(new.columns), len(new))

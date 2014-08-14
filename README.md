@@ -45,7 +45,7 @@ Other repos of relevance:
    - https://github.com/esheldon/gmix_meds
 
 - Code for making the meds files (also includes the shapelet PSF estimation code
-  as well as a shapelet shear estimation code taht we used to use but has too
+  as well as a shapelet shear estimation code that we used to use but has too
   large noise biases):
 
    - https://github.com/rmjarvis/deswl_shapelets

@@ -36,20 +36,21 @@ Other repos of relevance:
 
 - The im3shape shear estimation code:
 
-   https://bitbucket.org/joezuntz/im3shape
+   - https://bitbucket.org/joezuntz/im3shape
 
 - The ngmix shear estimation code: 
 
-   https://github.com/esheldon/ngmix
-   https://github.com/esheldon/gmix_meds
+   - https://github.com/esheldon/ngmix
+
+   - https://github.com/esheldon/gmix_meds
 
 - Code for making the meds files (also includes the shapelet PSF estimation code
   as well as a shapelet shear estimation code taht we used to use but has too
   large noise biases):
 
-   https://github.com/rmjarvis/deswl_shapelets
+   - https://github.com/rmjarvis/deswl_shapelets
 
 - Code for computing shear correlation functions (i.e. the corr2 executable
   and also the treecorr python module):
 
-   https://github.com/rmjarvis/TreeCorr
+   - https://github.com/rmjarvis/TreeCorr

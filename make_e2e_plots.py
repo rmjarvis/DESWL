@@ -11,11 +11,12 @@ truth_file = 'end2end-truth.fits'
 sex_file = 'DES0436-5748_r_cat.fits'
 match_file = 'match.fits'
 im3shape_file = 'end2end-im3shape-v4.fits'
-nfit_file = 'test-end-to-end-nfit-04.fits'
+nfit_file = 'e2e-nfit-05.fits'
 output_im3shape_file = 'e2e_im3shape-4.pdf'
-output_nfit_file = 'e2e_nfit-4.pdf'
-do_im3shape = True
-do_nfit = False
+output_nfit_file = 'e2e_nfit-5.pdf'
+output_nfit_coadd_file = 'e2e_nfit-coadd-5.pdf'
+do_im3shape = False
+do_nfit = True
 
 class Truth(object):
     def __init__(self, dir, file_name, sex_name, match_name):
@@ -87,34 +88,51 @@ class Im3Shape(object):
         return self.data[key]
 
 class NFit(object):
-    def __init__(self, file_name):
+    def __init__(self, file_name, prefix=''):
         import astropy.io.fits as pyfits
         self.data = pyfits.open(file_name)[1].data
         print 'nfit has %d columns, %d entries'%(len(self.data.columns), len(self.data))
 
         self.name = 'nfit'
+        self.prefix = prefix
+        if prefix != '': self.name += '-' + prefix[:-1]
 
         # The nfit entries are in order, but we can still use the same structure for indexing them.
+        print 'number = ',self.data['number']
+        print 'min(number) = ',min(self.data['number'])
+        print 'where(number < 0) = ',np.where(self.data['number'] < 0)
+        #print 'data[where(number < 0)] = ',self.data[np.where(self.data['number'] < 0)]
         self.index = self.data['number']-1
 
-        self.ok = (self.data['exp_flags'] == 0)
+        self.ok = (
+                (self.data[prefix+'exp_flags'] == 0) &
+                (self.data['number'] > 0) &
+                (self.data['number'] <= len(self.data)) )
+        self.index[self.data['number'] <= 0] = 0
+        self.index[self.data['number'] > len(self.data)] = 0
 
         # pull out the basic information that should be in all catalogs
         self.id = self.data['number']
-        self.g1 = -self.data['exp_g'][:,0]
-        self.g2 = self.data['exp_g'][:,1]
-        r2 = self.data['exp_pars'][:,4]
+        self.g1 = -self.data[prefix+'exp_g'][:,0]
+        self.g2 = self.data[prefix+'exp_g'][:,1]
+        r2 = self.data[prefix+'exp_pars'][:,4]
         self.r = np.sqrt(r2)
         self.r[r2<0] = -1
-        self.flux = self.data['exp_pars'][:,5]
-        self.snr = self.data['exp_s2n_w']
+        self.flux = self.data[prefix+'exp_pars'][:,5]
+        self.snr = self.data[prefix+'exp_s2n_w']
 
     def __getitem__(self, key): 
-        return self.data[key]
+        if self.prefix != '':
+            return self.data[self.prefix + key]
+        else:
+            return self.data[key]
 
 def simple_plots(truth, meas):
     """Make a few simple plots of truth vs meas
     """
+    print 'meas.index = ',meas.index
+    print 'min(index) = ',min(meas.index)
+    print 'max(index) = ',max(meas.index)
     mask = truth.ok[meas.index] & meas.ok
     tg1 = truth.g1[meas.index][mask]
     tg2 = truth.g2[meas.index][mask]
@@ -260,24 +278,24 @@ def do_basic_plots(truth, meas):
     xmag2[xsnr <= 0] = 99
 
 
-    plt_scatter(tg1, xg1, 'True g1', 'im3shape e1')
-    plt_scatter(tg2, xg2, 'True g2', 'im3shape e2')
-    plt_scatter(tg1, xg1, 'True g1', 'im3shape e1', m=1)
-    plt_scatter(tg2, xg2, 'True g2', 'im3shape e2', m=1)
-    plt_scatter(tg2, xg1, 'True g2', 'im3shape e1')
-    plt_scatter(tg1, xg2, 'True g1', 'im3shape e2')
-    plt_scatter(thlr, xr, 'True hlr', 'im3shape radius')
-    plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 10)
-    plt_scatter(thlr, xr,'True hlr', 'im3shape radius', xr < 2.5)
-    plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux')
-    plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux',
+    plt_scatter(tg1, xg1, 'True g1', meas.name + ' e1')
+    plt_scatter(tg2, xg2, 'True g2', meas.name + ' e2')
+    plt_scatter(tg1, xg1, 'True g1', meas.name + ' e1', m=1)
+    plt_scatter(tg2, xg2, 'True g2', meas.name + ' e2', m=1)
+    plt_scatter(tg2, xg1, 'True g2', meas.name + ' e1')
+    plt_scatter(tg1, xg2, 'True g1', meas.name + ' e2')
+    plt_scatter(thlr, xr, 'True hlr', meas.name + ' radius')
+    #plt_scatter(thlr, xr,'True hlr', meas.name + ' radius', xr < 10)
+    #plt_scatter(thlr, xr,'True hlr', meas.name + ' radius', xr < 2.5)
+    plt_scatter(tflux, xflux, 'True flux', meas.name + ' mean_flux')
+    plt_scatter(tflux, xflux, 'True flux', meas.name + ' mean_flux',
                 (abs(xflux) < 1.e5) & (tflux < 1.e5))
-    plt_scatter(tflux, xflux, 'True flux', 'im3shape mean_flux',
+    plt_scatter(tflux, xflux, 'True flux', meas.name + ' mean_flux',
                 (abs(xflux) < 2.e4) & (tflux < 2.e4))
-    plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr')
-    plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr',
+    plt_scatter(tflux, xsnr, 'True flux', meas.name + ' snr')
+    plt_scatter(tflux, xsnr, 'True flux', meas.name + ' snr',
                 (abs(xsnr) < 1.e5) & (tflux < 1.e5))
-    plt_scatter(tflux, xsnr, 'True flux', 'im3shape snr',
+    plt_scatter(tflux, xsnr, 'True flux', meas.name + ' snr',
                 (abs(xsnr) < 1.e4) & (tflux < 1.e4))
     plt_scatter(tmag, xmag, 'True mag', '-2.5 log10(flux)', xflux > 0)
     plt_scatter(tmag, xmag2, 'True mag', '-2.5 log10(snr)', xsnr > 0)
@@ -288,8 +306,8 @@ def do_basic_plots(truth, meas):
         xra = meas.ra[mask]
         xdec = meas.dec[mask]
 
-        plt_scatter(tra, xra, 'True RA', 'im3shape RA')
-        plt_scatter(tdec, xdec, 'True Dec', 'im3shape Dec')
+        plt_scatter(tra, xra, 'True RA', meas.name + ' RA')
+        plt_scatter(tdec, xdec, 'True Dec', meas.name + ' Dec')
 
 
 def do_extra_im3shape_plots(truth, meas):
@@ -329,23 +347,23 @@ def do_extra_im3shape_plots(truth, meas):
 
     #plt_scatter(xr, xrr, 'radius', 'radius_ratio')  # radius_ratio = 1
     plt_scatter(xba, xda, 'bulge_A', 'disc_A')
-    plt_scatter(xba, xda, 'bulge_A', 'disc_A', (abs(xba) < 1.e3) & (abs(xda) < 1.e3))
-    plt_scatter(xba, xda, 'bulge_A', 'disc_A', (abs(xba) < 1.e2) & (abs(xda) < 1.e2))
+    #plt_scatter(xba, xda, 'bulge_A', 'disc_A', (abs(xba) < 1.e3) & (abs(xda) < 1.e3))
+    #plt_scatter(xba, xda, 'bulge_A', 'disc_A', (abs(xba) < 1.e2) & (abs(xda) < 1.e2))
     #plt_scatter(xbi, xdi, 'bulge_index', 'disc_index')  # bulge_index = 4, disc_index = 1
     plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux')
-    plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 1.e2) & (abs(xdf) < 1.e2))
-    plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 2.) & (abs(xdf) < 4.))
+    #plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 1.e2) & (abs(xdf) < 1.e2))
+    #plt_scatter(xbf, xdf, 'bulge_flux', 'disc_flux', (abs(xbf) < 2.) & (abs(xdf) < 4.))
     plt_scatter(xflux, xfr, 'total flux', 'flux_ratio')
-    plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e5)
-    plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e4)
+    #plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e5)
+    #plt_scatter(xflux, xfr, 'total flux', 'flux_ratio', abs(xflux) < 1.e4)
     plt_scatter(xsnr, xlike, 'snr', 'likelihood')
-    plt_scatter(xsnr, xlike, 'snr', 'likelihood', abs(xlike) < 1.e6)
-    plt_scatter(xsnr, xlike, 'snr', 'likelihood', (abs(xlike) < 1.e5) & (xsnr < 1.e4))
+    #plt_scatter(xsnr, xlike, 'snr', 'likelihood', abs(xlike) < 1.e6)
+    #plt_scatter(xsnr, xlike, 'snr', 'likelihood', (abs(xlike) < 1.e5) & (xsnr < 1.e4))
     plt_scatter(xmag2, xlnlike, '-2.5 log10(snr)', 'ln(abs(likelihood))', xsnr > 0)
     plt_scatter(xmmin, xmmax, 'model_min', 'model_max')
-    plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 0.001) & (abs(xmmax) < 0.15))
-    plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-4) & (abs(xmmax) < 0.03))
-    plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-6) & (abs(xmmax) < 0.03))
+    #plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 0.001) & (abs(xmmax) < 0.15))
+    #plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-4) & (abs(xmmax) < 0.03))
+    #plt_scatter(xmmin, xmmax, 'model_min', 'model_max', (abs(xmmin) < 3.e-6) & (abs(xmmax) < 0.03))
     #plt_scatter(ideb, xdtb, 'delta_e_bulge', 'delta_theta_bulge')  # both = 0
     plt_scatter(xraas, xdecas, 'ra_as', 'dec_as')
 
@@ -382,6 +400,8 @@ def do_extra_nfit_plots(truth, meas):
     xe2 = meas['exp_pars'][mask][:,3]
     xr2 = meas['exp_pars'][mask][:,4]
     xchi2 = meas['exp_chi2per'][mask]
+    xg1sens = meas['exp_g_sens'][mask][:,0]
+    xg2sens = meas['exp_g_sens'][mask][:,1]
     xdof = meas['exp_dof'][mask]
     xaic = meas['exp_aic'][mask]
     xbic = meas['exp_bic'][mask]
@@ -400,46 +420,45 @@ def do_extra_nfit_plots(truth, meas):
     print 'Extracted all data fields'
 
     plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y')
-    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<1)
-    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.2)
-    plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.05)
+    #plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<1)
+    #plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.2)
+    #plt_scatter(xcenx, xceny, 'centroid_x', 'centroid_y', xcen<0.05)
     plt_scatter(xchi2, xsnr, 'chi2', 'snr')
-    plt_scatter(xchi2, xsnr, 'chi2', 'snr', xchi2<1.e4)
-    plt_scatter(xchi2, xsnr, 'chi2', 'snr', xchi2<1.e3)
+    plt_scatter(xchi2, xsnr, 'chi2', 'snr', (xchi2<5.) & (xsnr<1.e4))
     plt_scatter(xchi2, xdof, 'chi2', 'dof')
-    plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e4)
-    plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<1.e3)
+    plt_scatter(xchi2, xdof, 'chi2', 'dof', xchi2<5.)
     #plt_scatter(xaic, xbic, 'aic', 'bic')
     #plt_scatter(xaic, xbic, 'aic', 'bic', xaic<1.e6)
     #plt_scatter(xarate, xaic, 'arate', 'aic', xaic<1.e6)
-    #plt_scatter(xarate, xtau, 'arate', 'tau')
+    plt_scatter(xarate, xtau, 'arate', 'tau')
+    plt_scatter(xg1sens, xg2sens, 'g1_sens', 'g2_sens')
     #plt_scatter(xarate, xr2, 'arate', 'Irr')
     #plt_scatter(xarate, xr2, 'arate', 'Irr',xr2<10)
     #plt_scatter(xp, xtau, 'P', 'tau')
     #plt_scatter(xp, xarate, 'P', 'arate')
     plt_scatter(xp, xr2, 'P', 'Irr')
-    plt_scatter(xp, xr2, 'P', 'Irr',xr2<10)
+    #plt_scatter(xp, xr2, 'P', 'Irr',xr2<10)
     plt_scatter(xq0, xq1, 'Q0', 'Q1')
-    plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e4)
-    plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e3)
+    #plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e4)
+    #plt_scatter(xq0, xq1, 'Q0', 'Q1', xq<1.e3)
     plt_scatter(xp, xq, 'P', '|Q|')
-    plt_scatter(xp, xq, 'P', '|Q|', (xq<1.e4) & (xp<2.e3))
+    #plt_scatter(xp, xq, 'P', '|Q|', (xq<1.e4) & (xp<2.e3))
     plt_scatter(xr00, xr11, 'R00', 'R11')
-    plt_scatter(xr00, xr11, 'R00', 'R11',(xr00>-5.e5) & (xr11>-5.e5))
-    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e5) & (abs(xr11)<5.e5))
-    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<2.e5) & (abs(xr11)<2.e5))
-    plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e4) & (abs(xr11)<5.e4))
+    #plt_scatter(xr00, xr11, 'R00', 'R11',(xr00>-5.e5) & (xr11>-5.e5))
+    #plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e5) & (abs(xr11)<5.e5))
+    #plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<2.e5) & (abs(xr11)<2.e5))
+    #plt_scatter(xr00, xr11, 'R00', 'R11',(abs(xr00)<5.e4) & (abs(xr11)<5.e4))
     plt_scatter(xr00, xr01, 'R00', 'R01')
-    plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e6) & (abs(xr01)<1.e6))
-    plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e5) & (abs(xr01)<1.e5))
+    #plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e6) & (abs(xr01)<1.e6))
+    #plt_scatter(xr00, xr01, 'R00', 'R01',(abs(xr00)<1.e5) & (abs(xr01)<1.e5))
     plt_scatter(xp, xtrr, 'P', 'Tr(R)')
-    plt_scatter(xp, xtrr, 'P', 'Tr(R)',(abs(xtrr)<1.e5) & (xp<1.e3))
+    #plt_scatter(xp, xtrr, 'P', 'Tr(R)',(abs(xtrr)<1.e5) & (xp<1.e3))
     plt_scatter(xp, xdetr, 'P', 'Det(R)')
-    plt_scatter(xp, xdetr, 'P', 'Det(R)',(abs(xdetr)<1.e10) & (xp<1.e3))
+    #plt_scatter(xp, xdetr, 'P', 'Det(R)',(abs(xdetr)<1.e10) & (xp<1.e3))
     plt_scatter(xq, xtrr, '|Q|', 'Tr(R)')
-    plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',(abs(xtrr)<1.e5) & (xq<1.e4))
+    #plt_scatter(xq, xtrr, '|Q|', 'Tr(R)',(abs(xtrr)<1.e5) & (xq<1.e4))
     plt_scatter(xq, xdetr, '|Q|', 'Det(R)')
-    plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(abs(xdetr)<1.e10) & (xq<1.e4))
+    #plt_scatter(xq, xdetr, '|Q|', 'Det(R)',(abs(xdetr)<1.e10) & (xq<1.e4))
 
 def do_sys_plots(truth, meas):
 
@@ -513,6 +532,14 @@ if do_nfit:
     nfit = NFit(os.path.join(dir,nfit_file))
     simple_plots(truth, nfit)
     pp = PdfPages(os.path.join(dir,output_nfit_file))
+    do_basic_plots(truth, nfit)
+    do_extra_nfit_plots(truth, nfit)
+    do_sys_plots(truth, nfit)
+    pp.close()
+
+    nfit = NFit(os.path.join(dir,nfit_file),'coadd_')
+    simple_plots(truth, nfit)
+    pp = PdfPages(os.path.join(dir,output_nfit_coadd_file))
     do_basic_plots(truth, nfit)
     do_extra_nfit_plots(truth, nfit)
     do_sys_plots(truth, nfit)

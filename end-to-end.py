@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 # Setup various file and directory names:
-work_dir = '/direct/astro+astronfs03/workarea/mjarvis'
+work_dir = '/gpfs01/astro/workarea/mjarvis'
 tile_name = 'DES0436-5748'
 out_dir = os.path.join(work_dir,tile_name)
 print 'tile = ',tile_name
@@ -178,7 +178,7 @@ wcs_g1 = numpy.zeros(len(coadd_cat))
 wcs_g2 = numpy.zeros(len(coadd_cat))
 wcs_theta = numpy.zeros(len(coadd_cat))
 
-do_print = False    # Allows the ability to turn on debug printing dynamically.
+do_print = True    # Allows the ability to turn on debug printing dynamically.
 
 for obj_num in range(len(coadd_cat)):
     coadd_info = coadd_cat[obj_num]
@@ -564,6 +564,7 @@ for image_num in range(1,nimages):
 
     # Add in the sky level, which is estimated in the background map by sextractor
     sky_im = galsim.fits.read(sky_path[image_num])
+    if do_print: print 'mean sky level = ',sky_im.array.mean()
     im += sky_im
 
     # We will build a new hdulist for the new file and copy what we need from the old one.

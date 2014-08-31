@@ -1,0 +1,3 @@
+cd psfex_tests
+./run_psfex.py --exp_dir ../work/tmp --run_psfex 1  --config_psf new.psfex --exp_match '*[0-9].fits*' --out_dir ../work/tmp
+./run_psfex.py --exp_dir ../work/tmp --run_psfex 1  --config_psf new.psfex --exp_match '*_r.fits*' --out_dir ../work/tmp

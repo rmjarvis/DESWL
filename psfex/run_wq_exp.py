@@ -32,8 +32,8 @@ top_txt="""
 
 # The config files are in the production directory
 command: |
-    source /direct/astro+u/rarmst/.tcshrc
-    cd /direct/astro+u/rarmst/production
+    source /astro/u/mjarvis/.bashrc
+    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
     {cmd}
 
 # show this name in job listings instead of the command
@@ -74,7 +74,7 @@ parser.add_argument('--file',default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
                     help='where to put submit files')
-parser.add_argument('--output',default='/astro/astronfs01/workarea/rarmst/',
+parser.add_argument('--output',default='/astro/u/mjarvis/work',
                     help='where to put output files')
 parser.add_argument('--cmd',default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
@@ -89,6 +89,7 @@ if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
 # I'm sure there is a better way to do this
 files=open(args.file)
 nline=file_len(files)
+files.close()
 
 files=open(args.file)
 
@@ -116,13 +117,14 @@ for line in files:
 
         job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(ijob),cmd=cmd)
         submit_file='%s/submit_%d'%(args.submit_dir,ijob)
+        submit_out='%s/submit_%d.out'%(args.submit_dir,ijob)
         file=open(submit_file,'w')
         file.write(job_submit)
         file.close()
         time.sleep(0.2)
         runs=''
         exps=''
-        os.system('nohup wq sub -b %s >/dev/null & '%submit_file)
+        os.system('nohup wq sub -b %s >& %s'%(submit_file,submit_out))
         time.sleep(0.2)
         ijob+=1
 

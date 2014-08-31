@@ -14,7 +14,7 @@ parser.add_argument('--psf_dir',
                     default='/astro/u/rarmst/soft/bin/',
                     help='location of psfex executable')
 parser.add_argument('--findstars_dir',
-                    default='~/findstars/wl_trunk/src/',
+                    default='/astro/u/mjarvis/bin',
                     help='location wl executables')
 parser.add_argument('--output',
                     default='./',
@@ -33,22 +33,22 @@ parser.add_argument('--runs',default='', nargs='+',
 
 # Configuration files
 parser.add_argument('--config_cat',
-                    default='/astro/u/rarmst/production/default.sex',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/default.sex',
                    help='sextractor config file')
 parser.add_argument('--config_psf',
-                    default='/astro/u/rarmst/production/new.psfex',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/new.psfex',
                    help='psfex config file')
 parser.add_argument('--config_findstars',
                     default='wl.config +wl_desdm.config +wl_firstcut.config',
                    help='wl config file')
 parser.add_argument('--param_file',
-                    default='/astro/u/rarmst/production/sex.param_psfex',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.param_psfex',
                    help='sextractor param file')
 parser.add_argument('--filt_file',
-                    default='/astro/u/rarmst/production/sex.conv',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.conv',
                    help='name of sextractor filter file')
 parser.add_argument('--star_file',
-                    default='/astro/u/rarmst/production/sex.nnw',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.nnw',
                    help='name of sextractor star file')
 
 # file options

@@ -16,7 +16,7 @@ parser.add_argument('--condor',default=0,type=int,
 
 parser.add_argument('--find',default=1,type=int,
                     help='output directory')
-parser.add_argument('--wl_soft',default='/astro/u/rarmst/findstars/wl_trunk/src/',
+parser.add_argument('--wl_soft',default='/astro/u/mjarvis/bin',
                     help='software directory')
 parser.add_argument('--input_dir',default='',
                     help='input directory of the data')
@@ -71,7 +71,7 @@ for run,exp in zip(args.runs,args.exps):
 
           
             cmd="{wl_soft}/findstars wl.config +wl_desdm.config +wl_finalcut.config input_prefix={input_dir} root={exp}_{ccd:02d} output_prefix={odir} >>{logfile} 2>&1".format(wl_soft=args.wl_soft,run=run,exp=exp,ccd=ccd,odir=odir,logfile=logfile,input_dir=input_dir)
-            # print cmd
+            print cmd
             os.system(cmd)
       
             # run measure psf

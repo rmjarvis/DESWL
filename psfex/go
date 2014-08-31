@@ -1,0 +1,2 @@
+./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_findstars.py"
+#./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"

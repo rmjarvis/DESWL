@@ -59,7 +59,11 @@ This repository serves several purposes.
             - Bad rho statistics (TBD)
 
       Note: Items above with the * are planned.  Not yet done.
-          
+ 
+
+If you are a DESWL developer and would like to add code to this repo and/or edit
+existing code, please email Mike Jarvis and he will make you a collaborator, which
+will give you push access.
 
 
 Other repos of relevance:

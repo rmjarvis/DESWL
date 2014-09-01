@@ -53,6 +53,8 @@ parser.add_argument('--star_file',
 parser.add_argument('--tapebump_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_edited.txt',
                     help='name of tape bump file')
+parser.add_argument('--make_symlinks', default=1, type=int,
+                    help='make symlinks from $DESDATA/EXTRA/red/$run/psfex-rerun/$exp')
 
 # options
 parser.add_argument('--rm_files',default=1, type=int,
@@ -288,4 +290,12 @@ for run,exp in zip(args.runs,args.exps):
             rm_cmd='rm %s >>%s 2>&1'%(img_file,logfile)
             os.system(rm_cmd)
         
+        if args.make_symlinks:
+            link_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s/'%(run,exp))
+            try: 
+                os.makedirs(link_dir, mode=0775)
+            except OSError:
+                if not os.path.isdir(link_dir): raise
+            os.symlink(psfcat_file,link_dir)
+
 

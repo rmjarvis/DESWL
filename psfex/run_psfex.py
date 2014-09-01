@@ -51,7 +51,7 @@ parser.add_argument('--star_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.nnw',
                     help='name of sextractor star file')
 parser.add_argument('--tapebump_file',
-                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_edited.txt',
+                    default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_ccdnum.txt',
                     help='name of tape bump file')
 parser.add_argument('--make_symlinks', default=True, action='store_const', const=False,
                     help='make symlinks from $DESDATA/EXTRA/red/$run/psfex-rerun/$exp')
@@ -80,8 +80,7 @@ args = parser.parse_args()
 
 # Read and parse the tapebump file if we are going to need it.
 if args.use_tapebumps:
-    with open(args.tapebump_file) as fin:
-        raw_tbdata = [ line.split() for line in fin ]
+    raw_tbdata = np.genfromtxt(args.tapebump_file, delimiter=',')
     # repackage this as  dict (key = ccdnum) of lists of tuples (xmin, ymin, xmax, ymax)
     tbdata = {}
     for d in raw_tbdata:

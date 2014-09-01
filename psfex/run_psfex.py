@@ -131,12 +131,12 @@ for run,exp in zip(args.runs,args.exps):
         dir, base_file = os.path.split(file)
 
         # find the base filename
-        if os.path.splitext(base)[1] == '.fz'
+        if os.path.splitext(base_file)[1] == '.fz':
             do_unpack = True
-            base_file=os.path.splitext(base)[0]
+            base_file=os.path.splitext(base_file)[0]
         else:
             do_unpack = False
-        print '   dir, base = ',dir,base
+        print '   dir, base_file = ',dir,base_file
     
         # remove the .fits extension for the root
         match=re.search('(.*)\.fits.*',base_file)

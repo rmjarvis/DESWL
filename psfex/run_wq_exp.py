@@ -78,6 +78,8 @@ parser.add_argument('--output',default='/astro/u/mjarvis/work',
                     help='where to put output files')
 parser.add_argument('--cmd',default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
+parser.add_argument('--debug',default=0,type=int,
+                    help='Set priority to high for debugging run')
 
 
 args = parser.parse_args()
@@ -116,6 +118,9 @@ for line in files:
         cmd=args.cmd+' --runs %s --exps %s --output %s'%(runs,exps,args.output)
 
         job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(ijob),cmd=cmd)
+        if args.debug:
+            job_submit += "priority: high\n"
+
         submit_file='%s/submit_%d'%(args.submit_dir,ijob)
         submit_out='%s/submit_%d.out'%(args.submit_dir,ijob)
         file=open(submit_file,'w')

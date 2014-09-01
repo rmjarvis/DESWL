@@ -22,46 +22,46 @@ parser.add_argument('--output',
 
 # Exposure inputs
 parser.add_argument('--file', default=None,
-                   help='name of file')
+                    help='name of file')
 parser.add_argument('--exp_match', default='',
-                   help='regexp to search for files in exp_dir')
+                    help='regexp to search for files in exp_dir')
 
 parser.add_argument('--exps',default='', nargs='+',
-                   help='list of exposures to run')
+                    help='list of exposures to run')
 parser.add_argument('--runs',default='', nargs='+',
-                   help='list of runs')
+                    help='list of runs')
 
 # Configuration files
 parser.add_argument('--config_cat',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/default.sex',
-                   help='sextractor config file')
+                    help='sextractor config file')
 parser.add_argument('--config_psf',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/new.psfex',
-                   help='psfex config file')
+                    help='psfex config file')
 parser.add_argument('--config_findstars',
                     default='wl.config +wl_desdm.config +wl_firstcut.config',
-                   help='wl config file')
+                    help='wl config file')
 parser.add_argument('--param_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.param_psfex',
-                   help='sextractor param file')
+                    help='sextractor param file')
 parser.add_argument('--filt_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.conv',
-                   help='name of sextractor filter file')
+                    help='name of sextractor filter file')
 parser.add_argument('--star_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.nnw',
-                   help='name of sextractor star file')
+                    help='name of sextractor star file')
 
-# file options
+# options
 parser.add_argument('--rm_files',default=1, type=int,
-                   help='remove unpacked files after finished')
+                    help='remove unpacked files after finished')
 parser.add_argument('--run_psfex',default=1,
-                   help='run psfex on files')
+                    help='run psfex on files')
 parser.add_argument('--use_findstars',default=0,type=int,
-                   help='use findstars results in psfex')
+                    help='use findstars results in psfex')
 parser.add_argument('--mag_cut',default=-1,type=float,
-                   help='remove the top mags using mag_auto')
+                    help='remove the top mags using mag_auto')
 parser.add_argument('--nstars',default=10,type=int,
-                   help='use median of brightest nstars for min mag')
+                    help='use median of brightest nstars for min mag')
 
 
 args = parser.parse_args()
@@ -69,37 +69,35 @@ args = parser.parse_args()
 
 for run,exp in zip(args.runs,args.exps):
 
+    print 'run, exp = ',run,exp
 
     odir=args.output+'/'+exp
     logfile=odir+'/log.'+exp
     
-    datadir='/astro/u/astrodat/data/DES/OPS'
-    input_dir='%s/red/%s/red/%s/'%(datadir,run,exp)
+    datadir='/astro/u/astrodat/data/DES'
+    input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
     files=[]
     
     # We could build the file name but we might as just well search for 
     # what is there
-    for filename in glob.glob('%s/%s'%(input_dir,args.exp_match)):
-        files.append(filename)
-
+    files = glob.glob('%s/%s'%(input_dir,args.exp_match))
 
     if not os.path.exists(odir):
         os.makedirs(odir)
 
     for file in files:
-
-        file_split=file.split('.')
+        print 'Processing ', file
 
         # find out if the file is fpacked by the extension
-        ext=file_split[-1]
+        dir, base_file = os.path.split(file)
 
         # find the base filename
-        if ext=='fz':
-            base_file=os.path.splitext(os.path.basename(file))[0]
+        if os.path.splitext(base)[1] == '.fz'
+            do_unpack = True
+            base_file=os.path.splitext(base)[0]
         else:
-            base_file=os.path.basename(file)
-        print 'Processing '+base_file
-
+            do_unpack = False
+        print '   dir, base = ',dir,base
     
         # remove the .fits extension for the root
         match=re.search('(.*)\.fits.*',base_file)
@@ -110,17 +108,12 @@ for run,exp in zip(args.runs,args.exps):
             print "Cannot find base name for "+base_file+" skipping"
             continue
 
-        # check to see if we need to funpack
-        did_unpack=False
-        
-        if(ext=='fz'):
+        if do_unpack:
             funpack_file=odir+'/'+base_file
             
             # If an unpacked file does not exist in the output directory 
             if not os.path.exists(funpack_file):
-            
-                did_unpack=True
-                
+                print '   unpacking fz file'
                 cmd='funpack -O %s %s  >>%s 2>&1' % (funpack_file,file,logfile)
                 ok=os.system(cmd)
             img_file=funpack_file
@@ -168,6 +161,7 @@ for run,exp in zip(args.runs,args.exps):
             
             findstars_file=pyfits.open(star_file)
             mask=findstars_file[1].data['star_flag']==1
+            print '   found %d stars'%np.count_nonzero(mask)
             # create new sextractor file with only these entries
             data=initfile[2].data[mask]
             

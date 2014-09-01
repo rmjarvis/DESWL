@@ -301,7 +301,22 @@ for run,exp in zip(args.runs,args.exps):
                 print '   made directory ',link_dir
             except OSError:
                 if not os.path.isdir(link_dir): raise
-            os.symlink(psfcat_file,link_dir)
+            psf_link = os.path.join(link_dir,os.path.basename(psf_file))
+            try:
+                os.remove(psf_link)
+                print '   removed existing link: ',psf_link
+            except OSError:
+                pass
+            os.symlink(psf_file,psf_link)
+            print '   made link: ',psf_link
+            catout_link = os.path.join(link_dir,os.path.basename(catout_file))
+            try:
+                os.remove(catout_link)
+                print '   removed existing link: ',catout_link
+            except OSError:
+                pass
+            os.symlink(catout_file,catout_link)
+            print '   made link: ',catout_link
 
         if args.single_ccd:
             break

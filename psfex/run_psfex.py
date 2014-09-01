@@ -26,9 +26,9 @@ parser.add_argument('--file', default=None,
 parser.add_argument('--exp_match', default='',
                     help='regexp to search for files in exp_dir')
 
-parser.add_argument('--exps',default='', nargs='+',
+parser.add_argument('--exps', default='', nargs='+',
                     help='list of exposures to run')
-parser.add_argument('--runs',default='', nargs='+',
+parser.add_argument('--runs', default='', nargs='+',
                     help='list of runs')
 
 # Configuration files
@@ -53,24 +53,26 @@ parser.add_argument('--star_file',
 parser.add_argument('--tapebump_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_edited.txt',
                     help='name of tape bump file')
-parser.add_argument('--make_symlinks', default=1, type=int,
+parser.add_argument('--make_symlinks', default=True, action='store_const', const=False,
                     help='make symlinks from $DESDATA/EXTRA/red/$run/psfex-rerun/$exp')
 
 # options
-parser.add_argument('--rm_files',default=1, type=int,
+parser.add_argument('--rm_files', default=True, action='store_const', const=False,
                     help='remove unpacked files after finished')
-parser.add_argument('--run_psfex',default=1,
+parser.add_argument('--run_psfex', default=True, action='store_const', const=False,
                     help='run psfex on files')
-parser.add_argument('--use_findstars',default=0,type=int,
+parser.add_argument('--use_findstars', default=False, action='store_const', const=True,
                     help='use findstars results in psfex')
-parser.add_argument('--mag_cut',default=-1,type=float,
+parser.add_argument('--mag_cut', default=-1, type=float,
                     help='remove the top mags using mag_auto')
-parser.add_argument('--nstars',default=10,type=int,
+parser.add_argument('--nstars', default=10, type=int,
                     help='use median of brightest nstars for min mag')
-parser.add_argument('--use_tapebumps',default=1,type=int,
+parser.add_argument('--use_tapebumps', default=True, action='store_const', const=False,
                     help='avoid stars in or near tape bumps')
-parser.add_argument('--tapebump_extra',default=2,type=float,
+parser.add_argument('--tapebump_extra', default=2, type=float,
                     help='How much extra room around tape bumps to exclude stars in units of FWHM')
+parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
+                    help='Only do 1 ccd per exposure (used for debugging)')
 
 
 args = parser.parse_args()
@@ -291,11 +293,17 @@ for run,exp in zip(args.runs,args.exps):
             os.system(rm_cmd)
         
         if args.make_symlinks:
+            print '   making symlink'
             link_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s/'%(run,exp))
+            print '   link_dir = ',link_dir
             try: 
                 os.makedirs(link_dir, mode=0775)
+                print '   made directory ',link_dir
             except OSError:
                 if not os.path.isdir(link_dir): raise
             os.symlink(psfcat_file,link_dir)
+
+        if args.single_ccd:
+            break
 
 

@@ -31,10 +31,12 @@ top_txt="""
 # command: ./script
 
 # The config files are in the production directory
+# Old version uses:
+#     source /astro/u/mjarvis/.bashrc
+#     {cmd}
+# I switched to bash -l -c '{cmd}' because my shell seems to be set up wrong.
 command: |
     cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
-    #source /astro/u/mjarvis/.bashrc
-    #{cmd}
     bash -l -c '{cmd}'
 
 # show this name in job listings instead of the command
@@ -69,17 +71,17 @@ notgroup: [slow,crappy]
 
 
 parser = argparse.ArgumentParser(description='Run single file')
-parser.add_argument('--njob',default=10,type=int,
+parser.add_argument('--njob', default=10, type=int,
                     help='exposures per job')
-parser.add_argument('--file',default='',
+parser.add_argument('--file', default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
                     help='where to put submit files')
-parser.add_argument('--output',default='/astro/u/mjarvis/work',
+parser.add_argument('--output', default='/astro/u/mjarvis/work',
                     help='where to put output files')
-parser.add_argument('--cmd',default='./run_findstars.py --condor 0',
+parser.add_argument('--cmd', default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
-parser.add_argument('--debug',default=0,type=int,
+parser.add_argument('--debug', default=False, action='store_const', const=True,
                     help='Set priority to high for debugging run')
 
 

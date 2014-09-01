@@ -115,6 +115,15 @@ ud = galsim.UniformDeviate(8675309)
 psf_params = [ [ 2.*ud()-1. for i in range(18) ] for j in range(nimages) ]
 print 'Initialized psf parameters'
 
+# Setup some significant wcs component.  Similar to psf, but only 4 components.
+# u += 0.05 * ( a (1-x^2) + b (1-y^2) )
+# v += 0.05 * ( c (1-x^2) + d (1-y^2) )
+# where x,y are both normalized to range from -1 to 1.  This means at the edges, there is no
+# adjustment, so the edges are in the same place they were originally.  But in between, there 
+# is significant distortion.
+wcs_params = [ [ 2.*ud()-1. for i in range(4) ] for j in range(nimages) ]
+print 'Initialized wcs parameters'
+
 # Finally use the coadd_cat and the one in the meds file to draw each galaxy on the appropriate
 # new image file.
 meds_cat = meds[1].data

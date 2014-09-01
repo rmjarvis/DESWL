@@ -101,7 +101,9 @@ def exclude_tapebumps(tbd, data, extra):
     y = data['Y_IMAGE']
     masks = [(x>tb[0]-extra) & (x<tb[2]+extra) & (y>tb[1]-extra) & (y<tb[3]+extra) for tb in tbd]
     mask = np.any(masks, axis=0)
-    print '   masking %d stars for being in or near a bump'%sum(mask)
+    if sum(mask) > 0:
+        print '   masking %d stars for being in or near a bump'%sum(mask)
+        print '   x,y = ',zip(x[mask],y[mask])
     return data[np.logical_not(mask)]
 
 

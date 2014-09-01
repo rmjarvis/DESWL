@@ -32,9 +32,10 @@ top_txt="""
 
 # The config files are in the production directory
 command: |
-    source /astro/u/mjarvis/.bashrc
     cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
-    {cmd}
+    #source /astro/u/mjarvis/.bashrc
+    #{cmd}
+    bash -l -c '{cmd}'
 
 # show this name in job listings instead of the command
 job_name: {name}

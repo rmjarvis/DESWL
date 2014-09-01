@@ -97,8 +97,10 @@ def exclude_tapebumps(tbd, data, extra):
     data = the input data for the stars
     extra = how much extra distance around the tape bumps to exclude stars in pixels
     """
-    x = data['X_IMAGE']
-    y = data['Y_IMAGE']
+    # I'm sure it doesn't matter, but add an extra 0.5 pixel to the slop because the tape bump
+    # values are in terms of which pixels to include as part of the tape bump.  So the edges
+    # are an extra 0.5 pixel outside of that.
+    extra += 0.5
     masks = [(x>tb[0]-extra) & (x<tb[2]+extra) & (y>tb[1]-extra) & (y<tb[3]+extra) for tb in tbd]
     mask = np.any(masks, axis=0)
     if sum(mask) > 0:

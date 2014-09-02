@@ -101,6 +101,8 @@ def exclude_tapebumps(tbd, data, extra):
     # values are in terms of which pixels to include as part of the tape bump.  So the edges
     # are an extra 0.5 pixel outside of that.
     extra += 0.5
+    x = data['X_IMAGE']
+    y = data['Y_IMAGE']
     masks = [(x>tb[0]-extra) & (x<tb[2]+extra) & (y>tb[1]-extra) & (y<tb[3]+extra) for tb in tbd]
     mask = np.any(masks, axis=0)
     if sum(mask) > 0:

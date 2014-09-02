@@ -240,7 +240,7 @@ for run,exp in zip(args.runs,args.exps):
                     continue
                 print '   fwhm = ',fwhm
             if fwhm > HIGH_FWHM:
-                flag |= TOO_HIGH_FWHM
+                flag |= TOO_HIGH_FWHM_FLAG
 
             # This is the file that holds the vignettes 
             psfcat_file=odir+'/'+root+'_psfcat.fits'

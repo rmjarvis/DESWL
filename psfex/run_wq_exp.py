@@ -129,11 +129,11 @@ for line in files:
         file=open(submit_file,'w')
         file.write(job_submit)
         file.close()
-        time.sleep(0.2)
+        time.sleep(0.1)
         runs=''
         exps=''
         os.system('nohup wq sub -b %s >& %s'%(submit_file,submit_out))
-        time.sleep(0.2)
+        time.sleep(0.1)
         ijob+=1
 
     i+=1

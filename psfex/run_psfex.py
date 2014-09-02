@@ -143,12 +143,6 @@ try:
 except OSError:
     pass
 
-# If blacklist file is there, remove it.
-try:
-    os.remove(blacklist_file)
-except OSError:
-    pass
-
 for run,exp in zip(args.runs,args.exps):
 
     print 'run, exp = ',run,exp

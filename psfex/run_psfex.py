@@ -81,7 +81,7 @@ args = parser.parse_args()
 # Read and parse the tapebump file if we are going to need it.
 if args.use_tapebumps:
     raw_tbdata = np.genfromtxt(args.tapebump_file, delimiter=',')
-    # repackage this as  dict (key = ccdnum) of lists of tuples (xmin, ymin, xmax, ymax)
+    # repackage this as  dict (key = ccdnum) of lists of tuples (ymin, xmin, ymax, xmax)
     tbdata = {}
     for d in raw_tbdata:
         ccdnum = int(d[0])
@@ -103,11 +103,12 @@ def exclude_tapebumps(tbd, data, extra):
     extra += 0.5
     x = data['X_IMAGE']
     y = data['Y_IMAGE']
-    masks = [(x>tb[0]-extra) & (x<tb[2]+extra) & (y>tb[1]-extra) & (y<tb[3]+extra) for tb in tbd]
+    masks = [(y>tb[0]-extra) & (x>tb[1]-extra) & (y<tb[2]+extra) & (x<tb[3]+extra) for tb in tbd]
     mask = np.any(masks, axis=0)
     if sum(mask) > 0:
         print '   masking %d stars for being in or near a bump'%sum(mask)
-        print '   x,y = ',zip(x[mask],y[mask])
+        print '       tapebumps = ',tbd
+        print '       excluded x,y = ',zip(x[mask],y[mask])
     return data[np.logical_not(mask)]
 
 

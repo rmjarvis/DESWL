@@ -7,18 +7,16 @@ import numpy as np
 parser = argparse.ArgumentParser(description='Run single file')
 
 # Directory arguments
-parser.add_argument('--cat_dir',
-                    default='/astro/u/rarmst/soft/bin/',
+parser.add_argument('--cat_dir', default='/astro/u/rarmst/soft/bin/',
                     help='location of sextrator executable')
-parser.add_argument('--psf_dir',
-                    default='/astro/u/rarmst/soft/bin/',
+parser.add_argument('--psf_dir', default='/astro/u/rarmst/soft/bin/',
                     help='location of psfex executable')
-parser.add_argument('--findstars_dir',
-                    default='/astro/u/mjarvis/bin',
+parser.add_argument('--findstars_dir', default='/astro/u/mjarvis/bin',
                     help='location wl executables')
-parser.add_argument('--output',
-                    default='./',
+parser.add_argument('--output', default='./',
                     help='location of outputs')
+parser.add_argument('--clear_output', default=False, action='store_const', const=True,
+                    help='should the output directory be cleared before writing new files?')
 
 # Exposure inputs
 parser.add_argument('--file', default=None,
@@ -139,9 +137,17 @@ def log_blacklist(run, exp, ccdnum, flag):
         time.sleep(1)
         return log_blacklist(file,run,exp,ccdnum,flag)
 
-# If it is already there at the start, clear it.
-if os.path.exists(blacklist_file):
+# Make the output directory if it does not exist yet.
+try:
+    os.mkdir(args.output)
+except OSError:
+    pass
+
+# If blacklist file is there, remove it.
+try:
     os.remove(blacklist_file)
+except OSError:
+    pass
 
 for run,exp in zip(args.runs,args.exps):
 
@@ -149,8 +155,13 @@ for run,exp in zip(args.runs,args.exps):
 
     odir = os.path.join(args.output,exp)
     logfile = os.path.join(odir, 'log.'+exp)
-    if os.path.exists(logfile):
-        os.remove(logfile)
+
+    if args.clear_output:
+        import shutil
+        try:
+            shutil.rmtree(odir)
+        except OSError:
+            pass
 
     datadir='/astro/u/astrodat/data/DES'
     input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
@@ -160,8 +171,10 @@ for run,exp in zip(args.runs,args.exps):
     # what is there
     files = glob.glob('%s/%s'%(input_dir,args.exp_match))
 
-    if not os.path.exists(odir):
+    try:
         os.makedirs(odir)
+    except:
+        if not os.path.exists(odir): raise
 
     for file in files:
         print 'Processing ', file

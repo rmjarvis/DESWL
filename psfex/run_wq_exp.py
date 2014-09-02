@@ -1,78 +1,57 @@
 #!/usr/bin/env python
 # Program to loop over exposures and run a given command
 #
-# the njob argument will batch the exposures into njobs/per wq job
+# The njobs argument will bundle the exposures into batches to make a total
+# of njobs jobs to submit to wq.
 # 
-# the file argument  expects a file containing a list of run,expnum such as:
+# The file argument expects a file containing a list of run,expnum such as:
 #     
 #    20130711064512_20121202 DECam_00157539
 # 
-# the command argument is the name of exectuation that is expected 
+# The command argument is the name of exectuation that is expected 
 # to take a --exps and --runs to specify input directories
 # and --output for output
 # 
 # I only have two scripts that do this currently run_psfex.py and run_findstars.py
 # To run them you can do something like
-#    ./run_wq_exp.py --njob 1 --file test_exp --output test2 --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
+#    ./run_wq_exp.py --njobs 10 --file test_exp --output test2 --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
 
 # 
+# See https://github.com/esheldon/wq for information about using wq.
 
 import argparse,os,re
 import time
-def file_len(file):
-    lines = 0
-    for line in file:
-        lines += 1
-    return lines
-                    
-top_txt="""
-# these are the commands to be run.  if you only have a 
-# single command, you can use a single line such as 
-# command: ./script
 
-# The config files are in the production directory
-# Old version uses:
-#     source /astro/u/mjarvis/.bashrc
-#     {cmd}
-# I switched to bash -l -c '{cmd}' because my shell seems to be set up wrong.
+# Note: I originally had the wrong shell set.  I ran bash in my .login
+# rather than setting it correctly by mailing RT-RACF-UserAccounts@bnl.gov.
+# If you have the same problem, you can have the command look like:
+#    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+#    bash -l -c '{cmd}'
+# instead of 
+#    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+#    source /astro/u/mjarvis/.bashrc
+#    {cmd}
+
+top_txt="""
 command: |
     cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
-    bash -l -c '{cmd}'
+    source /astro/u/mjarvis/.bashrc
+    {cmd}
 
-# show this name in job listings instead of the command
 job_name: {name}
 
 # this is the type of node/host selection. bynode means select entire
 # nodes.
 mode: bycore
 
-# Since the mode is bynode, this means 5 full nodes
-# N: 5
-
 # Select from this group(s)
 group: [new, new2, new3]
-
-# Do not select from this set of groups
-notgroup: [slow,crappy]
-
-# require at least this many cores
-# min_cores: 8
-
-# used by MPI jobs
-# hostfile: auto
-
-# If we have 5 full nodes of 12 cores each,
-# there is 60 cores in total. Threads:4 ensures each
-# host is listed 3 times. So the command above will
-# run 15 MPI nodes of 4 threads each
-# threads: 4
-
 """
 
 
 parser = argparse.ArgumentParser(description='Run single file')
-parser.add_argument('--njob', default=10, type=int,
-                    help='exposures per job')
+parser.add_argument('--njobs', default=100, type=int,
+                    help='How many jobs to run')
 parser.add_argument('--file', default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
@@ -92,48 +71,48 @@ if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
 
 # open it once to count the number of lines
 # I'm sure there is a better way to do this
-files=open(args.file)
-nline=file_len(files)
-files.close()
+with open(args.file) as fin:
+    data = [ line.split() for line in fin ]
 
-files=open(args.file)
+runs, exps = zip(*data)
 
-# list of runs
-runs=''
-exps=''
+import math
+n_per_job = int(math.ceil(len(runs) / args.njobs))
+print 'njobs = ',args.njobs
+print 'total n = ',len(runs)
+print 'n_per_job = ',n_per_job
 
-ijob=0
-i=0
-iline=0
+submit_list = []
 
-for line in files:
+for job in range(args.njobs):
+    start = job * n_per_job
+    end = start + n_per_job
+    if end > len(runs): 
+        end = len(runs)
+    if end == start:
+        continue
 
-    iline+=1
-    vals=line.split()
-    run=vals[0]
-    exp=vals[1]
+    # Make single string with a list of the runs and exps for this job:
+    s_runs = " ".join(runs[start:end])
+    s_exps = " ".join(exps[start:end])
 
-    runs+=run+' '
-    exps+=exp+' '
-    
-    if (i+1)%args.njob==0 or iline==nline:
-        
-        cmd=args.cmd+' --runs %s --exps %s --output %s'%(runs,exps,args.output)
+    cmd=args.cmd+' --runs %s --exps %s --output %s'%(s_runs,s_exps,args.output)
 
-        job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(ijob),cmd=cmd)
-        if args.debug:
-            job_submit += "priority: high\n"
+    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(job),cmd=cmd)
+    if args.debug:
+        job_submit += "priority: high\n"
 
-        submit_file='%s/submit_%d'%(args.submit_dir,ijob)
-        submit_out='%s/submit_%d.out'%(args.submit_dir,ijob)
-        file=open(submit_file,'w')
-        file.write(job_submit)
-        file.close()
-        time.sleep(0.1)
-        runs=''
-        exps=''
-        os.system('nohup wq sub -b %s >& %s'%(submit_file,submit_out))
-        time.sleep(0.1)
-        ijob+=1
+    submit_file='%s/submit_%d'%(args.submit_dir,job)
 
-    i+=1
+    with open(submit_file,'w') as fout:
+        fout.write(job_submit)
+    submit_list.append(submit_file)
+
+time.sleep(0.1)
+s_sub = " ".join(submit_list)
+cmd = 'nohub wq sub -b %s >& %s/wq_sub.out'%(s_sub,args.submit_dir)
+print cmd
+print 'Note: This will take %d seconds to run, since wq waits'%len(submit_list)
+print '      1 second between each job submission.'
+os.system(cmd)
+

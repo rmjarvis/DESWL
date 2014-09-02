@@ -116,9 +116,11 @@ for run,exp in zip(args.runs,args.exps):
 
     print 'run, exp = ',run,exp
 
-    odir=args.output+'/'+exp
-    logfile=odir+'/log.'+exp
-    
+    odir = os.path.join(args.output,exp)
+    logfile = os.path.join(odir, 'log.'+exp)
+    if os.path.exists(logfile):
+        os.remove(logfile)
+
     datadir='/astro/u/astrodat/data/DES'
     input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
     files=[]

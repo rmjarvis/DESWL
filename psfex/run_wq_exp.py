@@ -117,7 +117,7 @@ for job in range(args.njobs):
 
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
-cmd = 'nohub wq sub -b %s >& %s/wq_sub.out'%(s_sub,args.submit_dir)
+cmd = 'nohup wq sub -b %s >& %s/wq_sub.out'%(s_sub,args.submit_dir)
 print cmd
 print 'Note: This will take %d seconds to run, since wq waits'%len(submit_list)
 print '      1 second between each job submission.'

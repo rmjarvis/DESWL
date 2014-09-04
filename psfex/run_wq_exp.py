@@ -84,7 +84,7 @@ print 'After shuffling, first 3 lines of input file are ',data[0:3]
 runs, exps = zip(*data)
 
 import math
-n_per_job = int(math.ceil(len(runs) / args.njobs))
+n_per_job = int(math.ceil(float(len(runs)) / float(args.njobs)))
 print 'njobs = ',args.njobs
 print 'total n = ',len(runs)
 print 'n_per_job = ',n_per_job

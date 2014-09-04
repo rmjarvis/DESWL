@@ -51,21 +51,21 @@ parser.add_argument('--star_file',
 parser.add_argument('--tapebump_file',
                     default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_ccdnum.txt',
                     help='name of tape bump file')
-parser.add_argument('--make_symlinks', default=True, action='store_const', const=False,
+parser.add_argument('--make_symlinks', default=1, type=int,
                     help='make symlinks from $DESDATA/EXTRA/red/$run/psfex-rerun/$exp')
 
 # options
-parser.add_argument('--rm_files', default=True, action='store_const', const=False,
+parser.add_argument('--rm_files', default=1, type=int,
                     help='remove unpacked files after finished')
-parser.add_argument('--run_psfex', default=True, action='store_const', const=False,
+parser.add_argument('--run_psfex', default=1, type=int,
                     help='run psfex on files')
-parser.add_argument('--use_findstars', default=False, action='store_const', const=True,
+parser.add_argument('--use_findstars', default=1, type=int,
                     help='use findstars results in psfex')
 parser.add_argument('--mag_cut', default=-1, type=float,
                     help='remove the top mags using mag_auto')
 parser.add_argument('--nstars', default=10, type=int,
                     help='use median of brightest nstars for min mag')
-parser.add_argument('--use_tapebumps', default=True, action='store_const', const=False,
+parser.add_argument('--use_tapebumps', default=1, type=int,
                     help='avoid stars in or near tape bumps')
 parser.add_argument('--tapebump_extra', default=2, type=float,
                     help='How much extra room around tape bumps to exclude stars in units of FWHM')
@@ -202,51 +202,52 @@ for run,exp in zip(args.runs,args.exps):
 
         try:
 
-            if do_unpack:
-                funpack_file=odir+'/'+base_file
-            
-                # If an unpacked file does not exist in the output directory 
-                if not os.path.exists(funpack_file):
-                    print '   unpacking fz file'
-                    cmd='funpack -O %s %s  >>%s 2>&1' % (funpack_file,file,logfile)
-                    ok=os.system(cmd)
-                img_file=funpack_file
-                
-            else:
-                # If the file is not fpacked, make a symlink into the output directory
-                if not os.path.exists(odir+'/'+base_file):
-                    # make symlink to local directory
-                    os.system('ln -s %s %s  >>%s 2>&1'%(file,odir,logfile))
-                img_file=odir+'/'+base_file
-            hdu=0
-
-            # extract the saturation level, this is how desdm runs sextractor
-            # we need the fwhm for class star
-            # Also need the fwhm for doing the tape bumps.
-            with pyfits.open(img_file) as pyfile:
-                sat=-1
-                fwhm=4.
-                try:
-                    sat=pyfile[hdu].header['SATURATE']
-                    fwhm=pyfile[hdu].header['FWHM']
-                except:
-                    print 'Cannot process ',img_file
-                    continue
-                print '   fwhm = ',fwhm
-            if fwhm > HIGH_FWHM:
-                flag |= TOO_HIGH_FWHM_FLAG
-
             # This is the file that holds the vignettes 
             psfcat_file=odir+'/'+root+'_psfcat.fits'
 
-            # if the sextractor catalog does not exist 
-            if not os.path.exists(psfcat_file):
-                print '   running sextractor'
-                cat_cmd="{cat_dir}/sex {img_file}[0] -c {cat_config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {param_file} -FILTER_NAME {filter_file}  -STARNNW_NAME {star_file} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat}  >>{logfile} 2>&1".format(
-                    cat_dir=args.cat_dir, img_file=img_file, cat_config=args.config_cat,
-                    cat_file=psfcat_file,param_file=args.param_file,filter_file=args.filt_file,
-                    star_file=args.star_file,fwhm=fwhm,logfile=logfile,sat=sat)
-                os.system(cat_cmd)
+            if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
+                if do_unpack:
+                    funpack_file=odir+'/'+base_file
+            
+                    # If an unpacked file does not exist in the output directory 
+                    if not os.path.exists(funpack_file):
+                        print '   unpacking fz file'
+                        cmd='funpack -O %s %s  >>%s 2>&1' % (funpack_file,file,logfile)
+                        ok=os.system(cmd)
+                    img_file=funpack_file
+                
+                else:
+                    # If the file is not fpacked, make a symlink into the output directory
+                    if not os.path.exists(odir+'/'+base_file):
+                        # make symlink to local directory
+                        os.system('ln -s %s %s  >>%s 2>&1'%(file,odir,logfile))
+                    img_file=odir+'/'+base_file
+                hdu=0
+
+                # extract the saturation level, this is how desdm runs sextractor
+                # we need the fwhm for class star
+                # Also need the fwhm for doing the tape bumps.
+                with pyfits.open(img_file) as pyfile:
+                    sat=-1
+                    fwhm=4.
+                    try:
+                        sat=pyfile[hdu].header['SATURATE']
+                        fwhm=pyfile[hdu].header['FWHM']
+                    except:
+                        print 'Cannot process ',img_file
+                        continue
+                    print '   fwhm = ',fwhm
+                if fwhm > HIGH_FWHM:
+                    flag |= TOO_HIGH_FWHM_FLAG
+
+                # if the sextractor catalog does not exist 
+                if not os.path.exists(psfcat_file):
+                    print '   running sextractor'
+                    cat_cmd="{cat_dir}/sex {img_file}[0] -c {cat_config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {param_file} -FILTER_NAME {filter_file}  -STARNNW_NAME {star_file} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat}  >>{logfile} 2>&1".format(
+                        cat_dir=args.cat_dir, img_file=img_file, cat_config=args.config_cat,
+                        cat_file=psfcat_file,param_file=args.param_file,filter_file=args.filt_file,
+                        star_file=args.star_file,fwhm=fwhm,logfile=logfile,sat=sat)
+                    os.system(cat_cmd)
 
             # if we want to use only the stars selected by findstars
             if args.use_findstars:

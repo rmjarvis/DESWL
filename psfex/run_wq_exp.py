@@ -21,6 +21,7 @@
 
 import argparse,os,re
 import time
+import numpy
 
 # Note: I originally had the wrong shell set.  I ran bash in my .login
 # rather than setting it correctly by mailing RT-RACF-UserAccounts@bnl.gov.
@@ -71,8 +72,14 @@ if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
 
 # open it once to count the number of lines
 # I'm sure there is a better way to do this
+print 'Read file ',args.file
 with open(args.file) as fin:
     data = [ line.split() for line in fin ]
+
+# Shuffle the order so we don't have all the LMC exposures in the same job.
+print 'first 3 lines of input file are ',data[0:3]
+numpy.random.shuffle(data)
+print 'After shuffling, first 3 lines of input file are ',data[0:3]
 
 runs, exps = zip(*data)
 

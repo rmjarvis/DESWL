@@ -1,9 +1,9 @@
 #!/bin/bash
 
 DATE=20140902
-FILE=test_exp
-#FILE=spte_exp
+#FILE=test_exp
+FILE=spte_exp
 
 #./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_findstars.py"
 
-./run_wq_exp.py --debug --njobs=20 --file=$FILE --output=~/work/psfex_rerun_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0 --single_ccd"
+./run_wq_exp.py --debug --njobs=10 --file=$FILE --output=~/work/psfex_rerun_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0"

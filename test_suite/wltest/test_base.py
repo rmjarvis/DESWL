@@ -18,7 +18,7 @@ class BaseCatalogTest(object):
         self.figures = {}
 
     def passed(self):
-        return np.all(self.statistic < self.target)
+        return np.all(abs(self.statistic) < self.target)
 
     def filename(self, base, *bases):
         if bases:

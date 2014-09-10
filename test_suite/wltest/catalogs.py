@@ -17,7 +17,10 @@ class Catalog(astropy.table.Table):
 			print " - ", filename
 			tables.append(astropy.table.Table.read(filename, format='fits'))
 		print
-		cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')
+		if len(tables)>1:
+			cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')
+		else:
+			cat = tables[0]
 		cat = cls(cat)
 		cat.name = name
 		return cat

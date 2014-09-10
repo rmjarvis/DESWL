@@ -1,0 +1,7 @@
+This is work in progress.
+Needs numpy, astropy, matplotlib
+
+For now, make two directories with sets of FITS files in from different runs.  Run comparison tests with:
+> python -m wltest dirname1 dirname2
+
+You get some test results and some plots.  The code expects im3shape column names for now but easy to change.

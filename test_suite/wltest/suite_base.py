@@ -46,12 +46,15 @@ class Suite(object):
 
 	def run(self, cat1, cat2=None):
 		cat1 = self.select(cat1)
-		cat2 = self.select(cat2)
-		print "Testing %s vs %s" % (cat1.name, cat2.name)
-		if self.intersect:
-			print " - Intersecting catalogs"
-			print
-			cat1, cat2 = cat1.intersection(cat2)
+		if cat2 is not None:
+			print "Testing %s vs %s" % (cat1.name, cat2.name)
+			cat2 = self.select(cat2)
+			if self.intersect:
+				print " - Intersecting catalogs"
+				print
+				cat1, cat2 = cat1.intersection(cat2)
+		else:
+			print "Testing %s alone" % cat1.name
 		filenames = []
 		for test in self.tests:
 			if isinstance(test, test_base.SingleCatalogTest):

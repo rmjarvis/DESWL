@@ -2,7 +2,8 @@
 
 DATE=20140902
 #FILE=test_exp
-FILE=spte_exp
+#FILE=spte_exp
+FILE=list_0902
 
 #./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_findstars.py"
 

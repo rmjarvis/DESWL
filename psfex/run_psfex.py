@@ -4,7 +4,7 @@
 import argparse,os,glob,re,pyfits,random,copy
 import numpy as np
 
-parser = argparse.ArgumentParser(description='Run single file')
+parser = argparse.ArgumentParser(description='Run PSFEx on a set of runs/exposures')
 
 # Directory arguments
 parser.add_argument('--cat_dir', default='/astro/u/rarmst/soft/bin/',
@@ -19,11 +19,8 @@ parser.add_argument('--clear_output', default=False, action='store_const', const
                     help='should the output directory be cleared before writing new files?')
 
 # Exposure inputs
-parser.add_argument('--file', default=None,
-                    help='name of file')
 parser.add_argument('--exp_match', default='',
                     help='regexp to search for files in exp_dir')
-
 parser.add_argument('--exps', default='', nargs='+',
                     help='list of exposures to run')
 parser.add_argument('--runs', default='', nargs='+',
@@ -203,7 +200,7 @@ for run,exp in zip(args.runs,args.exps):
         try:
 
             # This is the file that holds the vignettes 
-            psfcat_file=odir+'/'+root+'_psfcat.fits'
+            psfcat_file=os.path.join(odir,root+'_psfcat.fits')
 
             if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                 if do_unpack:
@@ -341,7 +338,8 @@ for run,exp in zip(args.runs,args.exps):
                     psfcat_file=magcut_file
 
     
-            psf_file=psfcat_file.replace('fits','psf')
+            psf_file=os.path.join(odir,root+'_psfcat.fits')
+            #psf_file=psfcat_file.replace('fits','psf')
             catout_file=psfcat_file.replace('fits','used.fits')
     
             if args.run_psfex:

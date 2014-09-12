@@ -6,6 +6,20 @@ For now, make two directories with sets of FITS files in from different runs.  R
 
 You get some test results and some plots.  The code expects im3shape column names for now but easy to change.
 
+How to add tests
+----------------
+
+If it is a test that can be run on a single catalog it goes in wltest/single_tests.py.  If it requires two catalogs (because you match up galaxies and compare) then wltest/pair_tests.py.  Once it's written you should add it to the list of classes in GreenSuite at the top of wltest/suite.py
+
+The first test in wltest/single_tests.py shows a minimal example of a single-catalog test.  It needs to define a name, names of stats it will calculate, and a target value for those statistics to be less than in absolute.  The "run" method should then calculate and return the calculated statistic.
+
+If you want to make plots in the run method then use the two methods:
+	filename = self.filename("root_of_plot_name")
+	self.figure(filename)
+and then use ordinary pylab plot commands.  They will be saved automatically.
+
+
+
 Ideally this would contain all the really important tests:
 
 + mean shear consistent with zero

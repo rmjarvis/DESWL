@@ -5,3 +5,23 @@ For now, make two directories with sets of FITS files in from different runs.  R
 > python -m wltest dirname1 dirname2
 
 You get some test results and some plots.  The code expects im3shape column names for now but easy to change.
+
+Ideally this would contain all the really important tests:
+
++ mean shear consistent with zero
++ no mean shear in bins of:
+- psf_e
+- snr
+- radius
++ tangential shear around stars
++ tangential shear around center of fov
++ tangential shear around random positions
++ star ellipticity - galaxy ellipticity correlation function
++ Compare shear around LRGs for the two shear methods
++ Compare shear around LRGs for two different filters
++ B-modes
++ changes 2-pt functions re-done with different cuts (S/N, masking, ...)
++ redshift dependence of galaxy-galaxy data for fixed lens population vary source bin ???
++ Rowe statistics on full area
+
+

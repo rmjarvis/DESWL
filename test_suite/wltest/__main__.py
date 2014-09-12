@@ -42,9 +42,19 @@ def suite_extrapolate():
 
 
 
+def suite_single():
+	dirname = sys.argv[1]
+	cat = Catalog.from_directory(dirname)
+	suite = GreenSuite()
+	print
+	filenames = suite.run(cat)
+	print
+	for f in filenames:
+		print f
 
 
 
 if __name__ == '__main__':
-	suite_extrapolate()
-	# suite_compare()
+	# suite_extrapolate()
+	#suite_compare()
+	suite_single()

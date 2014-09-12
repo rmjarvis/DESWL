@@ -9,13 +9,28 @@ import astropy.table
 import numpy as np
 import glob
 
+USELESS_COLUMNS = [
+	'covmat',
+	'levmar',
+	'fails',
+	'time',
+]
+
 class Catalog(astropy.table.Table):
 	@classmethod
 	def from_multiple_fits(cls, filenames, name, quiet=True):
 		tables = []
 		for filename in filenames:
 			print " - ", filename
-			tables.append(astropy.table.Table.read(filename, format='fits'))
+			cat = astropy.table.Table.read(filename, format='fits')
+			removals = []
+			for name in cat.colnames:
+				for useless in USELESS_COLUMNS:
+					if name.startswith(useless):
+						removals.append(name)
+						break
+			cat.remove_columns(removals)
+			tables.append(cat)
 		print
 		if len(tables)>1:
 			cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')

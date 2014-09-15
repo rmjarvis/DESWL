@@ -50,7 +50,8 @@ class Catalog(astropy.table.Table):
 	@classmethod
 	def from_desdb(cls,query,save_as=None):
 		"""Get catalog by querying the desdm database. Need desdb installed.
-		Only argument is query, which is an sql query as a string"""
+		Arguments: - query: which is an sql query as a string
+				   - save_as: filename to save catalog returned by query as .npy file"""
 		try:
 			import desdb
 		except Exception as e:

@@ -31,6 +31,7 @@ class BinnedTrend(SingleCatalogTest, BinnedTrendMethods):
     n = 10
 
     def run(self, cat):
+        iall=0
         outputs = []
         for x_axis in self.x_axes:
             for y_axis in self.y_axes:
@@ -38,13 +39,21 @@ class BinnedTrend(SingleCatalogTest, BinnedTrendMethods):
                 self.figure(filename)
                 x = cat[x_axis]
                 y = cat[y_axis]
-                p = self.binned_mean_equal_count_plot(x, y, self.n, label=cat.name)
+                print 'self.n',self.n
+                p, x_mid, y_mean, y_std = self.binned_mean_equal_count_plot(x, y, self.n, label=cat.name)
                 pylab.xlabel(x_axis)
                 pylab.ylabel(y_axis)
                 X = [x.min(), x.max()]
                 pylab.plot(X, np.polyval(p,X),label=cat.name+" fit")
                 outputs.extend(p)
                 pylab.legend(loc='lower right')
+                iall+=1
+
+                import cPickle as pickle
+                pickle_file = open(filename+'.%d'%iall+'.data.pp2','w')
+                pickle.dump({ 'x_mid': x_mid, 'y_mean': y_mean, 'y_std': y_std,'p':p},pickle_file,protocol=2)
+                print 'saved ', filename+'.%d'%iall+'.data.pp2'
+
         return np.array(outputs)
 
 

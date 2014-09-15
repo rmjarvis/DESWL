@@ -38,7 +38,7 @@ class BinnedTrendMethods(object):
         y_mean, y_std = BinnedTrendMethods.binned_means(y, bin, n)
         x_mid = (bins[1:]+bins[:-1])/2.
         pylab.errorbar(x_mid, y_mean, y_std, fmt='.', **plot_args)
-        return np.polyfit(x_mid, y_mean, 1)
+        return np.polyfit(x_mid, y_mean, 1), x_mid, y_mean, y_std 
 
     @staticmethod
     def binned_mean_equal_width_plot(x, y, n, **plot_args):

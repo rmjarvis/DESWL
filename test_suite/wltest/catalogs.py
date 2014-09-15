@@ -16,6 +16,8 @@ USELESS_COLUMNS = [
 	'time',
 ]
 
+USEFUL_COLUMNS = ['e1' , 'e2', 'mean_psf_e1_sky', 'mean_psf_e2_sky' , 'info_flag' , 'snr']
+
 class Catalog(astropy.table.Table):
 	@classmethod
 	def from_multiple_fits(cls, filenames, name, quiet=True):
@@ -25,13 +27,15 @@ class Catalog(astropy.table.Table):
 			cat = astropy.table.Table.read(filename, format='fits')
 			removals = []
 			for name in cat.colnames:
-				for useless in USELESS_COLUMNS:
-					if name.startswith(useless):
-						removals.append(name)
-						break
+				# for useless in USELESS_COLUMNS:
+					# if name.startswith(useless):
+						# removals.append(name)
+						# break
+				if name not in USEFUL_COLUMNS:
+					removals.append(name)				
 			cat.remove_columns(removals)
 			tables.append(cat)
-		print
+			import pdb; pdb.set_trace()
 		if len(tables)>1:
 			cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')
 		else:
@@ -44,6 +48,7 @@ class Catalog(astropy.table.Table):
 	def from_directory(cls, dirname):
 		print "Loading from directory: ", dirname
 		filenames = glob.glob(dirname+"/*.fits") + glob.glob(dirname+"/*.fits.gz")
+		print 'got %d files' % len(filenames)
 		cat = cls.from_multiple_fits(filenames, dirname)
 		return cat
 

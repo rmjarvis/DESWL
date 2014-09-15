@@ -35,7 +35,6 @@ class Catalog(astropy.table.Table):
 					removals.append(name)				
 			cat.remove_columns(removals)
 			tables.append(cat)
-			import pdb; pdb.set_trace()
 		if len(tables)>1:
 			cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')
 		else:

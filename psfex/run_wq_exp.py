@@ -91,9 +91,10 @@ print 'n_per_job = ',n_per_job
 
 submit_list = []
 
+end = 0
 for job in range(args.njobs):
-    start = job * n_per_job
-    end = start + n_per_job
+    start = end
+    end = int(math.ceil(float(len(runs)) * (job+1) / float(args.njobs)))
     if end > len(runs): 
         end = len(runs)
     if end == start:
@@ -105,11 +106,12 @@ for job in range(args.njobs):
 
     cmd=args.cmd+' --runs %s --exps %s --output %s'%(s_runs,s_exps,args.output)
 
-    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(job),cmd=cmd)
+    job_name = args.file + '_' + str(job)
+    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=job_name,cmd=cmd)
     if args.debug:
         job_submit += "priority: high\n"
 
-    submit_file='%s/submit_%d'%(args.submit_dir,job)
+    submit_file='%s/submit_%s'%(args.submit_dir,job_name)
 
     with open(submit_file,'w') as fout:
         fout.write(job_submit)

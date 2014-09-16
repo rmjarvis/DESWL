@@ -2,6 +2,7 @@
 # Program to run single file in psfex
 
 import os
+import traceback
  
 # Define the parameters for the blacklist
 
@@ -497,6 +498,7 @@ def main():
                 flag |= NO_STARS_FLAG
             except Exception as e:
                 print 'Caught exception: ',e
+                traceback.print_exc()
                 print 'Log this in the blacklist and continue.'
                 flag |= ERROR_FLAG
 

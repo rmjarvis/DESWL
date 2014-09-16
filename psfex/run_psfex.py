@@ -55,7 +55,7 @@ def parse_args():
                         default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/new.psfex',
                         help='psfex config file')
     parser.add_argument('--findstars_config',
-                        default='wl.config +wl_desdm.config +wl_firstcut.config',
+                        default='wl.config +wl_firstcut.config',
                         help='wl config file')
     parser.add_argument('--sex_params',
                         default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/sex.param_psfex',
@@ -247,6 +247,7 @@ def run_findstars(odir, root, cat_file, logfile, fs_dir, fs_config):
     findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={odir}/ >> {log} 2>&1'.format(
             fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
             odir=odir, log=logfile)
+    #print findstars_cmd
     os.system(findstars_cmd)
 
     # Make a mask based on which objects findstars decided are stars.
@@ -457,7 +458,6 @@ def main():
                     tmp = cat_file
                     cat_file, nstars = run_findstars(odir, root, cat_file, logfile,
                                                      args.findstars_dir, args.findstars_config)
-
                     # Check if there are few or many staras.
                     if nstars < FEW_STARS:
                         flag |= TOO_FEW_STARS_FLAG
@@ -474,6 +474,8 @@ def main():
                     # Recheck this.
                     if nstars < FEW_STARS:
                         flag |= TOO_FEW_STARS_FLAG
+                    if nstars == 0:
+                        raise NoStarsException()
     
                 # Need these names even if not running psfex, since we may be updating symlinks.
                 psf_file = os.path.join(odir,root+'_psfcat.psf')

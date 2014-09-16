@@ -1,10 +1,10 @@
 #!/bin/bash
 
-DATE=20140902
+DATE=20140904
 #FILE=test_exp
 #FILE=spte_exp
-FILE=list_0902
+FILE=list_0904
 
 #./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_findstars.py"
 
-./run_wq_exp.py --debug --njobs=10 --file=$FILE --output=~/work/psfex_rerun_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0"
+./run_wq_exp.py --debug --njobs=1 --file=$FILE --output=~/work/psfex_rerun_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0"

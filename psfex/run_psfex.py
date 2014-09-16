@@ -338,6 +338,20 @@ def remove_bad_stars(odir, root, ccdnum, cat_file, tbdata,
     return new_cat_file, len(data)
 
 
+def get_fwhm(cat_file):
+    """Get the fwhm from the SExtractor FLUX_RADIUS estimates.
+    """
+    import pyfits
+    import numpy
+
+    # get the brightest 10 stars that have flags=0 and take the median just in case some
+    # strange magnitudes were selected
+    with pyfits.open(cat_file) as pyf:
+        data = pyf[2].data
+        flux_radius = data['FLUX_RADIUS']
+    return numpy.median(flux_radius)
+
+
 def run_psfex(odir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psfex_config):
     """Run PSFEx
     """
@@ -447,8 +461,6 @@ def main():
                     # Also need the fwhm for doing the tape bumps.
                     sat, fwhm = read_image_header(img_file)
                     print '   fwhm = ',fwhm
-                    if fwhm > HIGH_FWHM:
-                        flag |= TOO_HIGH_FWHM_FLAG
 
                     cat_file = run_sextractor(odir, root, img_file, sat, fwhm, logfile,
                                               args.sex_dir, args.sex_config, args.sex_params, 
@@ -477,6 +489,11 @@ def main():
                         flag |= TOO_FEW_STARS_FLAG
                     if nstars == 0:
                         raise NoStarsException()
+
+                # Get the median fwhm of the given stars
+                fwhm = get_fwhm(cat_file)
+                if fwhm > HIGH_FWHM:
+                    flag |= TOO_HIGH_FWHM
     
                 # Need these names even if not running psfex, since we may be updating symlinks.
                 psf_file = os.path.join(odir,root+'_psfcat.psf')

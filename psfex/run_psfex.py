@@ -386,19 +386,21 @@ def remove_temp_files(odir, root, *args):
 def make_symlinks(odir, link_dir, *args):
     """Make symlinks for files given in args from link_dir to odir
     """
-    try: 
-        os.makedirs(link_dir, mode=0775)
-        print '   made directory ',link_dir
-    except OSError:
-        if not os.path.isdir(link_dir): raise
+    print '   Make symlinks from link_dir', link_dir
+    if not isdir(link_dir):
+        try: 
+            os.makedirs(link_dir, mode=0775)
+            print '   made directory ',link_dir
+        except OSError:
+            if not os.path.isdir(link_dir): raise
     for file in args:
         link = os.path.join(link_dir,os.path.basename(file))
+        print '   make link: ',link,' to ',file
         try:
             os.remove(link)
         except OSError:
             pass
         os.symlink(file,link)
-        print '   made link: ',link,' to ',file
 
 def main():
     import glob

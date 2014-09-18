@@ -46,7 +46,10 @@ job_name: {name}
 mode: bycore
 
 # Select from this group(s)
-group: [new, new2, new3]
+# I've had trouble with OS operations from neww2, so avoid that one.
+# astro0001 in particular, so possibly could try the other ones in new2.
+# I didn't try them individually.
+group: [new, new3]
 """
 
 
@@ -119,7 +122,7 @@ for job in range(args.njobs):
 
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
-cmd = 'nohup wq sub -b %s >& %s/wq_sub.out'%(s_sub,args.submit_dir)
+cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,args.submit_dir,args.file)
 print cmd
 print 'Note: This will take %d seconds to run, since wq waits'%len(submit_list)
 print '      1 second between each job submission.'

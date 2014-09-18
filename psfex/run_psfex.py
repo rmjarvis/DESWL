@@ -378,8 +378,10 @@ def remove_temp_files(odir, root, *args):
 
     print '   Removing the following files from ',odir
     for f in files:
-        os.remove(f)
         print '       ',os.path.split(f)[1]
+        os.remove(f)
+    print '   Done'
+
 
 def make_symlinks(odir, link_dir, *args):
     """Make symlinks for files given in args from link_dir to odir
@@ -493,7 +495,7 @@ def main():
                 # Get the median fwhm of the given stars
                 fwhm = get_fwhm(cat_file)
                 if fwhm > HIGH_FWHM:
-                    flag |= TOO_HIGH_FWHM
+                    flag |= TOO_HIGH_FWHM_FLAG
     
                 # Need these names even if not running psfex, since we may be updating symlinks.
                 psf_file = os.path.join(odir,root+'_psfcat.psf')

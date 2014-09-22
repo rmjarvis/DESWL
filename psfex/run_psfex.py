@@ -387,7 +387,7 @@ def make_symlinks(odir, link_dir, *args):
     """Make symlinks for files given in args from link_dir to odir
     """
     print '   Make symlinks from link_dir', link_dir
-    if not isdir(link_dir):
+    if not os.path.isdir(link_dir):
         try: 
             os.makedirs(link_dir, mode=0775)
             print '   made directory ',link_dir

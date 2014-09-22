@@ -42,20 +42,23 @@ command: |
 job_name: {name}
 
 # this is the type of node/host selection. bynode means select entire
-# nodes.
-mode: bycore
+# nodes.  bycore1 means all N cores from the same node.
+mode: bycore1
+N: {cores_per_job}
 
 # Select from this group(s)
 # I've had trouble with OS operations from neww2, so avoid that one.
 # astro0001 in particular, so possibly could try the other ones in new2.
 # I didn't try them individually.
-group: [new, new3]
+group: [new, new2, new3]
 """
 
 
 parser = argparse.ArgumentParser(description='Run single file')
 parser.add_argument('--njobs', default=100, type=int,
                     help='How many jobs to run')
+parser.add_argument('--cores_per_job', default=1, type=int,
+                    help='How many cores to use per job')
 parser.add_argument('--file', default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
@@ -110,7 +113,9 @@ for job in range(args.njobs):
     cmd=args.cmd+' --runs %s --exps %s --output %s'%(s_runs,s_exps,args.output)
 
     job_name = args.file + '_' + str(job)
-    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=job_name,cmd=cmd)
+    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,
+                                name=job_name, cores_per_job=args.cores_per_job,
+                                cmd=cmd)
     if args.debug:
         job_submit += "priority: high\n"
 
@@ -124,7 +129,7 @@ time.sleep(0.1)
 s_sub = " ".join(submit_list)
 cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,args.submit_dir,args.file)
 print cmd
-print 'Note: This will take %d seconds to run, since wq waits'%len(submit_list)
-print '      1 second between each job submission.'
+print 'Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list)
+print '      between each job submission.'
 os.system(cmd)
 

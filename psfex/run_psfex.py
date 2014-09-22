@@ -477,8 +477,10 @@ def main():
                                                      args.findstars_dir, args.findstars_config)
                     # Check if there are few or many staras.
                     if nstars < FEW_STARS:
+                        print '     -- flag for too few stars: ',nstars
                         flag |= TOO_FEW_STARS_FLAG
                     if nstars > MANY_STARS:
+                        print '     -- flag for too many stars: ',nstars
                         flag |= TOO_MANY_STARS_FLAG
 
 
@@ -490,14 +492,21 @@ def main():
                             args.use_tapebumps, args.tapebump_extra, fwhm)
                     # Recheck this.
                     if nstars < FEW_STARS:
+                        print '     -- flag for too few stars: ',nstars
                         flag |= TOO_FEW_STARS_FLAG
                     if nstars == 0:
                         raise NoStarsException()
 
-                # Get the median fwhm of the given stars
-                fwhm = get_fwhm(cat_file)
-                if fwhm > HIGH_FWHM:
-                    flag |= TOO_HIGH_FWHM_FLAG
+                if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
+                    # Get the median fwhm of the given stars
+                    star_fwhm = get_fwhm(cat_file)
+                    print '   fwhm of stars = ',star_fwhm
+                    if star_fwhm > HIGH_FWHM:
+                        print '     -- flag for too high fwhm'
+                        flag |= TOO_HIGH_FWHM_FLAG
+                    if star_fwhm > 1.5 * fwhm:
+                        print '     -- flag for too high fwhm compared to fwhm from fits header'
+                        flag |= TOO_HIGH_FWHM_FLAG
     
                 # Need these names even if not running psfex, since we may be updating symlinks.
                 psf_file = os.path.join(odir,root+'_psfcat.psf')

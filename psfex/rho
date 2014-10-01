@@ -1,0 +1,6 @@
+#!/bin/bash
+
+DATE=20140920
+FILE=spte_gold_exp
+
+./run_wq_exp.py --njobs=1 --cores_per_job=4 --file=$FILE --output=~/work/psfex_rerun_$DATE --submit_dir=submit_rho_$DATE --cmd="./run_rho.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE"

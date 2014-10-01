@@ -304,8 +304,7 @@ def remove_bad_stars(odir, root, ccdnum, cat_file, tbdata,
     new_cat_file = cat_file
 
     if mag_cut > 0:
-        mags = data['MAG_AUTO']
-        mags.sort()
+        mags = numpy.sort(data['MAG_AUTO'])
         min_star = numpy.median(mags[0:nbright_stars])
         print '   min mag = ',mags[0]
         print '   median of brightest %d is '%nbright_stars, min_star

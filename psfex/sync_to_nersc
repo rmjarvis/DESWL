@@ -1,0 +1,14 @@
+#!/bin/bash
+
+version=v3
+nersc=mjarvis@carver.nersc.gov:/global/project/projectdirs/des/wl/desdata
+
+for run in $( ls "$DESDATA/EXTRA/red" ); do
+    echo $run
+    psfex_dir="EXTRA/red/$run/psfex-rerun"
+    echo "  rsync -rz $DESDATA/$psfex_dir/$version $nersc/$psfex_dir"
+    rsync -rz $DESDATA/$psfex_dir/$version $nersc/$psfex_dir
+done
+
+echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-sv-$version.txt $nersc/EXTRA/blacklists"
+rsync -rz $DESDATA/EXTRA/blacklists/psfex-sv-$version.txt $nersc/EXTRA/blacklists

@@ -2,7 +2,7 @@
 
 DATE=20140930
 FILE=other_d
-TAa=v3
+TAG=v3
 
 #/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
 #/bin/rm -rf submit_$DATE/*

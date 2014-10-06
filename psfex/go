@@ -6,4 +6,4 @@ TAG=v3
 
 #/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
 #/bin/rm -rf submit_$DATE/*
-./run_wq_exp.py --njobs=247 --cores_per_job=4 --file=$FILE --submit_dir=submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"
+./run_wq_exp.py --njobs=247 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"

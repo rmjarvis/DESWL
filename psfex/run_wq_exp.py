@@ -10,11 +10,10 @@
 # 
 # The command argument is the name of exectuation that is expected 
 # to take a --exps and --runs to specify input directories
-# and --output for output
 # 
 # I only have two scripts that do this currently run_psfex.py and run_findstars.py
 # To run them you can do something like
-#    ./run_wq_exp.py --njobs 10 --file test_exp --output test2 --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
+#    ./run_wq_exp.py --njobs 10 --file test_exp --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
 
 # 
 # See https://github.com/esheldon/wq for information about using wq.
@@ -63,8 +62,6 @@ parser.add_argument('--file', default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
                     help='where to put submit files')
-parser.add_argument('--output', default='/astro/u/mjarvis/work',
-                    help='where to put output files')
 parser.add_argument('--cmd', default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
 parser.add_argument('--debug', default=False, action='store_const', const=True,
@@ -110,10 +107,10 @@ for job in range(args.njobs):
     s_runs = " ".join(runs[start:end])
     s_exps = " ".join(exps[start:end])
 
-    cmd=args.cmd+' --runs %s --exps %s --output %s'%(s_runs,s_exps,args.output)
+    cmd=args.cmd+' --runs %s --exps %s'%(s_runs,s_exps)
 
     job_name = args.file + '_' + str(job)
-    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,
+    job_submit = top_txt.format(runs=runs, exps=exps, 
                                 name=job_name, cores_per_job=args.cores_per_job,
                                 cmd=cmd)
     if args.debug:

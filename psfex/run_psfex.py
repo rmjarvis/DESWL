@@ -35,8 +35,10 @@ def parse_args():
                         help='location of psfex executable')
     parser.add_argument('--findstars_dir', default='/astro/u/mjarvis/bin',
                         help='location wl executables')
-    parser.add_argument('--output', default='./',
-                        help='location of outputs')
+    parser.add_argument('--work', default='./',
+                        help='location of intermediate outputs')
+    parser.add_argument('--tag', default=None,
+                        help='A version tag to add to the directory name')
     parser.add_argument('--clear_output', default=False, action='store_const', const=True,
                         help='should the output directory be cleared before writing new files?')
 
@@ -70,11 +72,11 @@ def parse_args():
     parser.add_argument('--tapebump_file',
                         default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_ccdnum.txt',
                         help='name of tape bump file')
-    parser.add_argument('--make_symlinks', default=1, type=int,
-                        help='make symlinks from $DESDATA/EXTRA/red/$run/psfex-rerun/$exp')
+    parser.add_argument('--make_symlinks', default=0, type=int,
+                        help='make symlinks in output dir, rather than move files')
 
     # options
-    parser.add_argument('--rm_files', default=1, type=int,
+    parser.add_argument('--rm_files', default=0, type=int,
                         help='remove unpacked files after finished')
     parser.add_argument('--run_psfex', default=1, type=int,
                         help='run psfex on files')
@@ -139,7 +141,8 @@ def log_blacklist(blacklist_file, run, exp, ccdnum, flag):
     try:
         with open(blacklist_file,'a') as f:
             f.write("%s %s %d %d\n"%(run,exp,ccdnum,flag))
-    except OSError:
+    except OSError as e:
+        print e
         print 'Error opening blacklist.  Wait and try again.'
         import time
         time.sleep(1)
@@ -167,11 +170,11 @@ def parse_file_name(file_name):
     return root, ccdnum
 
 
-def unpack_file(file_name, odir, logfile):
-    """Create the unpacked file in the output directory if necessary.
+def unpack_file(file_name, wdir, logfile):
+    """Create the unpacked file in the work directory if necessary.
 
     If the unpacked file already exists, then a link is made.
-    Otherwise funpack is run, outputting the result into the output directory.
+    Otherwise funpack is run, outputting the result into the work directory.
     """
     import os
     # find out if the file is fpacked by the extension
@@ -180,9 +183,9 @@ def unpack_file(file_name, odir, logfile):
     # find the base filename
     if os.path.splitext(base_file)[1] == '.fz':
 
-        img_file = os.path.join(odir,os.path.splitext(base_file)[0])
+        img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
 
-        # If an unpacked file does not exist in the output directory 
+        # If an unpacked file does not exist in the work directory 
         if not os.path.exists(img_file):
             print '   unpacking fz file'
             cmd = 'funpack -O {outf} {inf} >> {log} 2>&1'.format(
@@ -190,10 +193,10 @@ def unpack_file(file_name, odir, logfile):
             os.system(cmd)
     
     else:
-        # If the file is not fpacked, make a symlink into the output directory
-        img_file = os.path.join(odir,base_file)
+        # If the file is not fpacked, make a symlink into the work directory
+        img_file = os.path.join(wdir,base_file)
         if not os.path.exists(img_file):
-            os.symlink(file_name,odir)
+            os.symlink(file_name,wdir)
 
     return img_file
 
@@ -219,11 +222,11 @@ def read_image_header(img_file):
     return sat, fwhm
  
 
-def run_sextractor(odir, root, img_file, sat, fwhm, logfile,
+def run_sextractor(wdir, root, img_file, sat, fwhm, logfile,
                    sex_dir, sex_config, sex_params, sex_filter, sex_nnw):
     """Run sextractor, but only if the output file does not exist yet.
     """
-    cat_file = os.path.join(odir,root+'_psfcat.fits')
+    cat_file = os.path.join(wdir,root+'_psfcat.fits')
 
     if not os.path.exists(cat_file):
         print '   running sextractor'
@@ -235,19 +238,19 @@ def run_sextractor(odir, root, img_file, sat, fwhm, logfile,
         os.system(cat_cmd)
     return cat_file
 
-def run_findstars(odir, root, cat_file, logfile, fs_dir, fs_config):
+def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
     """Run findstars, and return a new updated catalog file to use.
     """
     import pyfits
     import numpy
     import copy
-    star_file = odir+'/'+root+'_findstars.fits'    
+    star_file = wdir+'/'+root+'_findstars.fits'    
 
     # run find stars
     print '   running findstars'
-    findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={odir}/ >> {log} 2>&1'.format(
+    findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ >> {log} 2>&1'.format(
             fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
-            odir=odir, log=logfile)
+            wdir=wdir, log=logfile)
     #print findstars_cmd
     os.system(findstars_cmd)
 
@@ -276,7 +279,7 @@ def run_findstars(odir, root, cat_file, logfile, fs_dir, fs_config):
 
     return new_cat_file, nstars
 
-def remove_bad_stars(odir, root, ccdnum, cat_file, tbdata,
+def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
                      mag_cut, nbright_stars,
                      use_tapebumps, tapebump_extra, fwhm):
     """Remove stars that are considered bad for some reason.
@@ -351,7 +354,7 @@ def get_fwhm(cat_file):
     return numpy.median(flux_radius)
 
 
-def run_psfex(odir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psfex_config):
+def run_psfex(wdir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psfex_config):
     """Run PSFEx
     """
     print '   running psfex'
@@ -366,52 +369,65 @@ def run_psfex(odir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psf
     if psf_file != actual_psf_file:
         os.rename(actual_psf_file, psf_file)
 
-def remove_temp_files(odir, root, *args):
-    """Remove odir/root* except for any files listed in the args
+def remove_temp_files(wdir, root, *args):
+    """Remove wdir/root* except for any files listed in the args
     """
     import glob
-    files = glob.glob('%s/%s*'%(odir,root))
+    files = glob.glob('%s/%s*'%(wdir,root))
     for save in args:
         if save in files:
             files.remove(save)
 
-    print '   Removing the following files from ',odir
+    print '   Removing the following files from ',wdir
     for f in files:
         print '       ',os.path.split(f)[1]
         os.remove(f)
     print '   Done'
 
 
-def make_symlinks(odir, link_dir, *args):
-    """Make symlinks for files given in args from link_dir to odir
+def move_files(wdir, odir, *args, **kwargs):
+    """Either move files from wdir to odir or make symlinks.
     """
-    print '   Make symlinks from link_dir', link_dir
-    if not os.path.isdir(link_dir):
-        try: 
-            os.makedirs(link_dir, mode=0775)
-            print '   made directory ',link_dir
-        except OSError:
-            if not os.path.isdir(link_dir): raise
+    make_symlinks = kwargs.pop('make_symlinks',False)
     for file in args:
-        link = os.path.join(link_dir,os.path.basename(file))
-        print '   make link: ',link,' to ',file
-        try:
-            os.remove(link)
-        except OSError:
-            pass
-        os.symlink(file,link)
+        # The file might not exist if psfex had an error.
+        if os.path.exists(file):
+            new_file = os.path.join(odir,os.path.basename(file))
+            try:
+                if os.path.exists(new_file):
+                    os.remove(new_file)
+            except OSError as e:
+                print "Ignore OSError from remove(new_file):"
+                print e
+                pass
+            if make_symlinks:
+                print '   make link: ',new_file,' to ',file
+                os.symlink(file,new_file)
+            else:
+                print '   move ',file,' to ',new_file
+                os.rename(file,new_file)
+                # Also make a symlink in the work directory to the new file location.
+                os.symlink(new_file,file)
 
 def main():
     import glob
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)
-    blacklist_file = os.path.join(args.output,'psfex_blacklist')
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
+    if args.tag:
+        blacklist_file += '-' + args.tag
+    blacklist_file += '.txt'
 
-    # Make the output directory if it does not exist yet.
+    # Make the work directory if it does not exist yet.
+    work = os.path.expanduser(args.work)
+    print 'work dir = ',work
     try:
-        os.mkdir(args.output)
-    except OSError:
+        if not os.path.exists(work):
+            os.makedirs(work)
+    except OSError as e:
+        print "Ignore OSError from makedirs(work):"
+        print e
         pass
 
     datadir = '/astro/u/astrodat/data/DES'
@@ -421,20 +437,44 @@ def main():
         print 'Start work on run, exp = ',run,exp
 
         # Make the output directory for this exposure and clear it if necessary.
-        odir = os.path.join(args.output,exp)
+        if args.tag:
+            tag_str = args.tag + "/"
+        else:
+            tag_str = ""
+        odir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s%s/'%(run,tag_str,exp))
         if args.clear_output:
-            import shutil
-            try:
-                shutil.rmtree(odir)
-            except OSError:
-                pass
+            if os.path.exists(odir):
+                for f in os.listdir(odir):
+                    try:
+                        os.remove(os.path.join(odir, f))
+                    except OSError as e:
+                        print "Ignore OSError from remove(odir/f):"
+                        print e
+                        pass
         try:
             os.makedirs(odir)
         except:
             if not os.path.exists(odir): raise
 
+        # Make the work directory for this exposure and clear it if necessary.
+        wdir = os.path.join(work,exp)
+        if args.clear_output:
+            import shutil
+            if os.path.exists(wdir):
+                for f in os.listdir(wdir):
+                    try:
+                        os.remove(os.path.join(wdir, f))
+                    except OSError as e:
+                        print "Ignore OSError from remove(wdir/f):"
+                        print e
+                        pass
+        try:
+            os.makedirs(wdir)
+        except:
+            if not os.path.exists(wdir): raise
+
         # Outputs of shell commands will be logged here.
-        logfile = os.path.join(odir, 'log.'+exp)
+        logfile = os.path.join(wdir, 'log.'+exp)
 
         # The input directory from the main DESDM reduction location.
         input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
@@ -457,7 +497,7 @@ def main():
 
                 if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                     # Unpack the image file if necessary
-                    img_file = unpack_file(file_name, odir, logfile)
+                    img_file = unpack_file(file_name, wdir, logfile)
 
                     # extract the saturation level, this is how desdm runs sextractor
                     # we need the fwhm for class star
@@ -465,14 +505,14 @@ def main():
                     sat, fwhm = read_image_header(img_file)
                     print '   fwhm = ',fwhm
 
-                    cat_file = run_sextractor(odir, root, img_file, sat, fwhm, logfile,
+                    cat_file = run_sextractor(wdir, root, img_file, sat, fwhm, logfile,
                                               args.sex_dir, args.sex_config, args.sex_params, 
                                               args.sex_filter, args.sex_nnw)
 
                 # if we want to use only the stars selected by findstars
                 if args.use_findstars:
                     tmp = cat_file
-                    cat_file, nstars = run_findstars(odir, root, cat_file, logfile,
+                    cat_file, nstars = run_findstars(wdir, root, cat_file, logfile,
                                                      args.findstars_dir, args.findstars_config)
                     # Check if there are few or many staras.
                     if nstars < FEW_STARS:
@@ -486,7 +526,7 @@ def main():
                 # If we want to cut the brighest magnitudes
                 if args.mag_cut>0 or args.use_tapebumps:
                     cat_file, nstars = remove_bad_stars(
-                            odir, root, ccdnum, cat_file, tbdata,
+                            wdir, root, ccdnum, cat_file, tbdata,
                             args.mag_cut, args.nbright_stars,
                             args.use_tapebumps, args.tapebump_extra, fwhm)
                     # Recheck this.
@@ -507,20 +547,16 @@ def main():
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     
-                # Need these names even if not running psfex, since we may be updating symlinks.
-                psf_file = os.path.join(odir,root+'_psfcat.psf')
-                used_file = os.path.join(odir,root+'_psfcat.used.fits')
-
                 if args.run_psfex:
-                    run_psfex(odir, root, cat_file, psf_file, used_file, logfile,
+                    psf_file = os.path.join(wdir,root+'_psfcat.psf')
+                    used_file = os.path.join(wdir,root+'_psfcat.used.fits')
+                    run_psfex(wdir, root, cat_file, psf_file, used_file, logfile,
                               args.psfex_dir, args.psfex_config)
+                    move_files(wdir, odir, psf_file, used_file, make_symlinks=args.make_symlinks)
 
                 if args.rm_files:
-                    remove_temp_files(odir, root, psf_file, used_file)
+                    remove_temp_files(wdir, root, psf_file, used_file)
 
-                if args.make_symlinks:
-                    link_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s/'%(run,exp))
-                    make_symlinks(odir, link_dir, psf_file, used_file)
 
             except NoStarsException:
                 print 'No stars.  Log this in the blacklist and continue.'

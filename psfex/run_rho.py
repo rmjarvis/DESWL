@@ -12,8 +12,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run PSFEx on a set of runs/exposures')
 
     # Output directory
-    parser.add_argument('--output', default='./',
-                        help='location of outputs')
+    parser.add_argument('--work', default='./',
+                        help='location of work directory')
     # Exposure inputs
     parser.add_argument('--exp_match', default='',
                         help='regexp to search for files in exp_dir')
@@ -130,10 +130,14 @@ def main():
     import glob
     args = parse_args()
 
-    # Make the output directory if it does not exist yet.
+    # Make the work directory if it does not exist yet.
+    work = os.path.expanduser(args.work)
+    print 'work dir = ',work
     try:
-        os.mkdir(args.output)
-    except OSError:
+        os.makedirs(work)
+    except OSError as e:
+        print "Ignore OSError from makedirs(work):"
+        print e
         pass
 
     datadir = '/astro/u/astrodat/data/DES'
@@ -142,8 +146,7 @@ def main():
 
         print 'Start work on run, exp = ',run,exp
 
-        # The "output" dir has the PSFEx files.
-        exp_dir = os.path.join(args.output,exp)
+        exp_dir = os.path.join(work,exp)
         print 'exp_dir = ',exp_dir
 
         # Get the file names in that directory.

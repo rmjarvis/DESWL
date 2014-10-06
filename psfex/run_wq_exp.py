@@ -73,23 +73,24 @@ args = parser.parse_args()
 
 if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
 
-# open it once to count the number of lines
-# I'm sure there is a better way to do this
+# Read in the runs, exps from the input file
 print 'Read file ',args.file
 with open(args.file) as fin:
     data = [ line.split() for line in fin ]
+nexps = len(data)
 
-# Shuffle the order so we don't have all the LMC exposures in the same job.
-print 'first 3 lines of input file are ',data[0:3]
-numpy.random.shuffle(data)
-print 'After shuffling, first 3 lines of input file are ',data[0:3]
+if args.njobs != 1:
+    # Shuffle the order so we don't have all the LMC exposures in the same job.
+    print 'first 3 lines of input file are ',data[0:3]
+    numpy.random.shuffle(data)
+    print 'After shuffling, first 3 lines of input file are ',data[0:3]
 
 runs, exps = zip(*data)
 
 import math
-n_per_job = int(math.ceil(float(len(runs)) / float(args.njobs)))
+n_per_job = int(math.ceil(float(nexps) / float(args.njobs)))
 print 'njobs = ',args.njobs
-print 'total n = ',len(runs)
+print 'total n = ',nexps
 print 'n_per_job = ',n_per_job
 
 submit_list = []
@@ -97,21 +98,22 @@ submit_list = []
 end = 0
 for job in range(args.njobs):
     start = end
-    end = int(math.ceil(float(len(runs)) * (job+1) / float(args.njobs)))
-    if end > len(runs): 
-        end = len(runs)
+    end = int(math.ceil(float(nexps) * (job+1) / float(args.njobs)))
+    if end > nexps: 
+        end = nexps
     if end == start:
         continue
 
-    # Make single string with a list of the runs and exps for this job:
-    s_runs = " ".join(runs[start:end])
-    s_exps = " ".join(exps[start:end])
-
-    cmd=args.cmd+' --runs %s --exps %s'%(s_runs,s_exps)
+    if args.njobs == 1:
+        cmd=args.cmd+' --file %s'%(args.file)
+    else:
+        # Make single string with a list of the runs and exps for this job:
+        s_runs = " ".join(runs[start:end])
+        s_exps = " ".join(exps[start:end])
+        cmd=args.cmd+' --runs %s --exps %s'%(s_runs,s_exps)
 
     job_name = args.file + '_' + str(job)
-    job_submit = top_txt.format(runs=runs, exps=exps, 
-                                name=job_name, cores_per_job=args.cores_per_job,
+    job_submit = top_txt.format(name=job_name, cores_per_job=args.cores_per_job,
                                 cmd=cmd)
     if args.debug:
         job_submit += "priority: high\n"

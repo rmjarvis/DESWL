@@ -45,6 +45,8 @@ def parse_args():
     # Exposure inputs
     parser.add_argument('--exp_match', default='',
                         help='regexp to search for files in exp_dir')
+    parser.add_argument('--file', default='',
+                        help='list of run/exposures (in lieu of separate exps, runs)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
     parser.add_argument('--runs', default='', nargs='+',
@@ -432,7 +434,16 @@ def main():
 
     datadir = '/astro/u/astrodat/data/DES'
 
-    for run,exp in zip(args.runs,args.exps):
+    if args.file != '':
+        print 'Read file ',args.file
+        with open(args.file) as fin:
+            data = [ line.split() for line in fin ]
+        runs, exps = zip(*data)
+    else:
+        runs = args.runs
+        exps = args.exps
+
+    for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
 

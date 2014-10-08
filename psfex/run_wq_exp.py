@@ -70,8 +70,9 @@ parser.add_argument('--debug', default=False, action='store_const', const=True,
 
 args = parser.parse_args()
 
-
-if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
+submit_dir = os.path.expanduser(args.submit_dir)
+print 'submit_dir = ',submit_dir
+if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
 
 # Read in the runs, exps from the input file
 print 'Read file ',args.file
@@ -118,7 +119,7 @@ for job in range(args.njobs):
     if args.debug:
         job_submit += "priority: high\n"
 
-    submit_file='%s/submit_%s'%(args.submit_dir,job_name)
+    submit_file='%s/submit_%s'%(submit_dir,job_name)
 
     with open(submit_file,'w') as fout:
         fout.write(job_submit)
@@ -126,7 +127,7 @@ for job in range(args.njobs):
 
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
-cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,args.submit_dir,args.file)
+cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,submit_dir,args.file)
 print cmd
 print 'Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list)
 print '      between each job submission.'

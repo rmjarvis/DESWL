@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument('--make_symlinks', default=0, type=int,
                         help='make symlinks in output dir, rather than move files')
 
-    # options
+    # Options
     parser.add_argument('--rm_files', default=0, type=int,
                         help='remove unpacked files after finished')
     parser.add_argument('--run_psfex', default=1, type=int,

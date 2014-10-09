@@ -3,11 +3,6 @@
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
-import os
-import traceback
-import galsim
-import treecorr
-import json
  
 def parse_args():
     import argparse
@@ -56,6 +51,7 @@ def read_tapebump_file(file_name):
 def bump_center(bump):
     """A quick helper function that returns the center of a tape bump
     """
+    import galsim
     return galsim.PositionD( (bump[1]+bump[3])/2., (bump[0]+bump[2])/2. )
 
 def read_blacklists(tag):
@@ -125,6 +121,7 @@ def read_image_header(img_file):
     Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, wcs
     """
     import pyfits
+    import galsim
 
     if img_file.endswith('fz'):
         hdu = 1
@@ -211,6 +208,8 @@ def convert_to_year(date, time):
 def parse_file_name(file_name):
     """Parse the PSFEx file name to get the root name and the chip number
     """
+    import os
+
     base_file = os.path.split(file_name)[1]
     if os.path.splitext(base_file)[1] == '.fz':
         base_file=os.path.splitext(base_file)[0]
@@ -226,9 +225,11 @@ def read_used(exp_dir, root):
     """Read in the .used.fits file that PSFEx generates with the list of stars that actually
     got used in making the PSFEx file.
     """
-    file_name = os.path.join(exp_dir, root + '_psfcat.used.fits')
+    import os
     import astropy.io.fits as pyfits
     import copy
+
+    file_name = os.path.join(exp_dir, root + '_psfcat.used.fits')
     f = pyfits.open(file_name, memmap=False)
     data = copy.copy(f[2].data)
     f.close()
@@ -249,9 +250,11 @@ def read_used(exp_dir, root):
 def read_findstars(exp_dir, root):
     """Read in the findstars output file.
     """
-    file_name = os.path.join(exp_dir, root + '_findstars.fits')
+    import os
     import astropy.io.fits as pyfits
     import copy
+
+    file_name = os.path.join(exp_dir, root + '_findstars.fits')
     f = pyfits.open(file_name, memmap=False)
     data = copy.copy(f[1].data)
     f.close()
@@ -298,8 +301,178 @@ def find_fs_index(used_data, fs_data):
     return index
 
 
+def measure_shapes(xlist, ylist, file_name, wcs):
+    """Given x,y positions, an image file, and the wcs, measure shapes and sizes.
+
+    We use the HSM module from GalSim to do this.
+
+    Returns e1, e2, size, mask.
+    """
+    import galsim
+    import numpy
+
+    im = galsim.fits.read(file_name)
+    bp_im = galsim.fits.read(file_name, hdu=2)
+    wt_im = galsim.fits.read(file_name, hdu=3)
+    wt_im.array[wt_im.array < 0] = 0.
+    print 'file_name = ',file_name
+    bkg_file_name = file_name[:-8] + '_bkg.fits.fz'
+    print 'bgk_file_name = ',bkg_file_name
+    bkg_im = galsim.fits.read(bkg_file_name)
+    im -= bkg_im # Subtract off the sky background.
+
+    stamp_size = 32
+
+    e1_list = numpy.zeros_like(xlist)
+    e2_list = numpy.zeros_like(xlist)
+    s_list = numpy.zeros_like(xlist)
+    mask = numpy.ones_like(xlist, dtype=bool)
+
+    for i in range(len(xlist)):
+        x = xlist[i]
+        y = ylist[i]
+        print 'Measure shape for star at ',x,y
+        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
+                           int(y)-stamp_size/2, int(y)+stamp_size/2)
+        subim = im[b]
+        subbp = bp_im[b]
+        subwt = wt_im[b]
+        shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
+        #print 'shape_data = ',shape_data
+        #print 'image_bounds = ',shape_data.image_bounds
+        #print 'shape = ',shape_data.observed_shape
+        #print 'sigma = ',shape_data.moments_sigma
+        #print 'amp = ',shape_data.moments_amp
+        #print 'centroid = ',shape_data.moments_centroid
+        #print 'rho4 = ',shape_data.moments_rho4
+        #print 'niter = ',shape_data.moments_n_iter
+
+        if shape_data.moments_status != 0:
+            print 'status = ',shape_data.moments_status
+            print ' *** Bad measurement.  Mask this one.'
+            mask[i] = 0
+            continue
+
+        dx = shape_data.moments_centroid.x - x
+        dy = shape_data.moments_centroid.y - y
+        #print 'dcentroid = ',dx,dy
+        if dx**2 + dy**2 > 0.1**2:
+            print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
+            mask[i] = 0
+            continue
+
+        e1 = shape_data.observed_shape.e1
+        e2 = shape_data.observed_shape.e2
+        s = shape_data.moments_sigma
+        # Note: this is (det M)^1/4, not ((Ixx+Iyy)/2)^1/2.
+        # For reference, the latter is size * (1-e^2)^-1/4
+        # So, not all that different, especially for stars with e ~= 0.
+
+        # Account for the WCS:
+        jac = wcs.jacobian(galsim.PositionD(x,y))
+        # ( Iuu  Iuv ) = ( dudx  dudy ) ( Ixx  Ixy ) ( dudx  dvdx )
+        # ( Iuv  Ivv )   ( dvdx  dvdy ) ( Ixy  Iyy ) ( dudy  dvdy )
+        M = numpy.matrix( [[ 1+e1, e2 ], [ e2, 1-e1 ]] )
+        #print 'M = ',M
+        #print 'det(M) = ',numpy.linalg.det(M)
+        M2 = jac.getMatrix() * M * jac.getMatrix().T
+        #print 'M2 = ',M2
+        #print 'det(M2) = ',numpy.linalg.det(M2)
+        e1 = (M2[0,0] - M2[1,1]) / (M2[0,0] + M2[1,1])
+        e2 = (2. * M2[0,1]) / (M2[0,0] + M2[1,1])
+        #print 's = ',s
+        s *= abs(numpy.linalg.det(jac.getMatrix()))**0.5
+        #print 's -> ',s
+        e1_list[i] = e1
+        e2_list[i] = e2
+        s_list[i] = s
+
+    return e1_list,e2_list,s_list,mask
+
+
+def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
+    """Given x,y positions, a psfex solution file, and the wcs, measure shapes and sizes
+    of the PSF model.
+
+    We use the HSM module from GalSim to do this.
+
+    Returns e1, e2, size, mask.
+    """
+    import galsim
+    import galsim.des
+    import numpy
+
+    psfex = galsim.des.DES_PSFEx(psfex_file_name, file_name)
+
+    stamp_size = 32
+    pixel_scale = 0.1
+
+    e1 = numpy.zeros_like(xlist)
+    e2 = numpy.zeros_like(xlist)
+    size = numpy.zeros_like(xlist)
+    mask = numpy.ones_like(xlist, dtype=bool)
+    im = galsim.Image(stamp_size, stamp_size, scale=pixel_scale)
+
+    for i in range(len(xlist)):
+        x = xlist[i]
+        y = ylist[i]
+        print 'Measure PSFEx model shape at ',x,y
+        image_pos = galsim.PositionD(x,y)
+        psf = psfex.getPSF(image_pos)
+        im = psf.drawImage(image=im, method='no_pixel')
+        #print 'im = ',im.array
+
+        shape_data = im.FindAdaptiveMom(strict=False)
+
+        if shape_data.moments_status != 0:
+            print 'status = ',shape_data.moments_status
+            print ' *** Bad measurement.  Mask this one.'
+            mask[i] = 0
+            continue
+
+        dx = shape_data.moments_centroid.x - im.trueCenter().x
+        dy = shape_data.moments_centroid.y - im.trueCenter().y
+        #print 'centroid = ',shape_data.moments_centroid
+        #print 'trueCenter = ',im.trueCenter()
+        #print 'dcentroid = ',dx,dy
+        if dx**2 + dy**2 > 0.1**2:
+            print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
+            mask[i] = 0
+            continue
+
+        #print 'shape = ',shape_data.observed_shape
+        e1[i] = shape_data.observed_shape.e1
+        e2[i] = shape_data.observed_shape.e2
+        size[i] = shape_data.moments_sigma * pixel_scale
+
+    return e1,e2,size,mask
+
+def measure_rho(e1,e2,s,m_e1,m_e2,m_s,mask):
+    """Compute the rho statistics
+    """
+    import numpy
+    import treecorr
+
+    print 'e1 = ',e1
+    print 'm_e1 = ',m_e1
+    print 'de1 = ',e1-m_e1
+    print 'mean de1 = ',numpy.mean(e1[mask]-m_e1[mask])
+    print 'e2 = ',e2
+    print 'm_e2 = ',m_e2
+    print 'de2 = ',e2-m_e2
+    print 'mean de2 = ',numpy.mean(e2[mask]-m_e2[mask])
+    print 's = ',s
+    print 'm_s = ',m_s
+    print 'ds = ',s-m_s
+    print 'mean ds = ',numpy.mean(s[mask]-m_s[mask])
+
+
 def main():
+    import os
     import glob
+    import galsim
+    import json
+
     args = parse_args()
 
     tbdata = read_tapebump_file('/astro/u/mjarvis/rmjarvis/DESWL/psfex/mask_ccdnum.txt')
@@ -431,18 +604,26 @@ def main():
             # These are useful to calculate as "special" positions for testing.
             corners = [ wcs.toWorld(galsim.PositionD(i,j)) 
                         for i,j in [ (0,0), (2048,0), (0,4096), (2048,4096) ] ]
-            print '   corners = ',corners
+            #print '   corners = ',corners
 
             # Also figure out the location of each tape bump.  (More "special" positions)
             print '   nbumps = ',len(tbdata[ccdnum])
             assert len(tbdata[ccdnum]) == 6
             bumps = [ wcs.toWorld(bump_center(bump)) for bump in tbdata[ccdnum] ]
-            print '   bumps = ',bumps
+            #print '   bumps = ',bumps
 
-            # Build the catalogs of the PSF information from the stars used by PSFEx.
+            # Measure the shpes and sizes of the stars used by PSFEx.
+            x = used_data['X_IMAGE']
+            y = used_data['Y_IMAGE']
+            e1, e2, size, mask = measure_shapes(x, y, file_name, wcs)
+
+            # Measure the model shapes, sizes.
+            psfex_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
+            m_e1, m_e2, m_size, m_mask = measure_psfex_shapes(x, y, psfex_file_name, file_name)
 
             # Compute the correlation functions
-
+            #rho1, rho2, rho3 = measure_rho(e1,e2,size,m_e1,m_e2,m_size,mask&m_mask)
+            
             # Write out the interesting stats for this ccd into a file, which we can 
             # then pull all together into a single FITS catalog later.
             stat_file = os.path.join(exp_dir, root + ".json")

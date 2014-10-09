@@ -383,8 +383,10 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         #print 's = ',s
         s *= abs(numpy.linalg.det(jac.getMatrix()))**0.5
         #print 's -> ',s
-        e1_list[i] = e1
-        e2_list[i] = e2
+        # Now convert back to a more normal shear definition, rather than distortion.
+        shear = galsim.Shear(e1=e1,e2=e2)
+        e1_list[i] = shear.g1
+        e2_list[i] = shear.g2
         s_list[i] = s
 
     return e1_list,e2_list,s_list,mask
@@ -441,30 +443,82 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
             continue
 
         #print 'shape = ',shape_data.observed_shape
-        e1[i] = shape_data.observed_shape.e1
-        e2[i] = shape_data.observed_shape.e2
+        e1[i] = shape_data.observed_shape.g1
+        e2[i] = shape_data.observed_shape.g2
         size[i] = shape_data.moments_sigma * pixel_scale
 
     return e1,e2,size,mask
 
-def measure_rho(e1,e2,s,m_e1,m_e2,m_s,mask):
+def measure_rho(coord,e1,e2,s,m_e1,m_e2,m_s,mask):
     """Compute the rho statistics
     """
     import numpy
     import treecorr
+    import galsim
 
     print 'e1 = ',e1
     print 'm_e1 = ',m_e1
     print 'de1 = ',e1-m_e1
+    print 'mean e1 = ',numpy.mean(e1[mask])
     print 'mean de1 = ',numpy.mean(e1[mask]-m_e1[mask])
     print 'e2 = ',e2
     print 'm_e2 = ',m_e2
     print 'de2 = ',e2-m_e2
+    print 'mean e2 = ',numpy.mean(e2[mask])
     print 'mean de2 = ',numpy.mean(e2[mask]-m_e2[mask])
     print 's = ',s
     print 'm_s = ',m_s
     print 'ds = ',s-m_s
+    print 'mean s = ',numpy.mean(s[mask])
     print 'mean ds = ',numpy.mean(s[mask]-m_s[mask])
+
+    # From Barney's paper: http://arxiv.org/pdf/0904.3056v2.pdf
+    # rho1 = < (e-em)* (e-em) >     Barney originally called this D1.
+    # rho2 = Re < e* (e-em) >       Barney's D2 is actually 2x this.
+    # rho3 = < (s-sm) (s-sm) >      Not in Barney's paper, but an obvious extension.
+    # rho4 = < s (s-sm) >           Ditto.
+
+    ra = numpy.array([ c.ra / galsim.degrees for c in coord ])
+    dec = numpy.array([ c.dec / galsim.degrees for c in coord ])
+    print 'ra = ',ra
+    print 'dec = ',dec
+    print 'mask = ',mask
+    ecat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
+                            g1=e1[mask], g2=e2[mask])
+    decat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
+                             g1=(e1-m_e1)[mask], g2=(e2-m_e1)[mask])
+    scat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
+                            k=s[mask])
+    dscat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
+                             k=(s-m_s)[mask])
+
+    rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho1.process(decat)
+    print 'rho1 = ',rho1.xip
+    print 'rho1.xip_im = ',rho1.xip_im
+    print 'rho1.xim = ',rho1.xim
+    print 'rho1.xim_im = ',rho1.xim_im
+    print 'rho1.sigma = ',numpy.sqrt(rho1.varxi)
+
+    rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho2.process(ecat, decat)
+    print 'rho2 = ',rho2.xip
+    print 'rho2.xip_im = ',rho2.xip_im
+    print 'rho2.xim = ',rho2.xim
+    print 'rho2.xim_im = ',rho2.xim_im
+    print 'rho2.sigma = ',numpy.sqrt(rho2.varxi)
+
+    rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho3.process(scat, dscat)
+    print 'rho3 = ',rho3.xi
+    print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
+
+    rho4 = treecorr.KKCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho4.process(scat, dscat)
+    print 'rho4 = ',rho4.xi
+    print 'rho4.sigma = ',numpy.sqrt(rho4.varxi)
+
+    return rho1,rho2,rho3,rho4
 
 
 def main():
@@ -622,7 +676,9 @@ def main():
             m_e1, m_e2, m_size, m_mask = measure_psfex_shapes(x, y, psfex_file_name, file_name)
 
             # Compute the correlation functions
-            #rho1, rho2, rho3 = measure_rho(e1,e2,size,m_e1,m_e2,m_size,mask&m_mask)
+            coord = [ wcs.toWorld(galsim.PositionD(xx,yy)) for xx,yy in zip(x,y) ]
+            m = mask & m_mask
+            rho1, rho2, rho3, rho4 = measure_rho(coord,e1,e2,size,m_e1,m_e2,m_size,m)
             
             # Write out the interesting stats for this ccd into a file, which we can 
             # then pull all together into a single FITS catalog later.

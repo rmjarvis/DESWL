@@ -7,8 +7,8 @@ import traceback
 # Define the parameters for the blacklist
 
 # How many stars are too few or too many?
-FEW_STARS = 50
-MANY_STARS = 500
+FEW_STARS = 20
+MANY_STARS_FRAC = 50
 # How high is a high FWHM?  1.8 arcsec / 0.26 arcsec/pixel = 6.9 pixels
 HIGH_FWHM = 6.9
 
@@ -17,7 +17,9 @@ NO_STARS_FLAG = 1
 TOO_FEW_STARS_FLAG = 2
 TOO_MANY_STARS_FLAG = 4
 TOO_HIGH_FWHM_FLAG = 8
-ERROR_FLAG = 16
+FINDSTAR_FAILURE = 16
+PSFEX_FAILURE = 32
+ERROR_FLAG = 64
 
 class NoStarsException(Exception):
     pass
@@ -78,7 +80,7 @@ def parse_args():
                         help='make symlinks in output dir, rather than move files')
 
     # Options
-    parser.add_argument('--rm_files', default=0, type=int,
+    parser.add_argument('--rm_files', default=False, action='store_const', const=True,
                         help='remove unpacked files after finished')
     parser.add_argument('--run_psfex', default=1, type=int,
                         help='run psfex on files')
@@ -256,10 +258,19 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
     #print findstars_cmd
     os.system(findstars_cmd)
 
+    if not os.path.exists(star_file):
+        print '   Error running findstars.  Rerun with verbose=2.'
+        findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ verbose=2 debug_ext=_fs.debug >> {log} 2>&1'.format(
+            fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
+            wdir=wdir, log=logfile)
+        print '   The debug file is',root + '_fs.debug'
+        return None, None, None
+
     # Make a mask based on which objects findstars decided are stars.
     with pyfits.open(star_file) as pyf:
         mask = pyf[1].data['star_flag']==1
     nstars = numpy.count_nonzero(mask)
+    ntot = len(mask)
     print '   found %d stars'%nstars
     if nstars == 0:
         # Can't really do any of the rest of this, so skip out to the end.
@@ -279,7 +290,7 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
         new_cat_file = cat_file.replace('psfcat','psfcat_findstars')
         list.writeto(new_cat_file,clobber=True)
 
-    return new_cat_file, nstars
+    return new_cat_file, nstars, ntot
 
 def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
                      mag_cut, nbright_stars,
@@ -358,6 +369,9 @@ def get_fwhm(cat_file):
 
 def run_psfex(wdir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psfex_config):
     """Run PSFEx
+
+    Returns True if successful, False if there was a catastrophic failure and no output 
+    file was written.
     """
     print '   running psfex'
     psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} >> {log} 2>&1'.format(
@@ -368,8 +382,14 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psf
     # PSFEx generates its output filename from the input catalog name.  If this doesn't match
     # our target name, then rename it.
     actual_psf_file = cat_file.replace('.fits','.psf')
+
+    if not os.path.exists(actual_psf_file):
+        print '   Error running PSFEx.  No ouput file was written.'
+        return False
+
     if psf_file != actual_psf_file:
         os.rename(actual_psf_file, psf_file)
+    return True
 
 def remove_temp_files(wdir, root, *args):
     """Remove wdir/root* except for any files listed in the args
@@ -523,14 +543,19 @@ def main():
                 # if we want to use only the stars selected by findstars
                 if args.use_findstars:
                     tmp = cat_file
-                    cat_file, nstars = run_findstars(wdir, root, cat_file, logfile,
-                                                     args.findstars_dir, args.findstars_config)
+                    cat_file, nstars, ntot = run_findstars(
+                            wdir, root, cat_file, logfile,
+                            args.findstars_dir, args.findstars_config)
+                    if cat_file == None:
+                        print '     -- flag for findstars failure'
+                        flag |= FINDSTARS_FAILURE
+                        raise NoStarsException()
                     # Check if there are few or many staras.
                     if nstars < FEW_STARS:
                         print '     -- flag for too few stars: ',nstars
                         flag |= TOO_FEW_STARS_FLAG
-                    if nstars > MANY_STARS:
-                        print '     -- flag for too many stars: ',nstars
+                    if nstars > MANY_STARS_FRAC * ntot:
+                        print '     -- flag for too many stars: %d/%d'%(nstars,ntot)
                         flag |= TOO_MANY_STARS_FLAG
 
 
@@ -544,7 +569,7 @@ def main():
                     if nstars < FEW_STARS:
                         print '     -- flag for too few stars: ',nstars
                         flag |= TOO_FEW_STARS_FLAG
-                    if nstars == 0:
+                    if nstars <= 1:
                         raise NoStarsException()
 
                 if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
@@ -561,9 +586,13 @@ def main():
                 if args.run_psfex:
                     psf_file = os.path.join(wdir,root+'_psfcat.psf')
                     used_file = os.path.join(wdir,root+'_psfcat.used.fits')
-                    run_psfex(wdir, root, cat_file, psf_file, used_file, logfile,
-                              args.psfex_dir, args.psfex_config)
-                    move_files(wdir, odir, psf_file, used_file, make_symlinks=args.make_symlinks)
+                    success = run_psfex(wdir, root, cat_file, psf_file, used_file, logfile,
+                            args.psfex_dir, args.psfex_config)
+                    if success:
+                        move_files(wdir, odir, psf_file,
+                                   make_symlinks=args.make_symlinks)
+                    else:
+                        flag |= PSFEX_FAILURE
 
                 if args.rm_files:
                     remove_temp_files(wdir, root, psf_file, used_file)

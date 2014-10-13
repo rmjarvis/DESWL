@@ -1,9 +1,7 @@
 #!/bin/bash
 
-DATE=20140930
-FILE=spte_e
-TAG=v3
+DATE=20141013
+FILE=gold_exp
+TAG=v4
 
-#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
-#/bin/rm -rf submit_$DATE/*
-./run_wq_exp.py --njobs=1 --file=$FILE --submit_dir=submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --work=~/work/psfex_rerun/$TAG --tag=$TAG --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0 --make_symlinks=0 --clear_output"
+./run_wq_exp.py --njobs=1 --file=$FILE --submit_dir=submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --work=~/work/psfex_rerun/$TAG --tag=$TAG --use_findstars=0 --use_tapebumps=0 --run_psfex=0 --clear_output"

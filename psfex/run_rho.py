@@ -115,10 +115,8 @@ def read_blacklists(tag):
 
     return d
 
-def read_image_header(img_file):
-    """Read some information from the image header.
-
-    Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, wcs
+def get_wcs(img_file):
+    """Read the wcs from the image header
     """
     import pyfits
     import galsim
@@ -127,40 +125,8 @@ def read_image_header(img_file):
         hdu = 1
     else:
         hdu = 0
-
-    with pyfits.open(img_file) as pyf:
-        # DATE-OBS looks like '2012-12-03T07:38:54.174780', so split on T.
-        date = pyf[hdu].header['DATE-OBS']
-        date, time = date.strip().split('T',1)
-
-        # FILTER looks like 'z DECam SDSS c0004 9260.0 1520.0', so split on white space
-        filter = pyf[hdu].header['FILTER']
-        filter = filter.split()[0]
-
-        # CCDNUM is 1-62.  DETPOS is a string such as 'S29     '.  Strip off the whitespace.
-        ccdnum = pyf[hdu].header['CCDNUM']
-        ccdnum = int(ccdnum)
-        detpos = pyf[hdu].header['DETPOS']
-        detpos = detpos.strip()
-
-        # TELRA, TELDEC look like '-62:30:22.320'.  Use GalSim to convert to decimal degrees.
-        telra = pyf[hdu].header['TELRA']
-        teldec = pyf[hdu].header['TELDEC']
-        telra = galsim.HMS_Angle(telra) / galsim.degrees
-        teldec = galsim.DMS_Angle(teldec) / galsim.degrees
-
-        # HA looks like '03:12:02.70''.  Use GalSim to convert to decimal degrees.
-        ha = pyf[hdu].header['HA']
-        ha = galsim.HMS_Angle(ha) / galsim.degrees
-
-        # AIRMASS should already be a float I think, but just make sure.
-        airmass = pyf[hdu].header['AIRMASS']
-        airmass = float(airmass)
-
-        # Use Galsim to read WCS
-        wcs = galsim.FitsWCS(header=pyf[hdu].header)
-
-    return date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, wcs
+    wcs = galsim.FitsWCS(img_file, hdu=hdu)
+    return wcs
  
 def convert_to_year(date, time):
     """Given string representations of the date and time, convert to a decimal year.
@@ -573,35 +539,12 @@ def main():
         for file_name in files:
             print '\nProcessing ', file_name
 
-            # Start by getting some basic information about the exposure / chip
-            # to put in the output file
             try:
                 root, ccdnum = parse_file_name(file_name)
             except:
                 print '   Unable to parse file_name %s.  Skipping this file.'%file_name
                 continue
             print '   root, ccdnum = ',root,ccdnum
-
-            date, time, filter, ccdnum2, detpos, telra, teldec, ha, airmass, wcs = \
-                read_image_header(file_name)
-            print '   date, time = ',date,time
-            print '   filter, ccdnum, detpos = ',filter,ccdnum,detpos
-            print '   telra, teldec, ha, airmass = ',telra, teldec, ha, airmass
-            if ccdnum != ccdnum2:
-                raise ValueError("CCDNUM from FITS header doesn't match ccdnum from file name.")
-
-            year = convert_to_year(date, time)
-            print '   year = ',year
-
-            # Check if we have a blacklist flag for this chip
-            key = (expnum, ccdnum)
-            if key in flag_dict:
-                flag = flag_dict[key]
-                print '   flag = ',flag
-                print '   type(flag) = ',type(flag)
-            else:
-                flag = 0
-                print '   not flagged'
 
             # Read the star data.  From both findstars and the PSFEx used file.
             fs_data = read_findstars(exp_dir, root)
@@ -617,10 +560,6 @@ def main():
             if len(used_data) == 0:
                 print '   No stars were used.'
                 continue
-
-            # Figure out which fs objects go with which used objects.
-            index = find_fs_index(used_data, fs_data)
-            print '   index = ',index
 
             tot_xmin = fs_data['x'].min()
             tot_xmax = fs_data['x'].max()
@@ -647,6 +586,10 @@ def main():
             print '   area = ',used_area
             print '   fraction used = ',float(used_area) / tot_area
 
+            # Figure out which fs objects go with which used objects.
+            index = find_fs_index(used_data, fs_data)
+            print '   index = ',index
+
             # Check: This should be the same as the used bounds
             alt_used_xmin = fs_data['x'][index].min()
             alt_used_xmax = fs_data['x'][index].max()
@@ -655,16 +598,8 @@ def main():
             print '   bounds from findstars[index] = ',
             print alt_used_xmin,alt_used_xmax,alt_used_ymin,alt_used_ymax
  
-            # These are useful to calculate as "special" positions for testing.
-            corners = [ wcs.toWorld(galsim.PositionD(i,j)) 
-                        for i,j in [ (0,0), (2048,0), (0,4096), (2048,4096) ] ]
-            #print '   corners = ',corners
-
-            # Also figure out the location of each tape bump.  (More "special" positions)
-            print '   nbumps = ',len(tbdata[ccdnum])
-            assert len(tbdata[ccdnum]) == 6
-            bumps = [ wcs.toWorld(bump_center(bump)) for bump in tbdata[ccdnum] ]
-            #print '   bumps = ',bumps
+            # Get the wcs from the image file
+            wcs = get_wcs(file_name)
 
             # Measure the shpes and sizes of the stars used by PSFEx.
             x = used_data['X_IMAGE']
@@ -685,24 +620,11 @@ def main():
             stat_file = os.path.join(exp_dir, root + ".json")
             stats = [ 
                 expnum, ccdnum, run, exp, root, 
-                date, time, year, filter, detpos,
-                telra, teldec, ha, airmass,
-                flag,
                 tot_xmin, tot_xmax, tot_ymin, tot_ymax,
                 fs_xmin, fs_xmax, fs_ymin, fs_ymax,
                 used_xmin, used_xmax, used_ymin, used_ymax,
                 tot_area, fs_area, used_area,
                 n_tot, n_fs, n_used,
-                corners[0].ra / galsim.degrees, corners[0].dec / galsim.degrees,
-                corners[1].ra / galsim.degrees, corners[1].dec / galsim.degrees,
-                corners[2].ra / galsim.degrees, corners[2].dec / galsim.degrees,
-                corners[3].ra / galsim.degrees, corners[3].dec / galsim.degrees,
-                bumps[0].ra / galsim.degrees, bumps[0].dec / galsim.degrees,
-                bumps[1].ra / galsim.degrees, bumps[1].dec / galsim.degrees,
-                bumps[2].ra / galsim.degrees, bumps[2].dec / galsim.degrees,
-                bumps[3].ra / galsim.degrees, bumps[3].dec / galsim.degrees,
-                bumps[4].ra / galsim.degrees, bumps[4].dec / galsim.degrees,
-                bumps[5].ra / galsim.degrees, bumps[5].dec / galsim.degrees,
                 ]
             with open(stat_file,'w') as f:
                 json.dump(stats, f)

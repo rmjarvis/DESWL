@@ -263,6 +263,8 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
         findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ verbose=2 debug_ext=_fs.debug >> {log} 2>&1'.format(
             fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
             wdir=wdir, log=logfile)
+        print findstars_cmd
+        os.system(findstars_cmd)
         print '   The debug file is',root + '_fs.debug'
         return None, None, None
 

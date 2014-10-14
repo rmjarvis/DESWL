@@ -188,19 +188,18 @@ def unpack_file(file_name, wdir, logfile):
     if os.path.splitext(base_file)[1] == '.fz':
 
         img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
-
-        # If an unpacked file does not exist in the work directory 
-        if not os.path.exists(img_file):
-            print '   unpacking fz file'
-            cmd = 'funpack -O {outf} {inf} >> {log} 2>&1'.format(
-                outf=img_file, inf=file_name, log=logfile)
-            os.system(cmd)
+        print '   unpacking fz file'
+        cmd = 'funpack -O {outf} {inf} >> {log} 2>&1'.format(
+            outf=img_file, inf=file_name, log=logfile)
+        print cmd
+        os.system(cmd)
     
     else:
         # If the file is not fpacked, make a symlink into the work directory
         img_file = os.path.join(wdir,base_file)
-        if not os.path.exists(img_file):
-            os.symlink(file_name,wdir)
+        if os.path.exists(img_file):
+            os.remove(new_file)
+        os.symlink(file_name,wdir)
 
     return img_file
 
@@ -232,14 +231,13 @@ def run_sextractor(wdir, root, img_file, sat, fwhm, logfile,
     """
     cat_file = os.path.join(wdir,root+'_psfcat.fits')
 
-    if not os.path.exists(cat_file):
-        print '   running sextractor'
-
-        cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat} >> {log} 2>&1".format(
-            sex_dir=sex_dir, img_file=img_file, config=sex_config,
-            cat_file=cat_file, params=sex_params, filter=sex_filter,
-            nnw=sex_nnw, fwhm=fwhm, log=logfile, sat=sat)
-        os.system(cat_cmd)
+    print '   running sextractor'
+    cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat} >> {log} 2>&1".format(
+        sex_dir=sex_dir, img_file=img_file, config=sex_config,
+        cat_file=cat_file, params=sex_params, filter=sex_filter,
+        nnw=sex_nnw, fwhm=fwhm, log=logfile, sat=sat)
+    print cat_cmd
+    os.system(cat_cmd)
     return cat_file
 
 def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
@@ -255,7 +253,7 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
     findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ >> {log} 2>&1'.format(
             fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
             wdir=wdir, log=logfile)
-    #print findstars_cmd
+    print findstars_cmd
     os.system(findstars_cmd)
 
     if not os.path.exists(star_file):
@@ -379,6 +377,7 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psf
     psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} >> {log} 2>&1'.format(
             psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file,
             log=logfile)
+    print psf_cmd
     os.system(psf_cmd)
 
     # PSFEx generates its output filename from the input catalog name.  If this doesn't match

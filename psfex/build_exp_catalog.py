@@ -1,7 +1,7 @@
 #! /usr/bin/env python
-# Program to computer rho statistics on PSFEx outputs.
-# This involves creating catalogs of shapes based on the PSFEx files, and then using
-# TreeCorr to compute the correlation functions.
+# Build a catalog with information about each exposure/ccdnum.
+# This includes information from the image header, the blacklists, and the results
+# of the rho statistics.
 
 import astropy.io.fits as pyfits
  
@@ -19,7 +19,7 @@ def parse_args():
                         help='The name of the output fits file')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='',
+    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
                         help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')
@@ -242,16 +242,8 @@ def main():
 
     flag_dict = read_blacklists(args.tag)
 
-    # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)
     print 'work dir = ',work
-    try:
-        if not os.path.isdir(work):
-            os.makedirs(work)
-    except OSError as e:
-        print "Ignore OSError from makedirs(work):"
-        print e
-        pass
 
     datadir = '/astro/u/astrodat/data/DES'
 

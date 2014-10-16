@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATE=20140920
-FILE=test_exp
-TAG=v3
+DATE=20141014
+FILE=spte_e
+TAG=v4
 
-./run_wq_exp.py --njobs=1 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_rho_$DATE --cmd="./run_rho.py --exp_match=\"*_[0-9][0-9].fits*\" --work=~/work/psfex_rerun/$TAG"
+./run_wq_exp.py --njobs=100 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

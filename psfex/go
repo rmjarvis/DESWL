@@ -1,8 +1,8 @@
 #!/bin/bash
 
 DATE=20141013
-FILE=test_exp
+FILE=spte_e
 TAG=v4
 
-/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
-./run_wq_exp.py --njobs=10 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"
+#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
+./run_wq_exp.py --njobs=221 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"

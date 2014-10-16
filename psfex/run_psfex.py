@@ -1,5 +1,6 @@
 #! /usr/bin/env python
-# Program to run single file in psfex
+# Run PSFEx for a set of exposures, including making any necessarily input files.
+# It also logs errors into a psfex blacklist file.
 
 import os
 import traceback
@@ -45,7 +46,7 @@ def parse_args():
                         help='should the output directory be cleared before writing new files?')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='',
+    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
                         help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')

@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# Program to computer rho statistics on PSFEx outputs.
+# Compute rho statistics on PSFEx outputs.
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
@@ -16,7 +16,7 @@ def parse_args():
                         help='A version tag to add to the directory name')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='',
+    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
                         help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')

@@ -276,15 +276,38 @@ def measure_shapes(xlist, ylist, file_name, wcs):
     """
     import galsim
     import numpy
+    import astropy.io.fits as pyfits
 
-    im = galsim.fits.read(file_name)
-    bp_im = galsim.fits.read(file_name, hdu=2)
-    wt_im = galsim.fits.read(file_name, hdu=3)
+    #im = galsim.fits.read(file_name)
+    #bp_im = galsim.fits.read(file_name, hdu=2)
+    #wt_im = galsim.fits.read(file_name, hdu=3)
+    with pyfits.open(file_name) as f:
+        # Some DES images have bad cards.  Fix them with verify('fix') before sending to GalSim.
+        f[1].verify('fix')
+        f[2].verify('fix')
+        f[3].verify('fix')
+        print 'after verify, f = ',f
+        print 'f[1] = ',f[1]
+        print 'f[2] = ',f[2]
+        print 'f[3] = ',f[3]
+        im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
+        print 'im = ',im
+        bp_im = galsim.fits.read(hdu_list=f, hdu=2, compression='rice')
+        wt_im = galsim.fits.read(hdu_list=f, hdu=3, compression='rice')
+
+    # Need this for HSM not to balk at negative weights, which are usually due to the funpack
+    # rounding problem for things that should be zero, so -1.e-12 kinds of values.
+    # Just set them to zero.
     wt_im.array[wt_im.array < 0] = 0.
     print 'file_name = ',file_name
+
+    # Read the background image as well.
     bkg_file_name = file_name[:-8] + '_bkg.fits.fz'
-    print 'bgk_file_name = ',bkg_file_name
-    bkg_im = galsim.fits.read(bkg_file_name)
+    print 'bkg_file_name = ',bkg_file_name
+    #bkg_im = galsim.fits.read(bkg_file_name)
+    with pyfits.open(bkg_file_name) as f:
+        f[1].verify('fix')
+        bkg_im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
     im -= bkg_im # Subtract off the sky background.
 
     stamp_size = 32

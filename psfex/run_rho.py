@@ -293,6 +293,7 @@ def measure_shapes(xlist, ylist, file_name, wcs):
     e2_list = numpy.zeros_like(xlist)
     s_list = numpy.zeros_like(xlist)
     mask = numpy.ones_like(xlist, dtype=bool)
+    print 'len(xlist) = ',len(xlist)
 
     for i in range(len(xlist)):
         x = xlist[i]
@@ -316,7 +317,7 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         if shape_data.moments_status != 0:
             print 'status = ',shape_data.moments_status
             print ' *** Bad measurement.  Mask this one.'
-            mask[i] = 0
+            mask[i] = False
             continue
 
         dx = shape_data.moments_centroid.x - x
@@ -324,7 +325,7 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         #print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > 0.1**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
-            mask[i] = 0
+            mask[i] = False
             continue
 
         e1 = shape_data.observed_shape.e1
@@ -395,7 +396,7 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
         if shape_data.moments_status != 0:
             print 'status = ',shape_data.moments_status
             print ' *** Bad measurement.  Mask this one.'
-            mask[i] = 0
+            mask[i] = False
             continue
 
         dx = shape_data.moments_centroid.x - im.trueCenter().x
@@ -405,17 +406,17 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
         #print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > 0.1**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
-            mask[i] = 0
+            mask[i] = False
             continue
 
         #print 'shape = ',shape_data.observed_shape
-        e1[i] = shape_data.observed_shape.g1
-        e2[i] = shape_data.observed_shape.g2
-        size[i] = shape_data.moments_sigma * pixel_scale
+        e1_list[i] = shape_data.observed_shape.g1
+        e2_list[i] = shape_data.observed_shape.g2
+        s_list[i] = shape_data.moments_sigma * pixel_scale
 
-    return e1,e2,size,mask
+    return e1_list,e2_list,s_list,mask
 
-def measure_rho(coord,e1,e2,s,m_e1,m_e2,m_s,mask):
+def measure_rho(coord,e1,e2,s,m_e1,m_e2,m_s,mask,max_sep):
     """Compute the rho statistics
     """
     import numpy
@@ -432,11 +433,11 @@ def measure_rho(coord,e1,e2,s,m_e1,m_e2,m_s,mask):
     print 'de2 = ',e2-m_e2
     print 'mean e2 = ',numpy.mean(e2[mask])
     print 'mean de2 = ',numpy.mean(e2[mask]-m_e2[mask])
-    print 's = ',s
-    print 'm_s = ',m_s
-    print 'ds = ',s-m_s
-    print 'mean s = ',numpy.mean(s[mask])
-    print 'mean ds = ',numpy.mean(s[mask]-m_s[mask])
+    #print 's = ',s
+    #print 'm_s = ',m_s
+    #print 'ds = ',s-m_s
+    #print 'mean s = ',numpy.mean(s[mask])
+    #print 'mean ds = ',numpy.mean(s[mask]-m_s[mask])
 
     # From Barney's paper: http://arxiv.org/pdf/0904.3056v2.pdf
     # rho1 = < (e-em)* (e-em) >     Barney originally called this D1.
@@ -446,43 +447,47 @@ def measure_rho(coord,e1,e2,s,m_e1,m_e2,m_s,mask):
 
     ra = numpy.array([ c.ra / galsim.degrees for c in coord ])
     dec = numpy.array([ c.dec / galsim.degrees for c in coord ])
-    print 'ra = ',ra
-    print 'dec = ',dec
-    print 'mask = ',mask
+    #print 'ra = ',ra
+    #print 'dec = ',dec
+    #print 'mask = ',mask
     ecat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
                             g1=e1[mask], g2=e2[mask])
     decat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
-                             g1=(e1-m_e1)[mask], g2=(e2-m_e1)[mask])
+                             g1=(e1-m_e1)[mask], g2=(e2-m_e2)[mask])
     scat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
                             k=s[mask])
     dscat = treecorr.Catalog(ra=ra[mask], dec=dec[mask], ra_units='deg', dec_units='deg', 
                              k=(s-m_s)[mask])
 
-    rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin', bin_size=0.1,
+                                  verbose=2)
     rho1.process(decat)
-    print 'rho1 = ',rho1.xip
-    print 'rho1.xip_im = ',rho1.xip_im
-    print 'rho1.xim = ',rho1.xim
-    print 'rho1.xim_im = ',rho1.xim_im
-    print 'rho1.sigma = ',numpy.sqrt(rho1.varxi)
+    #print 'rho1 = ',rho1.xip
+    #print 'rho1.xip_im = ',rho1.xip_im
+    #print 'rho1.xim = ',rho1.xim
+    #print 'rho1.xim_im = ',rho1.xim_im
+    #print 'rho1.sigma = ',numpy.sqrt(rho1.varxi)
 
-    rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin', bin_size=0.1,
+                                  verbose=2)
     rho2.process(ecat, decat)
-    print 'rho2 = ',rho2.xip
-    print 'rho2.xip_im = ',rho2.xip_im
-    print 'rho2.xim = ',rho2.xim
-    print 'rho2.xim_im = ',rho2.xim_im
-    print 'rho2.sigma = ',numpy.sqrt(rho2.varxi)
+    #print 'rho2 = ',rho2.xip
+    #print 'rho2.xip_im = ',rho2.xip_im
+    #print 'rho2.xim = ',rho2.xim
+    #print 'rho2.xim_im = ',rho2.xim_im
+    #print 'rho2.sigma = ',numpy.sqrt(rho2.varxi)
 
-    rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
-    rho3.process(scat, dscat)
-    print 'rho3 = ',rho3.xi
-    print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
+    rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin', bin_size=0.1,
+                                  verbose=2)
+    rho3.process(dscat)
+    #print 'rho3 = ',rho3.xi
+    #print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
 
-    rho4 = treecorr.KKCorrelation(min_sep=0.5, max_sep=100, sep_units='arcmin', bin_size=0.1)
+    rho4 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin', bin_size=0.1,
+                                  verbose=2)
     rho4.process(scat, dscat)
-    print 'rho4 = ',rho4.xi
-    print 'rho4.sigma = ',numpy.sqrt(rho4.varxi)
+    #print 'rho4 = ',rho4.xi
+    #print 'rho4.sigma = ',numpy.sqrt(rho4.varxi)
 
     return rho1,rho2,rho3,rho4
 
@@ -492,6 +497,7 @@ def main():
     import glob
     import galsim
     import json
+    import numpy
 
     args = parse_args()
 
@@ -536,6 +542,17 @@ def main():
         # Get the file names in that directory.
         files = glob.glob('%s/%s'%(input_dir,args.exp_match))
 
+        exp_e1 = numpy.array([], dtype=float)
+        exp_e2 = numpy.array([], dtype=float)
+        exp_size = numpy.array([], dtype=float)
+        exp_mask = numpy.array([], dtype=bool)
+        exp_m_e1 = numpy.array([], dtype=float)
+        exp_m_e2 = numpy.array([], dtype=float)
+        exp_m_size = numpy.array([], dtype=float)
+        exp_m_mask = numpy.array([], dtype=bool)
+        exp_coord = []
+        exp_n_used = 0
+
         for file_name in files:
             print '\nProcessing ', file_name
 
@@ -545,6 +562,18 @@ def main():
                 print '   Unable to parse file_name %s.  Skipping this file.'%file_name
                 continue
             print '   root, ccdnum = ',root,ccdnum
+
+            # Check if we have a blacklist flag for this chip
+            key = (expnum, ccdnum)
+            if key in flag_dict:
+                flag = flag_dict[key]
+                print '   flag = ',flag
+                if flag & (113 << 15):
+                    print '   Catastrophic flag.  Skipping this file.'
+                    continue
+            else:
+                flag = 0
+                print '   not flagged'
 
             # Read the star data.  From both findstars and the PSFEx used file.
             fs_data = read_findstars(exp_dir, root)
@@ -557,7 +586,7 @@ def main():
             used_data = read_used(exp_dir, root)
             n_used = len(used_data)
             print '   n_used = ',n_used
-            if len(used_data) == 0:
+            if n_used == 0:
                 print '   No stars were used.'
                 continue
 
@@ -598,6 +627,17 @@ def main():
             print '   bounds from findstars[index] = ',
             print alt_used_xmin,alt_used_xmax,alt_used_ymin,alt_used_ymax
  
+            # Get the magnitude range for each catalog.
+            tot_magmin = fs_data['mag'].min()
+            tot_magmax = fs_data['mag'].max()
+            print '   magnitude range of full catalog = ',tot_magmin,tot_magmax
+            fs_magmin = fs_data['mag'][mask].min()
+            fs_magmax = fs_data['mag'][mask].max()
+            print '   magnitude range of fs stars = ',fs_magmin,fs_magmax
+            used_magmin = fs_data['mag'][index].min()
+            used_magmax = fs_data['mag'][index].max()
+            print '   magnitude range of used stars = ',used_magmin,used_magmax
+
             # Get the wcs from the image file
             wcs = get_wcs(file_name)
 
@@ -613,7 +653,11 @@ def main():
             # Compute the correlation functions
             coord = [ wcs.toWorld(galsim.PositionD(xx,yy)) for xx,yy in zip(x,y) ]
             m = mask & m_mask
-            rho1, rho2, rho3, rho4 = measure_rho(coord,e1,e2,size,m_e1,m_e2,m_size,m)
+            print 'm = ',m
+            if numpy.sum(m) == 0:
+                print 'No stars survived the masks!'
+                continue
+            rho1, rho2, rho3, rho4 = measure_rho(coord,e1,e2,size,m_e1,m_e2,m_size,m,max_sep=20)
             
             # Write out the interesting stats for this ccd into a file, which we can 
             # then pull all together into a single FITS catalog later.
@@ -625,12 +669,85 @@ def main():
                 used_xmin, used_xmax, used_ymin, used_ymax,
                 tot_area, fs_area, used_area,
                 n_tot, n_fs, n_used,
+                rho1.meanlogr.tolist(),
+                rho1.xip.tolist(),
+                rho1.xim.tolist(),
+                rho2.xip.tolist(),
+                rho2.xim.tolist(),
+                rho3.xi.tolist(),
+                rho4.xi.tolist(),
                 ]
             with open(stat_file,'w') as f:
                 json.dump(stats, f)
 
+            if flag == 0:
+                print 'Flag == 0, so add this to exposure lists'
+                exp_n_used += n_used
+                exp_e1 = numpy.append(exp_e1, e1)
+                exp_e2 = numpy.append(exp_e2, e2)
+                exp_size = numpy.append(exp_size, size)
+                exp_mask = numpy.append(exp_mask, mask)
+                exp_m_e1 = numpy.append(exp_m_e1, m_e1)
+                exp_m_e2 = numpy.append(exp_m_e2, m_e2)
+                exp_m_size = numpy.append(exp_m_size, m_size)
+                exp_m_mask = numpy.append(exp_m_mask, m_mask)
+                exp_coord.extend(coord)
+            else:
+                print 'Not including this in exposure lists because flag =',flag
+
             if args.single_ccd:
                 break
+
+        print 'exp_n_used = ',exp_n_used
+        if exp_n_used == 0:
+            print 'No usable ccds for the whole exposure.  Probably due to astrometry flags.'
+            print 'Skip this exposure.'
+            continue
+            
+        print 'len(exp_coord) = ',len(exp_coord)
+        print 'len(exp_e1) = ',len(exp_e1)
+        # Now compute the full rho statistics for the exposure:
+        m = exp_mask & exp_m_mask
+        rho1, rho2, rho3, rho4 = measure_rho(
+                exp_coord,exp_e1,exp_e2,exp_size,
+                exp_m_e1,exp_m_e2,exp_m_size,m,max_sep=100)
+
+        print 'rho1.xip = ',rho1.xip
+        print 'rho1.xip_im = ',rho1.xip_im
+        print 'rho1.xim = ',rho1.xim
+        print 'rho1.xim_im = ',rho1.xim_im
+        print 'rho2.xip = ',rho2.xip
+        print 'rho2.xip_im = ',rho2.xip_im
+        print 'rho2.xim = ',rho2.xim
+        print 'rho2.xim_im = ',rho2.xim_im
+        print 'rho3.xi = ',rho3.xi
+        print 'rho4.xi = ',rho4.xi
+        # Write out the interesting stats for this ccd into a file, which we can 
+        # then pull all together into a single FITS catalog later.
+        exp_root = root.rsplit('_',1)[0]
+        print 'exp_root = ',exp_root
+        stat_file = os.path.join(exp_dir, exp_root + ".json")
+        stats = [ 
+            expnum, run, exp,
+            exp_n_used,
+            rho1.meanlogr.tolist(),
+            rho1.xip.tolist(),
+            rho1.xip_im.tolist(),
+            rho1.xim.tolist(),
+            rho1.xim_im.tolist(),
+            rho1.varxi.tolist(),
+            rho2.xip.tolist(),
+            rho2.xip_im.tolist(),
+            rho2.xim.tolist(),
+            rho2.xim_im.tolist(),
+            rho2.varxi.tolist(),
+            rho3.xi.tolist(),
+            rho3.varxi.tolist(),
+            rho4.xi.tolist(),
+            rho4.varxi.tolist(),
+            ]
+        with open(stat_file,'w') as f:
+            json.dump(stats, f)
 
     print '\nFinished processing all exposures'
 

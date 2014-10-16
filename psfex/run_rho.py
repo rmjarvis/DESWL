@@ -393,16 +393,24 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
     import galsim
     import galsim.des
     import numpy
+    print 'Read in PSFEx file: ',psfex_file_name
 
-    psfex = galsim.des.DES_PSFEx(psfex_file_name, file_name)
+    e1_list = numpy.zeros_like(xlist)
+    e2_list = numpy.zeros_like(xlist)
+    s_list = numpy.zeros_like(xlist)
+    mask = numpy.ones_like(xlist, dtype=bool)
+
+    try:
+        psfex = galsim.des.DES_PSFEx(psfex_file_name, file_name)
+    except Exception as e:
+        print 'Caught ',e
+        print 'Masking all PSFEx measurements'
+        mask[:] = False
+        return e1_list,e2_list,s_list,mask
 
     stamp_size = 32
     pixel_scale = 0.1
 
-    e1 = numpy.zeros_like(xlist)
-    e2 = numpy.zeros_like(xlist)
-    size = numpy.zeros_like(xlist)
-    mask = numpy.ones_like(xlist, dtype=bool)
     im = galsim.Image(stamp_size, stamp_size, scale=pixel_scale)
 
     for i in range(len(xlist)):

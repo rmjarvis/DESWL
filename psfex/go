@@ -1,12 +1,8 @@
 #!/bin/bash
 
-DATE=20140904xx
-#FILE=test_exp
-FILE=spte_exp
-#FILE=last_exp
+DATE=20141013
+FILE=spte_e
+TAG=v4
 
-#./run_wq_exp.py --njob 1 --file test_exp --output ~/work/psfex_output --cmd="./run_findstars.py"
-
-/bin/rm -f ~/work/psfex_rerun_$DATE/psfex_blacklist
-/bin/rm -rf submit_$DATE/*
-./run_wq_exp.py --njobs=20 --file=$FILE --output=~/work/psfex_rerun_$DATE --submit_dir=submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --mag_cut=3.0 --output=~/work/psfex_rerun_$DATE --clear_output"
+#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
+./run_wq_exp.py --njobs=221 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"

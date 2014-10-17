@@ -49,6 +49,24 @@ class Catalog(astropy.table.Table):
 		cat = cls.from_multiple_fits(filenames, cat_name)
 		return cat
 
+	@classmethod
+	def from_desdb(cls,query,save_as=None):
+		"""Get catalog by querying the desdm database. Need desdb installed.
+		Arguments: - query: which is an sql query as a string
+				   - save_as: filename to save catalog returned by query as .npy file"""
+		try:
+			import desdb
+		except Exception as e:
+			print 'while trying to import desdb, got the following exception:'
+			print e
+			return 1
+		conn=desdb.Connection()
+		catalog=conn.quick(query,array=True)
+		if save_as is not None:
+			np.save(save_as,catalog)
+		print catalog
+		return astropy.table.Table(catalog)
+
 
 	def intersection(self, cat2, field='coadd_objects_id'):
 		ids1 = set(self[field])

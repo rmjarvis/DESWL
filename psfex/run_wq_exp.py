@@ -10,11 +10,10 @@
 # 
 # The command argument is the name of exectuation that is expected 
 # to take a --exps and --runs to specify input directories
-# and --output for output
 # 
 # I only have two scripts that do this currently run_psfex.py and run_findstars.py
 # To run them you can do something like
-#    ./run_wq_exp.py --njobs 10 --file test_exp --output test2 --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
+#    ./run_wq_exp.py --njobs 10 --file test_exp --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
 
 # 
 # See https://github.com/esheldon/wq for information about using wq.
@@ -42,10 +41,14 @@ command: |
 job_name: {name}
 
 # this is the type of node/host selection. bynode means select entire
-# nodes.
-mode: bycore
+# nodes.  bycore1 means all N cores from the same node.
+mode: bycore1
+N: {cores_per_job}
 
 # Select from this group(s)
+# I've had trouble with OS operations from neww2, so avoid that one.
+# astro0001 in particular, so possibly could try the other ones in new2.
+# I didn't try them individually.
 group: [new, new2, new3]
 """
 
@@ -53,12 +56,12 @@ group: [new, new2, new3]
 parser = argparse.ArgumentParser(description='Run single file')
 parser.add_argument('--njobs', default=100, type=int,
                     help='How many jobs to run')
+parser.add_argument('--cores_per_job', default=1, type=int,
+                    help='How many cores to use per job')
 parser.add_argument('--file', default='',
                     help='list of run/exposures')
 parser.add_argument('--submit_dir',default='submit',
                     help='where to put submit files')
-parser.add_argument('--output', default='/astro/u/mjarvis/work',
-                    help='where to put output files')
 parser.add_argument('--cmd', default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
 parser.add_argument('--debug', default=False, action='store_const', const=True,
@@ -67,49 +70,56 @@ parser.add_argument('--debug', default=False, action='store_const', const=True,
 
 args = parser.parse_args()
 
+submit_dir = os.path.expanduser(args.submit_dir)
+print 'submit_dir = ',submit_dir
+if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
 
-if not os.path.isdir(args.submit_dir): os.makedirs(args.submit_dir)
-
-# open it once to count the number of lines
-# I'm sure there is a better way to do this
+# Read in the runs, exps from the input file
 print 'Read file ',args.file
 with open(args.file) as fin:
     data = [ line.split() for line in fin ]
+nexps = len(data)
 
-# Shuffle the order so we don't have all the LMC exposures in the same job.
-print 'first 3 lines of input file are ',data[0:3]
-numpy.random.shuffle(data)
-print 'After shuffling, first 3 lines of input file are ',data[0:3]
+if args.njobs != 1:
+    # Shuffle the order so we don't have all the LMC exposures in the same job.
+    print 'first 3 lines of input file are ',data[0:3]
+    numpy.random.shuffle(data)
+    print 'After shuffling, first 3 lines of input file are ',data[0:3]
 
 runs, exps = zip(*data)
 
 import math
-n_per_job = int(math.ceil(float(len(runs)) / float(args.njobs)))
+n_per_job = int(math.ceil(float(nexps) / float(args.njobs)))
 print 'njobs = ',args.njobs
-print 'total n = ',len(runs)
+print 'total n = ',nexps
 print 'n_per_job = ',n_per_job
 
 submit_list = []
 
+end = 0
 for job in range(args.njobs):
-    start = job * n_per_job
-    end = start + n_per_job
-    if end > len(runs): 
-        end = len(runs)
+    start = end
+    end = int(math.ceil(float(nexps) * (job+1) / float(args.njobs)))
+    if end > nexps: 
+        end = nexps
     if end == start:
         continue
 
-    # Make single string with a list of the runs and exps for this job:
-    s_runs = " ".join(runs[start:end])
-    s_exps = " ".join(exps[start:end])
+    if args.njobs == 1:
+        cmd=args.cmd+' --file %s'%(args.file)
+    else:
+        # Make single string with a list of the runs and exps for this job:
+        s_runs = " ".join(runs[start:end])
+        s_exps = " ".join(exps[start:end])
+        cmd=args.cmd+' --runs %s --exps %s'%(s_runs,s_exps)
 
-    cmd=args.cmd+' --runs %s --exps %s --output %s'%(s_runs,s_exps,args.output)
-
-    job_submit = top_txt.format(runs=runs, exps=exps, output=args.output,name=str(job),cmd=cmd)
+    job_name = args.file + '_' + str(job)
+    job_submit = top_txt.format(name=job_name, cores_per_job=args.cores_per_job,
+                                cmd=cmd)
     if args.debug:
         job_submit += "priority: high\n"
 
-    submit_file='%s/submit_%d'%(args.submit_dir,job)
+    submit_file='%s/submit_%s'%(submit_dir,job_name)
 
     with open(submit_file,'w') as fout:
         fout.write(job_submit)
@@ -117,9 +127,9 @@ for job in range(args.njobs):
 
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
-cmd = 'nohup wq sub -b %s >& %s/wq_sub.out'%(s_sub,args.submit_dir)
+cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,submit_dir,args.file)
 print cmd
-print 'Note: This will take %d seconds to run, since wq waits'%len(submit_list)
-print '      1 second between each job submission.'
+print 'Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list)
+print '      between each job submission.'
 os.system(cmd)
 

@@ -8,6 +8,7 @@ Methods for loading in astropy tables from:
 import astropy.table
 import numpy as np
 import glob
+import os
 
 USELESS_COLUMNS = [
 	'covmat',
@@ -18,7 +19,7 @@ USELESS_COLUMNS = [
 
 class Catalog(astropy.table.Table):
 	@classmethod
-	def from_multiple_fits(cls, filenames, name, quiet=True):
+	def from_multiple_fits(cls, filenames, cat_name, quiet=True):
 		tables = []
 		for filename in filenames:
 			print " - ", filename
@@ -37,14 +38,15 @@ class Catalog(astropy.table.Table):
 		else:
 			cat = tables[0]
 		cat = cls(cat)
-		cat.name = name
+		cat.name = cat_name
 		return cat
 
 	@classmethod
 	def from_directory(cls, dirname):
 		print "Loading from directory: ", dirname
 		filenames = glob.glob(dirname+"/*.fits") + glob.glob(dirname+"/*.fits.gz")
-		cat = cls.from_multiple_fits(filenames, dirname)
+		cat_name=dirname.strip(os.path.sep).split(os.path.sep)[-1]
+		cat = cls.from_multiple_fits(filenames, cat_name)
 		return cat
 
 

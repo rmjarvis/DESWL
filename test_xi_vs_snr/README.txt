@@ -6,6 +6,7 @@
 
 # TODO: implement noise bias calibration/ responsivity corrections
 # TODO: implement cuts
+# TODO: check if ngmix works
 
 # get the weights
 python test_xi_vs_snr.py  -c test_xi_vs_snr.yaml -a get_weights -n 394

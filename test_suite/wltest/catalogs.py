@@ -8,6 +8,7 @@ Methods for loading in astropy tables from:
 import astropy.table
 import numpy as np
 import glob
+import os
 
 USELESS_COLUMNS = [
 	'covmat',
@@ -20,7 +21,7 @@ USEFUL_COLUMNS = ['e1' , 'e2', 'mean_psf_e1_sky', 'mean_psf_e2_sky' , 'info_flag
 
 class Catalog(astropy.table.Table):
 	@classmethod
-	def from_multiple_fits(cls, filenames, name, quiet=True):
+	def from_multiple_fits(cls, filenames, cat_name, quiet=True):
 		tables = []
 		for filename in filenames:
 			print " - ", filename
@@ -40,7 +41,7 @@ class Catalog(astropy.table.Table):
 		else:
 			cat = tables[0]
 		cat = cls(cat)
-		cat.name = name
+		cat.name = cat_name
 		return cat
 
 	@classmethod
@@ -48,8 +49,27 @@ class Catalog(astropy.table.Table):
 		print "Loading from directory: ", dirname
 		filenames = glob.glob(dirname+"/*.fits") + glob.glob(dirname+"/*.fits.gz")
 		print 'got %d files' % len(filenames)
-		cat = cls.from_multiple_fits(filenames, dirname)
+		cat_name=dirname.strip(os.path.sep).split(os.path.sep)[-1]
+		cat = cls.from_multiple_fits(filenames, cat_name)
 		return cat
+
+	@classmethod
+	def from_desdb(cls,query,save_as=None):
+		"""Get catalog by querying the desdm database. Need desdb installed.
+		Arguments: - query: which is an sql query as a string
+				   - save_as: filename to save catalog returned by query as .npy file"""
+		try:
+			import desdb
+		except Exception as e:
+			print 'while trying to import desdb, got the following exception:'
+			print e
+			return 1
+		conn=desdb.Connection()
+		catalog=conn.quick(query,array=True)
+		if save_as is not None:
+			np.save(save_as,catalog)
+		print catalog
+		return astropy.table.Table(catalog)
 
 
 	def intersection(self, cat2, field='coadd_objects_id'):

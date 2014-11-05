@@ -8,6 +8,7 @@ def suite_compare():
 
 	cat1 = Catalog.from_directory(dirname1)
 	cat2 = Catalog.from_directory(dirname2)
+
 	suite = GreenSuite()
 	print
 	print "Running tests"
@@ -56,5 +57,5 @@ def suite_single():
 
 if __name__ == '__main__':
 	# suite_extrapolate()
-	#suite_compare()
-	suite_single()
+	suite_compare()
+	# suite_single()

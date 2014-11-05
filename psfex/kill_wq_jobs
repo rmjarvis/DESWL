@@ -1,4 +1,5 @@
-wq ls | grep jarvis | awk '{print "wq rm", $1}' > ./kj_temp
+wq ls | grep jarvis | grep ' W ' | awk '{print "wq rm", $1}' > ./kj_temp
+wq ls | grep jarvis | grep -v ' W ' | awk '{print "wq rm", $1}' >> ./kj_temp
 chmod u+x ./kj_temp
 ./kj_temp
 /bin/rm ./kj_temp

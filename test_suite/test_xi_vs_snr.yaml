@@ -1,0 +1,11 @@
+columns: {photoz: 'ZP', e1: 'im3shape_r_e1', e2: 'im3shape_r_e2', SNR: 'im3shape_r_snr', ra: 'ra', de: 'dec', info_flag: 'im3shape_r_info_flag', error_flag: 'im3shape_r_error_flag', m1: 'im3shape_r_psf_e1_sky_mean', m2: 'im3shape_r_psf_e2_sky_mean'} # im3shape-v7-matched
+# columns: { e1 : 'e1' ,  e2 :  'e2' ,  SNR : 'snr' , ra : 'ra' , de : 'dec' , info_flag : 'info_flag' , error_flag : 'error_flag' } # im3shape-v7
+snr_bins: [[0,10],[10,20],[20,40],[40,1000]]
+info_cuts: [1,2,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,65536,131072,262144,524288,1048576]
+# photoz_bins: [ [0.3,0.6] , [0.6,0.9] , [0.9,1.2] , [1.2,1.5] ] 
+photoz_bins: [ [0.2,1.0] ] 
+treecorr_min_sep: 1 
+treecorr_max_sep: 200
+treecorr_n_bins: 5
+method: im3shape
+results_dir: /Users/tomek/data/DES/im3shape-v7-matched

@@ -12,7 +12,7 @@ logger.addHandler(stream_handler)
 logger.propagate = False
 
 
-def get_weights(split_list_cat,target_nz_index=-1,normed_hist=True,label='systematics',plots=True,photoz_min=0.2,photoz_max=1.2,photoz_nbins=50):
+def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,photoz_nbins=50,normed_hist=True,label='systematics',plots=False):
     """
     @param split_list_cat list columns for redshifts and statistical weights of objects, each one corresponding to a bin split by systematics.
     Example split_list_cat = [ (cat_airmass_low_z,cat_airmass_low_w) , (cat_airmass_high_z,cat_airmass_high_w) ].

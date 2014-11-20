@@ -12,11 +12,12 @@ logger.addHandler(stream_handler)
 logger.propagate = False
 
 
-def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='systematics',plots=True,photoz_min=0.2,photoz_max=1.2,photoz_nbins=50):
+def get_weights(split_list_cat,target_nz_index=-1,normed_hist=True,label='systematics',plots=True,photoz_min=0.2,photoz_max=1.2,photoz_nbins=50):
     """
-    @param split_list_cat list columns for redshift of objects, each one corresponding to a bin split by systematics.
-    Example split_list_cat = [cat_airmass_low_z,cat_airmass_high_z].
+    @param split_list_cat list columns for redshifts and statistical weights of objects, each one corresponding to a bin split by systematics.
+    Example split_list_cat = [ (cat_airmass_low_z,cat_airmass_low_w) , (cat_airmass_high_z,cat_airmass_high_w) ].
     For example cat_airmass = np.array(pyfits.getdata('DESXXXX-XXXX_cat.fits'))
+    @param target_nz_index n(z) of this bin will be used as a target nz for reweighting of the other bins. If target_nz_index=-1 (default), then mean of all bins will be used.
     @param redshift_col each of these catalogs has to have a column corresponding to redshift point estimate.
     @param normed_hist if to use reweighting with normalised histograms (not much difference)
     @label title to pass for plots (example: 'airmass')
@@ -29,21 +30,30 @@ def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='system
     n_bins = len(split_list_cat)
     list_hist_z = []
 
-    normed_hist=True
 
     logger.info('getting n(z) for %d systematic bins' % n_bins)
     for isb,vbin in enumerate(split_list_cat):
 
-        nbin = len(vbin)       
+        col_redshift = vbin[0]
+        col_statistical_weight = vbin[1]
+        nbin = len(col_redshift)       
 
-        hist_z, bins_z = np.histogram(vbin,bins=bins_photoz,normed=normed_hist)
+        hist_z, bins_z = np.histogram(col_redshift,bins=bins_photoz,normed=normed_hist,weights=col_statistical_weight)
         list_hist_z.append(hist_z)
         if plots:  pl.plot(get_bins_centers(bins_z),hist_z,label=r'bin %d '%(isb))
 
         logger.info('bin %d n_gal %d' % (isb,nbin))
 
-    mean_z = np.mean(np.array(list_hist_z),axis=0)
-    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5)
+    if target_nz_index==-1:
+        mean_z = np.mean(np.array(list_hist_z),axis=0)
+    else:
+        try:
+            mean_z = np.array(list_hist_z[target_nz_index])
+        except:
+            raise Exception('target_nz_index may be larger than the number of bins lin split_list_cat')
+
+
+    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5,zorder = 0)
     if plots: pl.legend()
     if plots: pl.xlabel('z')
     if plots: pl.ylabel('number of galaxies')
@@ -57,15 +67,17 @@ def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='system
     logger.info('getting weights for %d systematic bins' % n_bins)
     for isb,vbin in enumerate(split_list_cat):
 
-        nbin = len(vbin)       
+        col_redshift = vbin[0]
+        col_statistical_weight = vbin[1]
+        nbin = len(col_redshift)       
 
-        hist_z, bins_z = np.histogram(vbin,bins=bins_photoz,normed=normed_hist)
+        hist_z, bins_z = np.histogram(col_redshift,bins=bins_photoz,normed=normed_hist,weights=col_statistical_weight)
 
-        weights = mean_z/hist_z
+        nz_weights = mean_z/hist_z
 
-        list_weights.append(weights)
+        list_weights.append(nz_weights)
 
-        if plots: pl.plot(get_bins_centers(bins_z),weights,label=r'bin %d'%(isb))
+        if plots: pl.plot(get_bins_centers(bins_z),nz_weights,label=r'bin %d'%(isb))
         
         logger.info('bin %d n_gal %d' % (isb,nbin))
 
@@ -79,15 +91,17 @@ def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='system
 
 
     if plots: pl.figure()
-    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5)
+    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5,zorder = 0)
     digitize_bins = bins_photoz
     list_weights_use = []
     logger.info('getting reweighted histogrgams for %d systematic bins' % n_bins)
     for isb,vbin in enumerate(split_list_cat):
 
-        nbin = len(vbin)       
+        col_redshift = vbin[0]
+        col_statistical_weight = vbin[1]
+        nbin = len(col_redshift)       
 
-        inds = np.digitize(vbin, digitize_bins)
+        inds = np.digitize(col_redshift, digitize_bins)
 
         weights_in_bin = list_weights[isb].copy()
         weights_in_bin = np.append(weights_in_bin,0)
@@ -95,7 +109,7 @@ def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='system
         weights_use = weights_in_bin[inds]
         list_weights_use.append(weights_use)
 
-        hist_z, bins_z = np.histogram(vbin,bins=bins_photoz,weights=weights_use,normed=normed_hist)
+        hist_z, bins_z = np.histogram(col_redshift,bins=bins_photoz,weights=weights_use*col_statistical_weight,normed=normed_hist)
 
         dx=0.01
         if plots: pl.plot(get_bins_centers(bins_z)+isb*dx,hist_z,'o',label=r'bin %d'%isb)       
@@ -107,7 +121,7 @@ def get_weights(split_list_cat,redshift_col='ZB',normed_hist=False,label='system
     if plots: pl.title('n(z) using weights')
     if plots: filename_fig = 'reweighted.%s.eps' % label
     if plots: pl.savefig(filename_fig)
-    if plots: logger.info('wrote %s' % (filename_fig))    
+    if plots: logger.info('wrote %s - run pl.show() if needed' % (filename_fig))    
 
     return list_weights_use
 

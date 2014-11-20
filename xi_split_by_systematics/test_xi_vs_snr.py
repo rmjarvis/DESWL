@@ -17,6 +17,19 @@ logger.propagate = False
 
 prob_z = None
 
+def add_col(rec, name, arr, dtype=None):
+
+    import numpy
+    arr = numpy.asarray(arr)
+    if dtype is None:
+        dtype = arr.dtype
+    newdtype = numpy.dtype(rec.dtype.descr + [(name, dtype)])
+    newrec = numpy.empty(rec.shape, dtype=newdtype)
+    for field in rec.dtype.fields:
+        newrec[field] = rec[field]
+    newrec[name] = arr
+    return newrec
+
 def load_data():
 
     import glob;
@@ -29,12 +42,17 @@ def load_data():
         res=fitsio.read(file_results)
         warnings.warn('%s'%str(res.dtype.names))
         res=res[columns_list]
+        for col in columns_list:
+            if col not in res.dtype.names:
+                logger.error('column %s not found in file %s',col,file_results)
+
         res.dtype.names=config['columns'].keys()
+
 
         if config['method'] == 'im3shape':
             warnings.warn('using 1 as m1 and m2')
-            res['m1'] = 1
-            res['m2'] = 1
+            res = add_col(res,'m1',res['m'])
+            res = add_col(res,'m2',res['m'])
 
         res_cut = apply_cuts(res)
         logger.info('%s size=%d/%d' % (file_results,len(res_cut),len(res)) )
@@ -50,14 +68,14 @@ def apply_cuts(res):
     if config['method'] == 'im3shape':
 
         cut_vals = config['info_cuts']
-        select = (res['error_flag'] == 0) 
+        select = (res['error_flag'] == 0) & (res['info_flag'] == 0) 
         logger.debug('select on error_flag, catalog size %d' % (len(np.nonzero(select)[0]) ))
 
-        for cv in cut_vals:
+        # for cv in cut_vals:
 
-            select_cut =  (res['info_flag'] & cv) == 0
-            select = select & select_cut
-            logger.debug('select on %d, catalog size %d' % (cv,len(np.nonzero(select)[0]) ))
+        #     select_cut =  (res['info_flag'] & cv) == 0
+        #     select = select & select_cut
+        #     logger.debug('select on %d, catalog size %d' % (cv,len(np.nonzero(select)[0]) ))
 
         res_cut = res[select]
 
@@ -81,21 +99,22 @@ def get_weights():
 
         select = (res['SNR'] > snr_bin[0]) & (res['SNR'] < snr_bin[1]) 
         res_bin = res[select]
-        res_bin_z = res_bin['photoz']
+        res_bin_z = (res_bin['photoz'], res_bin['w'])
+
+        import pdb; pdb.set_trace()
 
         list_snr_bins_cats.append(res_bin_z)
 
-    list_weights = homogenise_nz.get_weights(list_snr_bins_cats,label='snr')
+    list_weights = homogenise_nz.get_weights(list_snr_bins_cats,target_nz_index=0,label='snr',photoz_min=0.2,photoz_max=1.0)
+
 
     import cPickle as pickle
     filename_pickle = 'weights.pp2'
     pickle.dump(list_weights,open(filename_pickle,'w'))
     print 'saved ', filename_pickle
 
-
     import pdb; pdb.set_trace()
-
-
+    pl.show()
 
 def get_xi_vs_snr():
 
@@ -122,17 +141,24 @@ def get_xi_vs_snr():
             if len(weights_use) != len(res_bin):
             	raise Exception('different number of galaxies in weights and data - did you mess with the setting somewhere in the middle of the process?' % (len(list_weights),len(res_bin)))
 
+
+            filename_xi = 'list_bin_xi.'
             if args.no_weights:
-                dummy_weights = np.ones_like(weights_use)
-                logr,xip,xim,stdxi = get_corr(res_bin,dummy_weights)    
-                filename_xi = 'list_bin_xi.noweights.pp2'
+                weights_use = np.ones_like(weights_use)
+                filename_xi = filename_xi + 'no-homogen.'
             else:
-                logr,xip,xim,stdxi = get_corr(res_bin,weights_use)    
-                filename_xi = 'list_bin_xi.pp2'
+                filename_xi = filename_xi + 'homogen.'
+            if args.use_responsivity:
+                filename_xi = filename_xi + 'resp.'
+            else:
+                filename_xi = filename_xi + 'no-resp.'            
+            filename_xi = filename_xi + 'pp2'
+
+            logr,xip,xim,stdxi,mean_responsivity = get_corr(res_bin,weights_use)    
 
             hist_e1, bins_e1 = np.histogram(res_bin['e1'],bins=np.linspace(-1,1,100),normed=True)
             hist_e2, bins_e2 = np.histogram(res_bin['e2'],bins=np.linspace(-1,1,100),normed=True)
-            list_bin_xi.append((logr,xip,xim,stdxi,nbin))
+            list_bin_xi.append((logr,xip,xim,stdxi,nbin,mean_responsivity))
 
     import cPickle as pickle
     pickle.dump(list_bin_xi,open(filename_xi,'w'),protocol=2)
@@ -147,19 +173,34 @@ def plot_xi_vs_snr():
 
     import cPickle as pickle
 
+    titlestr = config['method'] + ': '
+
+    filename_xi = 'list_bin_xi.'
     if args.no_weights:
-        filename_xi = 'list_bin_xi.noweights.pp2'
+        filename_xi = filename_xi + 'no-homogen.'
+        titlestr += 'no n(z) reweighting '
     else:
-        filename_xi = 'list_bin_xi.pp2'
+        filename_xi = filename_xi + 'homogen.'
+        titlestr += 'using n(z) reweighting '
+
+    if args.use_responsivity:
+        filename_xi = filename_xi + 'resp.'
+        titlestr += 'and using responsivity/nbc'
+    else:
+        filename_xi = filename_xi + 'no-resp.'
+        titlestr += 'and no responsivity/nbc'
+    filename_xi = filename_xi + 'pp2'
 
     list_bin_xi=pickle.load(open(filename_xi))
 
     n_photoz_bins = len(config['photoz_bins'])
 
+
+
     dx=0.05
     for isb,snr_bin in enumerate(config['snr_bins']):
 
-            logr,xip,xim,stdxi,nbin = list_bin_xi[isb]
+            logr,xip,xim,stdxi,nbin,mean_responsivity = list_bin_xi[isb]
 
             pl.figure(1)
             pl.errorbar(np.exp(logr)*(isb*dx+1),xip/1e-5,yerr=stdxi/1e-5,label=r're[$\xi_+$] SNR$\in[%2.0f,%2.0f]$'%(snr_bin[0],snr_bin[1]),fmt='.')
@@ -171,6 +212,7 @@ def plot_xi_vs_snr():
             pl.ylabel(r're[$\xi_{+}$] / $10^{-5}$') ;    
             pl.legend(loc='lower center',ncol=2,mode='expand') 
             # pl.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
+            pl.title(titlestr)
 
             pl.figure(2)
             pl.errorbar(np.exp(logr)*(isb*dx+1),xim/1e-5,yerr=stdxi/1e-5,label=r're[$\xi_-$] SNR$\in[%2.0f,%2.0f]$'%(snr_bin[0],snr_bin[1]),fmt='.')
@@ -181,6 +223,19 @@ def plot_xi_vs_snr():
             pl.xlabel(r'$\theta$ [arcmin]');     
             pl.ylabel(r're[$\xi_{-}$] / $10^{-5}$') ;    
             pl.legend(loc='lower center',ncol=2,mode='expand') 
+            pl.title(titlestr)
+
+            pl.figure(3)
+            pl.errorbar(np.exp(logr)*(isb*dx+1),mean_responsivity,label=r'responsivity SNR$\in[%2.0f,%2.0f]$'%(snr_bin[0],snr_bin[1]),fmt='.')
+            pl.axhline(0,c='k')
+            pl.xscale('log',nonposx='clip'); 
+            pl.yscale('symlog', nonposy='clip',linthreshy=1e-5); 
+            pl.ylim([1e-3,1e2]);    
+            pl.xlabel(r'$\theta$ [arcmin]');     
+            pl.ylabel(r're[$\xi_{-}$] / $10^{-5}$') ;    
+            pl.legend(loc='lower center',ncol=2,mode='expand') 
+            pl.title(titlestr)
+
 
             print 'SNR=%2.0f - %2.0f' % (snr_bin[0],snr_bin[1])
             for ir in range(len(logr)):
@@ -216,14 +271,26 @@ def get_corr(res,weights):
     gg = treecorr.GGCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
     gg.process(shape_cat)
 
-    responsivity_cat = treecorr.Catalog(g1=res['m1'], g2=res['m2'], ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
-    mm = treecorr.GGCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
-    mm.process(responsivity_cat)
+    responsivity_type = 'scalar'
+
+    if responsivity_type == 'scalar': 
+        responsivity_cat = treecorr.Catalog(k=(1+res['m1']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
+        mm = treecorr.KKCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
+        mm.process(responsivity_cat)
+        corr_xip = mm.xi
+        corr_xim = mm.xi
+    elif responsivity_type == 'vector':
+        responsivity_cat = treecorr.Catalog(g1=(1+res['m1']), g2=(1+res['m2']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
+        mm = treecorr.GGCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
+        mm.process(responsivity_cat)
+        corr_xip = mm.xip
+        corr_xim = mm.xim
 
     if args.use_responsivity==True:
-        xip = gg.xip / mm.xip*2.            # The real part of xi+
-        xim = gg.xim / mm.xim*2.            # The real part of xi-
-        warnings.warn('using responsivity')
+        xip = gg.xip / corr_xip            # The real part of xi+
+        xim = gg.xim / corr_xim         # The real part of xi-
+        warnings.warn('using responsivity ')
+        logger.info('responsivity %s',str(corr_xip))
     else:
         xip = gg.xip             # The real part of xi+
         xim = gg.xim             # The real part of xi-
@@ -232,8 +299,9 @@ def get_corr(res,weights):
     meanlogr = gg.meanlogr  # The mean <log(r)> within the bins
     varxi = gg.varxi        # The variance of each xi+ or xi- value taking into account shape noise only
     stdxi = np.sqrt(varxi)
+    mean_responsivity = mm.xi
 
-    return logr,xip,xim,stdxi
+    return logr,xip,xim,stdxi,mean_responsivity
 
 
 def main():

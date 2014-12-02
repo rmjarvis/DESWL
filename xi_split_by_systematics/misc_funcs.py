@@ -16,92 +16,219 @@ import fitsio as fio
 import numpy.lib.recfunctions as nlr
 import time
 import ctypes
-
+import numpy.linalg as linalg
   
 class CatalogStore(object):
 
-  def __init__(self,coadd,ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,tbins,sbins,lbins,sep,slop,use_jk,bs,wt,regs,num_reg):
-    self.coadd=coadd
-    self.ra=ra
-    self.dec=dec
-    self.e1=e1
-    self.e2=e2
-    self.m=m
-    self.c1=c1
-    self.c2=c2
-    self.s1=s1
-    self.s2=s2
-    self.w=w
-    self.regs=regs
-    self.cat=cat
-    self.tbins=tbins
-    self.sbins=sbins
-    self.lbins=lbins
-    self.sep=sep
-    self.slop=slop
-    self.use_jk=use_jk
-    self.bs=bs
-    self.wt=wt
-    self.num_reg=num_reg
+  coadd=[]
+  ra=[]
+  dec=[]
+  e1=[]
+  e2=[]
+  m=[]
+  c1=[]
+  c2=[]
+  s1=[]
+  s2=[]
+  w=[]
+  psf1=[]
+  psf2=[]
+  psffwhm=[]
+  radius=[]
+  snr=[]
+  regs=[]
+  cat=0
+  tbins=7
+  sbins=2
+  lbins=5
+  sep=np.array([1,120])
+  slop=0.1
+  use_jk=False
+  bs=True
+  wt=True
+  num_reg=152
+  zpeak=[]
+  ebv=[]
+  exptime=[]
+  maglimit=[]
+  skysigma=[]
+  skybrite=[]
+  airmass=[]
+  fwhm=[]
 
+  def __init__(self,cat,setup):
+
+    noval=999999
+
+    if setup:
+      if CatalogMethods.cat_name(cat)=='im3shapev7':
+        dir='/share/des/sv/im3shape/v7/main_cats/'
+        cuts=CatalogMethods.default_im3shapev7_cuts()
+        cols=np.array(['coadd_objects_id','ra','dec','e1','e2','mean_psf_e1_sky','mean_psf_e2_sky','mean_psf_fwhm','nbc_m','nbc_c1','nbc_c2','weight','snr','radius'])
+        coadd,ra,dec,e1,e2,psf1,psf2,fwhm,m,c2,c1,w,snr,radius,zpeak=CatalogMethods.get_cat_cols(dir,cols,cuts,False,noval)
+        s1=np.ones((len(ra)))
+        s2=np.ones((len(ra)))
+        c12,c22,m2,w2=CatalogMethods.get_new_nbcw(coadd)
+        c11=c1
+        c21=c2
+        m1=m
+        w1=w
+        c1=c11
+        c2=c21
+        m=m1
+        w=w1
+        c1=c12
+        c2=c22
+        m=m2
+        w=w2
+      elif CatalogMethods.cat_name(cat)=='ngmix010':
+        dir='/share/des/sv/ngmix/v010/v010b/'
+        cuts=CatalogMethods.default_ngmix009_cuts()
+        cols=np.array(['coadd_objects_id','ra','dec','exp_e_1','exp_e_2','psfrec_e_1','psfrec_e_2','psfrec_t','exp_e_sens_1','exp_e_sens_2','exp_e_cov_1_1','exp_e_cov_2_2','exp_e_cov_1_2','exp_t','exp_s2n_w'])
+        coadd,ra,dec,e1,e2,psf1,psf2,fwhm,s1,s2,cov11,cov22,cov12,radius,snr,zpeak=CatalogMethods.get_cat_cols_ng(dir,cols,cuts,False,noval)
+        e1=-e1
+        psf1=-psf1
+        cov12=-cov12
+        fwhm=np.sqrt(fwhm/2.)
+        radius=np.sqrt(radius/2.)
+        w=lin_shear_test_methods.ngmix_weight_calc(cov11,cov22,cov12)
+        m=np.ones((len(ra))) #np.sqrt(s1*s2)
+        c1=np.zeros((len(ra)))
+        c2=np.zeros((len(ra)))
+
+      num_reg,regs=jackknife_methods.load_jk_regs(ra,dec,64)
+
+
+      lbins=5
+      sbins=2
+      tbins=7
+      slop=0.1
+      sep=np.array([1,120])
+      use_jk=False
+      bs=True
+      wt=True
+
+      self.coadd=coadd
+      self.ra=ra
+      self.dec=dec
+      self.e1=e1
+      self.e2=e2
+      self.m=m
+      self.c1=c1
+      self.c2=c2
+      self.s1=s1
+      self.s2=s2
+      self.w=w
+      self.psf1=psf1
+      self.psf2=psf2
+      self.psffwhm=fwhm
+      self.radius=radius
+      self.snr=snr
+      self.regs=regs
+      self.cat=cat
+      self.tbins=tbins
+      self.sbins=sbins
+      self.lbins=lbins
+      self.sep=sep
+      self.slop=slop
+      self.use_jk=use_jk
+      self.bs=bs
+      self.wt=wt
+      self.num_reg=num_reg
+      self.zpeak=zpeak
+
+      ebv,exptime,maglimit,skysigma,skybrite,airmass,fwhm=split_systematics.init_systematics_maps(ra,dec)
+
+      if CatalogMethods.cat_name(cat)=='im3shapev7':
+        self.ebv=ebv
+        self.exptime=exptime[1,:]
+        self.maglimit=maglimit[1,:]
+        self.skysigma=skysigma[1,:]
+        self.skybrite=skybrite[1,:]
+        self.airmass=airmass[1,:]
+        self.fwhm=fwhm[1,:]
+      if CatalogMethods.cat_name(cat)=='ngmix010':
+        self.ebv=ebv
+        self.exptime=np.mean(exptime,axis=0)
+        self.maglimit=np.mean(maglimit,axis=0)
+        self.skysigma=np.mean(skysigma,axis=0)
+        self.skybrite=np.mean(skybrite,axis=0)
+        self.airmass=np.mean(airmass,axis=0)
+        self.fwhm=np.mean(fwhm,axis=0)
 
 class lin_shear_test_methods(object):
 
   @staticmethod
-  def get_lin_e_w_norm(e,m,c,s,w,cat,bs,wt):
+  def get_lin_e_w_norm(cat,xi):
 
-    if CatalogMethods.cat_name(cat)=='im3shapev7':
+    if CatalogMethods.cat_name(cat.cat)=='im3shapev7':
 
-      if bs & wt:
-        mw=w
-        me=(e-c)
-        norm=w*(m+1)
-      elif bs and not wt:
-        mw=np.ones((len(e)))
-        me=e-c
-        norm=m+1
-      elif wt and not bs:
-        mw=w
-        me=e
-        norm=w
+      if cat.bs & cat.wt:
+        mw=cat.w
+        me1=(cat.e1-cat.c1)
+        me2=(cat.e2-cat.c2)
+        norm=cat.w*(cat.m+1)
+      elif cat.bs and not cat.wt:
+        mw=np.ones((len(cat.e1)))
+        me1=(cat.e1-cat.c1)
+        me2=(cat.e2-cat.c2)
+        norm=cat.m+1
+      elif cat.wt and not cat.bs:
+        mw=cat.w
+        me1=cat.e1
+        me2=cat.e2
+        norm=cat.w
       else:
-        mw=np.ones((len(e)))
-        me=e
-        norm=np.ones((len(e)))
+        mw=np.ones((len(cat.e1)))
+        me1=cat.e1
+        me2=cat.e2
+        norm=np.ones((len(cat.e1)))
 
-    elif CatalogMethods.cat_name(cat)=='ngmix009':
+    elif CatalogMethods.cat_name(cat.cat)=='ngmix010':
 
-      if bs & wt:
-        mw=w
-        me=e
-        norm=w*s
-      elif bs and not wt:
-        mw=np.ones((len(e)))
-        me=e
-        norm=s
-      elif wt and not bs:
-        mw=w
-        me=e
-        norm=w
+      if cat.bs & cat.wt:
+        mw=cat.w
+        me1=cat.e1
+        me2=cat.e2
+        if xi:
+          norm=cat.w*np.sqrt(cat.s1*cat.s2)
+        else:
+          norm=cat.w*(cat.s1+cat.s2)/2.
+      elif cat.bs and not cat.wt:
+        mw=np.ones((len(cat.e1)))
+        me1=cat.e1
+        me2=cat.e2
+        if xi:
+          norm=cat.w*np.sqrt(cat.s1*cat.s2)
+        else:
+          norm=cat.w*(cat.s1+cat.s2)/2.
+      elif cat.wt and not cat.bs:
+        mw=cat.w
+        me1=cat.e1
+        me2=cat.e2
+        norm=cat.w
       else:
-        mw=np.ones((len(e)))
-        me=e
-        norm=np.ones((len(e)))
+        mw=np.ones((len(cat.e1)))
+        me1=cat.e1
+        me2=cat.e2
+        norm=np.ones((len(cat.e1)))
 
-    return me,mw,norm
+    return me1,me2,mw,norm
 
   @staticmethod
-  def calc_mean_std_rms_e(e,m,c,s,w,cat,bs,wt):
+  def calc_mean_std_rms_e(cat,mask):
 
-    me,mw,norm=lin_shear_test_methods.get_lin_e_w_norm(e,m,c,s,w,cat,bs,wt)
+    me1,me2,mw,norm=lin_shear_test_methods.get_lin_e_w_norm(cat,False)
+    mean1=np.sum(mw[mask]*me1[mask])/np.sum(norm[mask])
+    mean2=np.sum(mw[mask]*me2[mask])/np.sum(norm[mask])
+    std1=(np.sum(mw[mask]*(me1[mask]-mean1)**2)/np.sum(norm[mask]))
+    std2=(np.sum(mw[mask]*(me2[mask]-mean2)**2)/np.sum(norm[mask]))
+    rms1=np.sqrt(np.sum((mw[mask]*me1[mask])**2)/np.sum(mw[mask]**2))
+    rms2=np.sqrt(np.sum((mw[mask]*me2[mask])**2)/np.sum(mw[mask]**2))
 
-    mean=np.sum(mw*me)/np.sum(norm)
-    std=(np.sum(mw*(me-mean)**2)/np.sum(norm))
-    rms=np.sqrt(np.sum((mw*me)**2)/np.sum(mw**2))
+    return mean1,mean2,std1,std2,rms1,rms2
 
-    return mean,std,rms
-
-  @staticmethod
+  @staticmethod    
   def find_bin_edges(x,nbins):
 
     xs=np.sort(x)
@@ -111,32 +238,46 @@ class lin_shear_test_methods(object):
     return xs[r.astype(int)]
 
   @staticmethod
-  def binned_means(y,bin,nbins,m,c,s,w,cat,bs,wt):
+  def binned_means_e(bin,cat,jkmask):
 
-    y_mean=[]
-    y_std=[]
+    y_mean1=[]
+    y_std1=[]
+    y_mean2=[]
+    y_std2=[]
 
-    for i in xrange(nbins):
-      mask=(bin==i)
-      mean,std,rms=lin_shear_test_methods.calc_mean_std_rms_e(y[mask],m[mask],c[mask],s[mask],w[mask],cat,bs,wt)
-      y_mean.append(mean)
-      y_std.append(std/np.sqrt(len(y[mask])))
+    for i in xrange(cat.lbins):
+      mask=(bin==i)&jkmask
+      mean1,mean2,std1,std2,rms1,rms2=lin_shear_test_methods.calc_mean_std_rms_e(cat,mask)
+      y_mean1.append(mean1)
+      y_std1.append(std1/np.sqrt(len(cat.e1[mask])))
+      y_mean2.append(mean2)
+      y_std2.append(std2/np.sqrt(len(cat.e2[mask])))
 
-    y_mean=np.array(y_mean)
-    y_std=np.array(y_std)
+    y_mean1=np.array(y_mean1)
+    y_std1=np.array(y_std1)
+    y_mean2=np.array(y_mean2)
+    y_std2=np.array(y_std2)
 
-    return y_mean,y_std
+    return y_mean1,y_std1,y_mean2,y_std2
 
   @staticmethod
-  def bin_means(y,x,nbins,m,c,s,w,cat,bs,wt):
+  def bin_means(x,cat,jkmask):
 
-    edge=lin_shear_test_methods.find_bin_edges(x,nbins)
+    edge=lin_shear_test_methods.find_bin_edges(x[jkmask],cat.lbins)
     xbin=np.digitize(x,edge)-1
 
-    y_mean,y_std=lin_shear_test_methods.binned_means(y,xbin,nbins,m,c,s,w,cat,bs,wt)
-    x_mean,x_std=lin_shear_test_methods.binned_means(x,xbin,nbins,m,c,s,w,cat,False,False)
+    e1_mean,e1_std,e2_mean,e2_std=lin_shear_test_methods.binned_means_e(xbin,cat,jkmask)
 
-    return x_mean,x_std,y_mean,y_std
+    x_mean=[]
+    x_std=[]
+    for i in xrange(cat.lbins):
+      mask=(xbin==i)&jkmask
+      x_mean.append(np.mean(x[mask]))
+      x_std.append(np.std(x[mask]))
+    x_mean=np.array(x_mean)
+    x_std=np.array(x_std)
+
+    return x_mean,x_std,e1_mean,e1_std,e2_mean,e2_std
 
   @staticmethod
   def ngmix_weight_calc(cov11,cov22,cov12):
@@ -150,17 +291,15 @@ class lin_shear_test_methods(object):
 class xi_2pt_shear_test_methods(object):
 
   @staticmethod
-  def xi_2pt(ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,use_jk,bs,wt,regs,reg_num):
+  def xi_2pt(cat,mask,w2):
 
+    me1,me2,mw,norm=lin_shear_test_methods.get_lin_e_w_norm(cat,True)
 
-    me1,mw,norm=lin_shear_test_methods.get_lin_e_w_norm(e1,m,c1,np.sqrt(s1*s2),w,cat,bs,wt)
-    me2,mw,norm=lin_shear_test_methods.get_lin_e_w_norm(e2,m,c2,np.sqrt(s1*s2),w,cat,bs,wt)
+    gg = treecorr.GGCorrelation(nbins=cat.tbins, min_sep=cat.sep[0], max_sep=cat.sep[1], sep_units='arcmin',binslop=cat.slop,verbose=0)
+    kk = treecorr.KKCorrelation(nbins=cat.tbins, min_sep=cat.sep[0], max_sep=cat.sep[1], sep_units='arcmin',binslop=cat.slop,verbose=0)
 
-    gg = treecorr.GGCorrelation(nbins=bins, min_sep=sep[0], max_sep=sep[1], sep_units='arcmin',binslop=slop,verbose=0)
-    kk = treecorr.KKCorrelation(nbins=bins, min_sep=sep[0], max_sep=sep[1], sep_units='arcmin',binslop=slop,verbose=0)
-
-    cate=treecorr.Catalog(g1=mw*me1, g2=mw*me2, ra=ra, dec=dec, ra_units='deg', dec_units='deg')
-    catm=treecorr.Catalog(k=norm, ra=ra, dec=dec, ra_units='deg', dec_units='deg')
+    cate=treecorr.Catalog(g1=mw[mask]*me1[mask]*w2, g2=mw[mask]*me2[mask]*w2, ra=cat.ra[mask], dec=cat.dec[mask], ra_units='deg', dec_units='deg')
+    catm=treecorr.Catalog(k=norm[mask]*w2, ra=cat.ra[mask], dec=cat.dec[mask], ra_units='deg', dec_units='deg')
 
     kk.process(catm,catm)
     kkp = np.copy(kk.xi)
@@ -173,8 +312,8 @@ class xi_2pt_shear_test_methods(object):
     theta = np.exp(gg.meanlogr)
     print 'xip',ggp
 
-    if use_jk:
-      ggperr,ggmerr=jackknife_methods.xi_2pt_err0(ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,bs,wt,regs,reg_num)
+    if cat.use_jk:
+      ggperr,ggmerr=jackknife_methods.xi_2pt_err0(cat,mask,w2)
 
     return theta,ggp,ggm,ggperr,ggmerr
 
@@ -260,20 +399,46 @@ class split_systematics(object):
 
     dir='/share/des/sv/systematics_maps/'
 
-    ebv=split_systematics.load_sys_map_to_array(ra,dec,dir+'Planck_EBV_2048r_Q.fits',False,2048,True)
-    ebverr=split_systematics.load_sys_map_to_array(ra,dec,dir+'Planck_EBVerr_2048r_Q.fits',False,2048,True)
-    exptime=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
-    maglimit=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
-    skysigmacoadd=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
-    skysigma=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYSIGMA__mean.fits.gz',False,4096,False)
-    skybritecoadd=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
-    skybrite=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYBRITE__mean.fits.gz',False,4096,False)
-    airmasscoadd=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
-    airmass=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_AIRMASS__mean.fits.gz',False,4096,False)
-    fwhmcoadd=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
-    fwhm=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_FWHM__mean.fits.gz',False,4096,False)
+    exptime=np.zeros((5,len(ra)))
+    maglimit=np.zeros((5,len(ra)))
+    skysigma=np.zeros((5,len(ra)))
+    skybrite=np.zeros((5,len(ra)))
+    airmass=np.zeros((5,len(ra)))
+    fwhm=np.zeros((5,len(ra)))
 
-    return ebv,ebverr,exptime,maglimit,skysigmacoadd,skysigma,skybritecoadd,skybrite,airmasscoadd,airmass,fwhmcoadd,fwhm
+    ebv=split_systematics.load_sys_map_to_array(ra,dec,dir+'Planck_EBV_2048r_Q.fits',False,2048,True)
+    exptime[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
+    exptime[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
+    exptime[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
+    exptime[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
+    exptime[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_EXPTIME__total.fits.gz',False,4096,False)
+    maglimit[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
+    maglimit[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
+    maglimit[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
+    maglimit[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
+    maglimit[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_maglimit__.fits.gz',False,4096,False)
+    skysigma[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
+    skysigma[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
+    skysigma[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
+    skysigma[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
+    skysigma[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_SKYSIGMA_coaddweights_mean.fits.gz',False,4096,False)
+    skybrite[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
+    skybrite[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
+    skybrite[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
+    skybrite[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
+    skybrite[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_SKYBRITE_coaddweights_mean.fits.gz',False,4096,False)
+    airmass[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
+    airmass[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
+    airmass[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
+    airmass[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
+    airmass[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_AIRMASS_coaddweights_mean.fits.gz',False,4096,False)
+    fwhm[0,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_g_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
+    fwhm[1,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_r_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
+    fwhm[2,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_i_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
+    fwhm[3,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_z_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
+    fwhm[4,:]=split_systematics.load_sys_map_to_array(ra,dec,dir+'SVA1_IMAGE_SRC_band_Y_nside4096_oversamp4_FWHM_coaddweights_mean.fits.gz',False,4096,False)
+
+    return ebv,exptime,maglimit,skysigma,skybrite,airmass,fwhm
 
 
   @staticmethod
@@ -293,76 +458,66 @@ class split_systematics(object):
     return array
 
   @staticmethod
-  def split_gals_lin_along_(array,e1,e2,nbins,m,c1,c2,s1,s2,w,cat,bs,wt,use_jk,regs,reg_num,label):
+  def split_gals_lin_along_(array,cat,label):
 
-    arr1,tmp,me1,e1err=lin_shear_test_methods.bin_means(e1,array,nbins,m,c1,s1,w,cat,bs,wt)
-    arr1,tmp,me2,e2err=lin_shear_test_methods.bin_means(e2,array,nbins,m,c2,s2,w,cat,bs,wt)
+    arr1,tmp,me1,e1err,me2,e2err=lin_shear_test_methods.bin_means(array,cat,np.ones((len(cat.e1))).astype(bool))
 
     slp1,tmp=np.polyfit(arr1, me1, 1)
     slp2,tmp=np.polyfit(arr1, me2, 1)
 
-    if use_jk:
-      edge=lin_shear_test_methods.find_bin_edges(array,nbins)
-      bin=np.digitize(array,edge)-1
-      e1err[i]=jackknife_methods.lin_err0(e1,array,m,c1,s1,w,nbins,cat,bs,wt,regs,reg_num)
-      e2err[i]=jackknife_methods.lin_err0(e2,array,m,c2,s2,w,nbins,cat,bs,wt,regs,reg_num)
+    if cat.use_jk:
+      e1err,e2err=jackknife_methods.lin_err0(array,cat)
 
-    plotting_methods.fig_create_e12vs(me1,me2,e1err,e2err,arr1,nbins,cat,bs,wt,label)
+    plotting_methods.fig_create_e12vs(me1,me2,e1err,e2err,arr1,cat,label)
     print 'slope of e1 vs '+label,slp1
     print 'slope of e2 vs '+label,slp2
 
     return
 
   @staticmethod
-  def split_gals_2pt_along_(array,zpeak,ra,dec,e1,e2,nbins,m,c1,c2,s1,s2,w,cat,bs,wt,bins,sep,slop,use_jk,regs,reg_num,label):
+  def split_gals_2pt_along_(array,cat,label):
 
-    xip=np.zeros((nbins+1,bins))
-    xim=np.zeros((nbins+1,bins))
-    var=np.zeros((nbins+1,bins))
-    xiperr=np.zeros((nbins+1,bins))
-    ximerr=np.zeros((nbins+1,bins))
-    edge=lin_shear_test_methods.find_bin_edges(array,nbins)
-    print edge
+    xip=np.zeros((cat.sbins+1,cat.tbins))
+    xim=np.zeros((cat.sbins+1,cat.tbins))
+    var=np.zeros((cat.sbins+1,cat.tbins))
+    xiperr=np.zeros((cat.sbins+1,cat.tbins))
+    ximerr=np.zeros((cat.sbins+1,cat.tbins))
+    edge=lin_shear_test_methods.find_bin_edges(array,cat.sbins)
+    print 'bin edges',edge
     bin=np.digitize(array,edge)-1
-    for i in xrange(nbins):
+    for i in xrange(cat.sbins):
       mask=(bin==i)
       print 'mean splits',np.mean(array[mask])
-      list_split=[(zpeak,w),(zpeak[mask],w[mask])]
+      list_split=[(cat.zpeak,cat.w),(cat.zpeak[mask],cat.w[mask])]
       list_nz_weights = hnz.get_weights(list_split,target_nz_index=0,photoz_min=0.3,photoz_max=1.3)
       w2=list_nz_weights[1]
-      print len(w2),len(w[mask])
-      theta,xip[i,:],xim[i,:],xiperr[i,:],tmp=xi_2pt_shear_test_methods.xi_2pt(ra[mask],dec[mask],e1[mask],e2[mask],m[mask],c1[mask],c2[mask],s1[mask],s2[mask],w[mask]*w2,cat,bins,sep,slop,False,bs,wt,regs[mask],reg_num)
-      if use_jk:
-        xiperr[i,:],ximerr[i,:]=jackknife_methods.xi_2pt_err0(ra[mask],dec[mask],e1[mask],e2[mask],m[mask],c1[mask],c2[mask],s1[mask],s2[mask],w[mask],cat,bins,sep,slop,bs,wt,regs[mask],reg_num)
-      plotting_methods.fig_open_xi_2pt0(theta*(1+.02*(i+1)),xip[i,:],xiperr[i,:],nbins,cat,bs,wt,'bin '+str(i+1))
+      if i==0:
+        w20=list_nz_weights[1]
+        mask0=mask
+      if i==(cat.sbins-1):
+        w21=list_nz_weights[1]
+        mask1=mask
+      theta,xip[i,:],xim[i,:],xiperr[i,:],tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask,w2)
+      if cat.use_jk:
+        xiperr[i,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,w2)
+      plotting_methods.fig_open_xi_2pt0(theta*(1+.02*(i+1)),xip[i,:],xiperr[i,:],cat,'bin '+str(i+1))
 
-    theta,xip[nbins,:],xim[nbins,:],xiperr[nbins,:],tmp=xi_2pt_shear_test_methods.xi_2pt(ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,False,bs,wt,regs,reg_num)
-    if use_jk:
-      xiperr[nbins,:],ximerr[nbins,:]=jackknife_methods.xi_2pt_err0(ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,bs,wt,regs,reg_num)
-    plotting_methods.fig_open_xi_2pt0(theta,xip[nbins,:],xiperr[nbins,:],nbins,cat,bs,wt,'full')
-    plotting_methods.fig_close_xi_2pt0(nbins,cat,bs,wt,label)
+    mask=np.ones((len(cat.coadd))).astype(bool)
+    theta,xip[cat.sbins,:],tmp,xiperr[cat.sbins,:],tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask,np.ones((len(cat.coadd))))
+    if cat.use_jk:
+      xiperr[cat.sbins,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,np.ones((len(cat.coadd))))
+      dxip1,dxip2,xiperr1,xiperr2,chi21,chi22=jackknife_methods.xi_2pt_split_err0(cat,mask0,w20,mask1,w21)
+    else:
+      dxip1=xip[0,:]-xip[cat.sbins,:]
+      dxip2=xip[cat.sbins-1,:]-xip[cat.sbins,:]
+      xiperr1=xiperr[0,:]
+      xiperr2=xiperr[cat.sbins-1,:]
+      chi21=0.
+      chi22=0.
+    plotting_methods.fig_open_xi_2pt0(theta,xip[cat.sbins,:],xiperr[cat.sbins,:],cat,'full')
+    plotting_methods.fig_close_xi_2pt0(cat,label)
 
-    #tmp=np.column_stack((theta,xip,xiperr))
-    #xi_2pt_shear_test_methods.save_xi_2pt0(tmp,nbins,cat,bs,wt,label)
-
-    return 
-
-def xi_2pt_err_slave0(nsi):
-
-  ns=nsi[0]
-  i=nsi[1]
-  mask=(ns.regs==i)
-  print mask
-  xip=0
-  xim=0
-  print 'test'
-  if np.sum(mask)>0:
-    print ns
-    print 'test'
-    tmp,xip,xim,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(ns.ra[mask],ns.dec[mask],ns.e1[mask],ns.e2[mask],ns.m[mask],ns.c1[mask],ns.c2[mask],ns.s1[mask],ns.s2[mask],ns.w[mask],ns.cat,ns.bins,ns.sep,ns.slop,False,ns.bs,ns.wt,ns.regs,ns.num_reg)
-
-  return xip,xim
-
+    return theta,edge,xip[cat.sbins,:],xiperr[cat.sbins,:],dxip1,dxip2,xiperr1,xiperr2,chi21,chi22
 
 
 class jackknife_methods(object):
@@ -382,54 +537,117 @@ class jackknife_methods(object):
     return len(regfile),regs
 
   @staticmethod
-  def jk_cov(array,nbins,num_reg):
+  def jk_chi2(invcov,xi1,xi2,cat):
 
-    cov=np.zeros((nbins,nbins))
+    chi2=0.
+    for i in xrange(cat.tbins):
+      for j in xrange(cat.tbins):
+        chi2+=((xi1[i]-xi2[i])*(xi1[j]-xi2[j])*invcov[i,j])
 
-    for i in xrange(nbins):
-      print np.mean(array[:,i]),array[:,i]-np.mean(array[:,i])
-      for j in xrange(nbins):
-        cov[i,j]=np.sum((array[:,i]-np.mean(array[:,i]))*(array[:,j]-np.mean(array[:,j])))/num_reg*(num_reg-1.)
+    return chi2
+
+  @staticmethod
+  def jk_corr_invcov(cov,cat):
+
+    cov=np.zeros((cat.tbins,cat.tbins))
+
+    invcov=(cat.num_reg-cat.tbins-2)/(cat.num_reg-1)*linalg.inv(cov)
+
+    return invcov
+
+  @staticmethod
+  def jk_cov(array,cat):
+
+    cov=np.zeros((cat.tbins,cat.tbins))
+
+    for i in xrange(cat.tbins):
+      for j in xrange(cat.tbins):
+        cov[i,j]=np.sum((array[:,i]-np.mean(array[:,i]))*(array[:,j]-np.mean(array[:,j])))/(cat.num_reg-1.)
 
     return cov
 
   @staticmethod
-  def lin_err0(e,array,m,c,s,w,nbins,cat,bs,wt,regs,num_reg):
+  def lin_err0(array,cat):
 
-    e1=np.zeros((num_reg,nbins))
+    e1=np.zeros((cat.num_reg,cat.lbins))
+    e2=np.zeros((cat.num_reg,cat.lbins))
 
-    for i in xrange(reg_num):
-      mask=(regs!=i)
-      arr1,tmp,e1[i,:],tmp=lin_shear_test_methods.bin_means(e[mask],array[mask],nbins,m[mask],c[mask],s[mask],w[mask],cat,bs,wt)
+    for i in xrange(cat.num_reg):
+      print 'jk',i
+      mask=(cat.regs!=i)
+      arr1,tmp,e1[i,:],tmp,e2[i,:],tmp=lin_shear_test_methods.bin_means(array,cat,mask)
 
-    err=np.sqrt(np.diagonal(jackknife_methods.jk_cov(e1,nbins,num_reg)))
+    err1=np.sqrt(np.diagonal(jackknife_methods.jk_cov(e1,cat)))
+    err2=np.sqrt(np.diagonal(jackknife_methods.jk_cov(e2,cat)))
 
-    return err
+    return err1,err2
+
+  @staticmethod
+  def xi_2pt_err0(cat,mask,w2):
+
+    xip=np.zeros((cat.num_reg,cat.tbins))
+    xim=np.zeros((cat.num_reg,cat.tbins))
+    tmptime=time.time()
+
+    jkst=cat.use_jk
+    cat.use_jk=False
+    for i in xrange(cat.num_reg):
+      print 'jack_iter', i, time.time()-tmptime
+      jkmask=(cat.regs!=i)
+      tmp,xip[i,:],xim[i,:],tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask],w2[jkmask[mask]])
+      print 'jack xip',xip[i,:]
+    cat.use_jk=jkst
+
+    covp=jackknife_methods.jk_cov(xip,cat)
+    covm=jackknife_methods.jk_cov(xim,cat)
+
+    #invcovp=jackknife_methods.jk_corr_invcov(covp,cat)
+    #invcovm=jackknife_methods.jk_corr_invcov(covm,cat)
+
+    xiperr=np.sqrt(np.diagonal(covp))
+    ximerr=np.sqrt(np.diagonal(covm))
+
+    return xiperr,ximerr,invcovp,invcovm
 
 
   @staticmethod
-  def xi_2pt_err0(ra,dec,e1,e2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,bs,wt,regs,num_reg):
+  def xi_2pt_split_err0(cat,mask0,w20,mask1,w21):
+
+    theta,xip0,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,np.ones((len(cat.coadd))).astype(bool),np.ones((len(cat.coadd))))
+    tmp,xip01,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask0],w20[jkmask[mask0]])
+    tmp,xip02,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask1],w21[jkmask[mask1]])
 
 
-    num_reg=20
-
-    xip=np.zeros((num_reg,bins))
-    xim=np.zeros((num_reg,bins))
+    dxip1=np.zeros((cat.num_reg,cat.tbins))
+    dxip2=np.zeros((cat.num_reg,cat.tbins))
     tmptime=time.time()
 
-    for i in xrange(num_reg):
+    jkst=cat.use_jk
+    cat.use_jk=False
+    for i in xrange(cat.num_reg):
       print 'jack_iter', i, time.time()-tmptime
-      mask=(regs!=i)
-      tmp,xip[i,:],xim[i,:],tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(ra[mask],dec[mask],e1[mask],e2[mask],m[mask],c1[mask],c2[mask],s1[mask],s2[mask],w[mask],cat,bins,sep,slop,False,bs,wt,regs,num_reg)
-      print 'jack xip',xip[i,:]
+      jkmask=(cat.regs!=i)
+      tmp,xip1,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask0],w20[jkmask[mask0]])
+      tmp,xip2,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask1],w21[jkmask[mask1]])
+      dxip1[i,:]=xip1-xip0
+      dxip2[i,:]=xip2-xip0
+      print 'jack dxip',dxip[i,:]
+    cat.use_jk=jkst
 
-    tmp=jackknife_methods.jk_cov(xip,bins,num_reg)
-    print 'cov before sqrt',tmp
+    covp1=jackknife_methods.jk_cov(dxip1,cat.tbins,cat.num_reg)
+    covp2=jackknife_methods.jk_cov(dxip2,cat.tbins,cat.num_reg)
 
-    xiperr=np.sqrt(np.diagonal(tmp))
-    ximerr=0#np.sqrt(np.diagonal(jackknife_methods.jk_cov(xim,bins,num_reg)))
+    #invcovp=jackknife_methods.jk_corr_invcov(covp,cat.tbins,cat.num_reg)
+    #invcovm=jackknife_methods.jk_corr_invcov(covm,cat.tbins,cat.num_reg)
 
-    return xiperr,ximerr
+    xiperr1=np.sqrt(np.diagonal(covp1))
+    xiperr2=np.sqrt(np.diagonal(covp2))
+
+    chi21=jk_chi2(1./covp1,xip01,xip0,cat)
+    chi22=jk_chi2(1./covp2,xip02,xip0,cat)
+
+    return dxip1,dxip2,xiperr1,xiperr2,chi21,chi22
+
 
   @staticmethod
   def xi_2pt_psf_err(ra,dec,e1,e2,psf1,psf2,m,c1,c2,s1,s2,w,cat,bins,sep,slop,mean_e1,mean_e2,mean_psf1,mean_psf2,ggp,bs,wt,regs,num_reg):
@@ -472,7 +690,7 @@ class plotting_methods(object):
     return 
 
   @staticmethod
-  def fig_create_e12vs(e1,e2,e1err,e2err,x,nbins,cat,bs,wt,label):
+  def fig_create_e12vs(e1,e2,e1err,e2err,x,cat,label):
 
     plt.figure(1)
     plt.errorbar(x,e1, yerr=e1err, xerr=None,label='<e1>')
@@ -481,7 +699,7 @@ class plotting_methods(object):
     plt.ylabel('<e>')
     plt.xlabel(label)
     plt.ylim((-5e-3,5e-3))
-    plt.savefig(CatalogMethods.cat_name(cat)+'_nbins-'+str(nbins)+'_biasorsens-'+str(bs)+'_weight-'+str(wt)+'_eVS'+label+'.png', bbox_inches='tight')
+    plt.savefig(CatalogMethods.cat_name(cat.cat)+'_nbins-'+str(cat.lbins)+'_biasorsens-'+str(cat.bs)+'_weight-'+str(cat.wt)+'_jk-'+str(cat.use_jk)+'_eVS'+label+'.png', bbox_inches='tight')
     plt.close(1)
 
     return
@@ -542,7 +760,7 @@ class plotting_methods(object):
     return
 
   @staticmethod
-  def fig_open_xi_2pt0(theta,xi,err,nbins,cat,bs,wt,label):
+  def fig_open_xi_2pt0(theta,xi,err,cat,label):
 
     plt.figure(10)
     plt.errorbar(theta,xi, yerr=err, xerr=None,marker='o',linestyle='',label=label)
@@ -550,7 +768,7 @@ class plotting_methods(object):
     return
 
   @staticmethod
-  def fig_close_xi_2pt0(nbins,cat,bs,wt,label):
+  def fig_close_xi_2pt0(cat,label):
 
     plt.figure(10)
     plt.xscale('log')
@@ -560,7 +778,7 @@ class plotting_methods(object):
     plt.xlim((1,200))
     plt.ylim((5e-7,1e-4))
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),ncol=3, fancybox=True, shadow=True)
-    plt.savefig(CatalogMethods.cat_name(cat)+'_nbins-'+str(nbins)+'_biasorsens-'+str(bs)+'_weight-'+str(wt)+'_xi_'+label+'.png', bbox_inches='tight')
+    plt.savefig(CatalogMethods.cat_name(cat.cat)+'_nbins-'+str(cat.tbins)+'_biasorsens-'+str(cat.bs)+'_weight-'+str(cat.wt)+'_xi_'+label+'.png', bbox_inches='tight')
     plt.close(10)
 
     return
@@ -667,7 +885,7 @@ class CatalogMethods(object):
     cuts=CatalogMethods.add_cut(cuts,'modest_class',noval,1,noval)
     cuts=CatalogMethods.add_cut(cuts,'gold_match',noval,1,noval)
     cuts=CatalogMethods.add_cut(cuts,'ra',56.,noval,94.)
-    cuts=CatalogMethods.add_cut(cuts,'dec',noval,noval,-42.)
+    cuts=CatalogMethods.add_cut(cuts,'dec',-61,noval,-42.)
 
     return cuts
 
@@ -682,7 +900,7 @@ class CatalogMethods(object):
     cuts=CatalogMethods.add_cut(cuts,'exp_s2n_w',10,noval,noval)
     cuts=CatalogMethods.add_cut(cuts,'exp_t_s2n',3,noval,noval)
     cuts=CatalogMethods.add_cut(cuts,'ra',56.,noval,94.)
-    cuts=CatalogMethods.add_cut(cuts,'dec',noval,noval,-42.)
+    cuts=CatalogMethods.add_cut(cuts,'dec',-61,noval,-42.)
 
     return cuts
 
@@ -732,18 +950,15 @@ class CatalogMethods(object):
 
     zpeak,zmean,zmask=CatalogMethods.get_pz(array['coadd_objects_id'])
     zpeak0=np.zeros((len(zpeak),),dtype=[('zpeak','>f8')])
-    zmean0=np.zeros((len(zmean),),dtype=[('zmean','>f8')])
     zpeak0['zpeak']=zpeak
-    zmean0['zmean']=zmean
 
     len1=len(array)
     array=array[zmask]
-    array=nlr.merge_arrays([array,zpeak0,zmean0],flatten=True)
+    array=nlr.merge_arrays([array,zpeak0],flatten=True)
 
     print 'selected '+str(len(array))+' galaxies from catalog out of '+str(len0)+' ('+str(len1)+' before pz cut)'
 
     cols=np.append(cols,'zpeak')
-    cols=np.append(cols,'zmean')
 
     array=array[(array['zpeak']>0.3)&(array['zpeak']<1.3)]
 
@@ -758,7 +973,6 @@ class CatalogMethods(object):
     len0=0
 
     for ifile,file in enumerate(glob.glob(dir+'*.fits.gz')):
-      print 'test'
       if ifile>maxiter:
         print 'test break found'
         break
@@ -795,7 +1009,19 @@ class CatalogMethods(object):
       else:
         array=np.append(array,tmparray[mask],axis=0)
 
-    print 'selected '+str(len(array))+' galaxies from catalog out of '+str(len0)
+    zpeak,zmean,zmask=CatalogMethods.get_pz(array['coadd_objects_id'])
+    zpeak0=np.zeros((len(zpeak),),dtype=[('zpeak','>f8')])
+    zpeak0['zpeak']=zpeak
+
+    len1=len(array)
+    array=array[zmask]
+    array=nlr.merge_arrays([array,zpeak0],flatten=True)
+
+    print 'selected '+str(len(array))+' galaxies from catalog out of '+str(len0)+' ('+str(len1)+' before pz cut)'
+
+    cols=np.append(cols,'zpeak')
+
+    array=array[(array['zpeak']>0.3)&(array['zpeak']<1.3)]
 
     if full:
       return np.copy(array)
@@ -963,4 +1189,177 @@ class CatalogMethods(object):
 
     return c12,c22,m2,w2
 
+class SVA1(object):
 
+  @staticmethod
+  def Fig_2ptPaper_amp(cat,xip,dxip,dxiperr):
+
+    chi2st=999999
+    amp=0.
+    for a in xrange(-200,200):
+      chi2=0.
+      for i in xrange(cat.tbins):
+        chi2=np.sum((dxip-a*xip/100.)**2./dxiperr**2.)
+      if chi2<chi2st:
+        chi2st=chi2
+        amp=a/100.
+
+    return amp
+
+  @staticmethod
+  def Fig_2ptPaper_subplot(cat,fig,r,c,n,array,label):
+
+    plt.figure(fig)
+    print ' '
+    print ' '
+    print '..........'+label+'..........'
+    print ' '
+    print ' '
+    theta,edge,xip,xiperr,dxip1,dxip2,xiperr1,xiperr2,chi21,chi22=split_systematics.split_gals_2pt_along_(array,cat,label)
+    edge=edge.astype(int)
+    A1=SVA1.Fig_2ptPaper_amp(cat,xip,dxip1,xiperr1)
+    A2=SVA1.Fig_2ptPaper_amp(cat,xip,dxip2,xiperr2)
+    print 'theta',theta
+    print 'xip',xip
+    print 'xiperr',xiperr
+    print 'dxip1',dxip1
+    print 'dxiperr1',xiperr1
+    print 'dxip2',dxip2
+    print 'dxiperr2',xiperr2
+    print 'chi',chi21,chi22
+    print 'A',A1,A2
+    ax=plt.subplot(r,c,n)
+    plt.errorbar(theta[xip>0],xip[xip>0]*theta[xip>0],yerr=xiperr[xip>0]*theta[xip>0],marker='.',linestyle='',color='k')
+    plt.errorbar(theta[xip<0],xip[xip<0]*theta[xip<0],yerr=xiperr[xip<0]*theta[xip<0],marker='.',linestyle='',color='k')
+    plt.errorbar(theta,np.abs(xip*A1*theta),marker='',linestyle=':',color='r')
+    plt.errorbar(theta[dxip1>0]*(1.2),dxip1[dxip1>0]*theta[dxip1>0],yerr=xiperr1[dxip1>0]*theta[dxip1>0],marker='v',linestyle='',color='r',label='snr=['+str(edge[0])+','+str(edge[1])+']')
+    plt.errorbar(theta[dxip1<0]*(1.2),-dxip1[dxip1<0]*theta[dxip1<0],yerr=xiperr1[dxip1<0]*theta[dxip1<0],marker='1',linestyle='',color='r')
+    plt.errorbar(theta,np.abs(xip*A2*theta),marker='',linestyle=':',color='b')
+    plt.errorbar(theta[dxip2>0]*(1.4),dxip2[dxip2>0]*theta[dxip2>0],yerr=xiperr2[dxip2>0]*theta[dxip2>0],marker='^',linestyle='',color='b',label='snr=['+str(edge[1])+','+str(edge[2])+']')
+    plt.errorbar(theta[dxip2<0]*(1.4),-dxip2[dxip2<0]*theta[dxip2<0],yerr=xiperr2[dxip2<0]*theta[dxip2<0],marker='2',linestyle='',color='b')
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.ylabel(r'$\theta\xi_+$')
+    plt.xlim((1,200))
+    plt.ylim((1e-6,9e-4))
+    #plt.legend(loc='upper center',ncol=2, frameon=False,prop={'size':10})
+    if n<5:
+      ax.set_xticklabels([])
+    else:
+      plt.xlabel(r'$\theta$')
+    if n%2==0:
+      ax.set_yticklabels([])
+
+    return
+
+  @staticmethod
+  def Fig1_2ptPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 1'
+    print '...........'
+
+    SVA1.Fig_2ptPaper_subplot(i3,1,3,2,1,i3.snr,'snr')
+    SVA1.Fig_2ptPaper_subplot(ng,1,3,2,2,ng.snr,'snr')
+    SVA1.Fig_2ptPaper_subplot(i3,1,3,2,3,i3.radius,'radius')
+    SVA1.Fig_2ptPaper_subplot(ng,1,3,2,4,ng.radius,'radius')
+    SVA1.Fig_2ptPaper_subplot(i3,1,3,2,5,i3.snr,'colour')
+    SVA1.Fig_2ptPaper_subplot(ng,1,3,2,6,ng.snr,'colour')
+    plt.figure(1)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig1.png', bbox_inches='tight')
+    plt.close(1)   
+
+    return
+
+  @staticmethod
+  def Fig2_2ptPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 2'
+    print '...........'
+
+    
+    SVA1.Fig_2ptPaper_subplot(i3,2,3,2,1,i3.ra,'ra')
+    SVA1.Fig_2ptPaper_subplot(ng,2,3,2,2,ng.ra,'ra')
+    SVA1.Fig_2ptPaper_subplot(i3,2,3,2,3,i3.dec,'dec')
+    SVA1.Fig_2ptPaper_subplot(ng,2,3,2,4,ng.dec,'dec')
+    SVA1.Fig_2ptPaper_subplot(i3,2,3,2,5,i3.ebv,'ebv')
+    SVA1.Fig_2ptPaper_subplot(ng,2,3,2,6,ng.ebv,'ebv')
+    plt.figure(2)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig2.png', bbox_inches='tight')
+    plt.close(2)   
+    
+    return
+
+  @staticmethod
+  def Fig3_2ptPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 3'
+    print '...........'
+
+    
+    SVA1.Fig_2ptPaper_subplot(i3,3,3,2,1,i3.exptime,'exptime')
+    SVA1.Fig_2ptPaper_subplot(ng,3,3,2,2,ng.exptime,'exptime')
+    SVA1.Fig_2ptPaper_subplot(i3,3,3,2,3,i3.maglimit,'maglimit')
+    SVA1.Fig_2ptPaper_subplot(ng,3,3,2,4,ng.maglimit,'maglimit')
+    SVA1.Fig_2ptPaper_subplot(i3,3,3,2,5,i3.airmass,'airmass')
+    SVA1.Fig_2ptPaper_subplot(ng,3,3,2,6,ng.airmass,'airmass')
+    plt.figure(3)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig3.png', bbox_inches='tight')
+    plt.close(3)   
+    
+    return
+
+
+  @staticmethod
+  def Fig4_2ptPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 4'
+    print '...........'
+
+  
+    SVA1.Fig_2ptPaper_subplot(i3,4,3,2,1,i3.skysigma,'skysigma')
+    SVA1.Fig_2ptPaper_subplot(ng,4,3,2,2,ng.skysigma,'skysigma')
+    SVA1.Fig_2ptPaper_subplot(i3,4,3,2,3,i3.skybrite,'skybrite')
+    SVA1.Fig_2ptPaper_subplot(ng,4,3,2,4,ng.skybrite,'skybrite')
+    SVA1.Fig_2ptPaper_subplot(i3,4,3,2,5,i3.fwhm,'fwhm')
+    SVA1.Fig_2ptPaper_subplot(ng,4,3,2,6,ng.fwhm,'fwhm')
+    plt.figure(4)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig4.png', bbox_inches='tight')
+    plt.close(4)   
+    
+    return
+
+  @staticmethod
+  def Fig5_2ptPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 5'
+    print '...........'
+
+    
+    SVA1.Fig_2ptPaper_subplot(i3,5,3,2,1,i3.psf1,'psf1')
+    SVA1.Fig_2ptPaper_subplot(ng,5,3,2,2,ng.psf1,'psf1')
+    SVA1.Fig_2ptPaper_subplot(i3,5,3,2,3,i3.psf2,'psf2')
+    SVA1.Fig_2ptPaper_subplot(ng,5,3,2,4,ng.psf2,'psf2')
+    SVA1.Fig_2ptPaper_subplot(i3,5,3,2,5,i3.psffwhm,'psffwhm')
+    SVA1.Fig_2ptPaper_subplot(ng,5,3,2,6,ng.psffwhm,'psffwhm')
+    plt.figure(5)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig5.png', bbox_inches='tight')
+    plt.close(5)   
+    
+    return
+
+#split_gals_lin_along_(array,cat,label)

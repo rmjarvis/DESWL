@@ -159,7 +159,7 @@ class CatalogStore(object):
         self.airmass=np.mean(airmass,axis=0)
         self.fwhm=np.mean(fwhm,axis=0)
 
-      match=np.genfromtxt('../catcutDES/cat_match_dec.dat', names=True)
+      match=np.genfromtxt('/share/des/sv/cat_match_dec.dat', names=True)
 
       mask1=np.in1d(coadd,match['coadd_objects_id'],assume_unique=True)
       mask2=np.in1d(match['coadd_objects_id'],coadd,assume_unique=True)

@@ -107,7 +107,7 @@ class CatalogStore(object):
       tbins=7
       slop=0.1
       sep=np.array([1,120])
-      use_jk=True
+      use_jk=False
       bs=True
       wt=True
 

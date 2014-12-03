@@ -268,6 +268,7 @@ def main():
                     rho3.xi.tolist(),
                     rho4.xi.tolist(),
                     ])
+            print 'len stats = ',len(stats)
 
             if args.single_ccd:
                 break
@@ -346,7 +347,7 @@ def main():
             drho4.xi.tolist(),
             drho4.varxi.tolist(),
             ])
-        #print 'stats = ',stats
+        print 'len stats = ',len(stats)
         with open(stat_file,'w') as f:
             json.dump(stats, f)
 

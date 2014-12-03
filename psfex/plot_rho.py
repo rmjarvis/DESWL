@@ -86,9 +86,22 @@ def pretty_rho1(meanr, rho1p, sig1p, sqrtn):
     # I'm taking Cathering's CFHTLS xi+ values of 1.e-4 at 1 arcmin, 2e-6 at 40 arcmin.
     # Then I'm saying our requirements on rho need to be about 0.16 times this for SV (S/N=6),
     # but more like 0.03 times this for Y5.
-    sv_req = plt.fill( [0.5, 0.5, 100, 100], [0., 1.6e-4 * 0.16, 1.e-6 * 0.16, 0.], 
+    t1 = 0.5
+    t2 = 300.
+    xa = numpy.log(1.0)
+    xb = numpy.log(40.0)
+    ya = numpy.log(1.e-4)
+    yb = numpy.log(2.e-6)
+    x1 = numpy.log(t1)
+    x2 = numpy.log(t2)
+    y1 = (yb * (x1-xa) + ya * (xb-x1)) / (xb-xa)
+    y2 = (yb * (x2-xa) + ya * (xb-x2)) / (xb-xa)
+    xi1 = numpy.exp(y1)
+    xi2 = numpy.exp(y2)
+
+    sv_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.16, xi2 * 0.16, 0.], 
                         color = '#FFFF82')
-    y5_req = plt.fill( [0.5, 0.5, 100, 100], [0., 1.6e-4 * 0.03, 1.e-6 * 0.03, 0.], 
+    y5_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.03, xi2 * 0.03, 0.], 
                         color = '#BAFFA4')
     plt.plot(meanr, rho1p, color='blue')
     plt.plot(meanr, -rho1p, color='blue', ls=':')
@@ -99,7 +112,7 @@ def pretty_rho1(meanr, rho1p, sig1p, sqrtn):
     y5_req = mp.Patch(color='#BAFFA4')
     plt.legend([rho1_line, sv_req, y5_req], 
                [r'$\rho_1(\theta)$', 'SV Requirements', 'Y5 Requirements'])
-    plt.xlim( [0.5,100] )
+    plt.xlim( [t1,t2] )
     plt.ylim( [1.e-8, 1.e-4] )
     plt.xlabel(r'$\theta$ (arcmin)')
     plt.ylabel(r'$\rho_1$')
@@ -110,10 +123,23 @@ def pretty_rho2(meanr, rho2p, sig2p, sqrtn):
     import matplotlib.patches as mp
     # The requirements on rho2 are less stringent.  They are larger by a factor 1/alpha.
     # Let's use alpha = 0.05.
-    plt.fill( [0.5, 0.5, 100, 100], [0., 1.6e-4 * 0.16 / 0.05, 1.e-6 * 0.16 / 0.05, 0.], 
-                color = '#FFFF82')
-    plt.fill( [0.5, 0.5, 100, 100], [0., 1.6e-4 * 0.03 / 0.05, 1.e-6 * 0.03 / 0.05, 0.], 
-                color = '#BAFFA4')
+    t1 = 0.5
+    t2 = 300.
+    xa = numpy.log(1.0)
+    xb = numpy.log(40.0)
+    ya = numpy.log(1.e-4)
+    yb = numpy.log(2.e-6)
+    x1 = numpy.log(t1)
+    x2 = numpy.log(t2)
+    y1 = (yb * (x1-xa) + ya * (xb-x1)) / (xb-xa)
+    y2 = (yb * (x2-xa) + ya * (xb-x2)) / (xb-xa)
+    xi1 = numpy.exp(y1)
+    xi2 = numpy.exp(y2)
+
+    sv_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.16 / 0.05, xi2 * 0.16 / 0.05, 0.], 
+                        color = '#FFFF82')
+    y5_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.03 / 0.05, xi2 * 0.03 / 0.05, 0.], 
+                        color = '#BAFFA4')
     plt.plot(meanr, rho2p, color='blue')
     plt.plot(meanr, -rho2p, color='blue', ls=':')
     plt.errorbar(meanr[rho2p>0], rho2p[rho2p>0], yerr=sig2p[rho2p>0]/sqrtn, color='blue', ls='')
@@ -123,7 +149,7 @@ def pretty_rho2(meanr, rho2p, sig2p, sqrtn):
     y5_req = mp.Patch(color='#BAFFA4')
     plt.legend([rho2_line, sv_req, y5_req], 
                [r'$\rho_2(\theta)$', 'SV Requirements', 'Y5 Requirements'])
-    plt.xlim( [0.5,100] )
+    plt.xlim( [t1,t2] )
     plt.ylim( [1.e-7, 1.e-3] )
     plt.xlabel(r'$\theta$ (arcmin)')
     plt.ylabel(r'$\rho_2$')
@@ -183,6 +209,18 @@ def main():
     desdm_var3 = numpy.empty( (nexp,53) )
     desdm_var4 = numpy.empty( (nexp,53) )
 
+    meande1 = 0
+    meande2 = 0
+    varde1 = 0
+    varde2 = 0
+    nde = 0
+    histde1 = numpy.zeros(200)  # bin size = 1.e-3
+    histde2 = numpy.zeros(200)  # bin size = 1.e-3
+    histnstars = numpy.zeros(200)  # bin size = 10
+    listnstars = []
+    meannstars = 0
+    ngoodccd = 0
+
     iexp = 0
     iccd = 0
     for run,exp in zip(runs,exps):
@@ -193,6 +231,29 @@ def main():
 
         exp_dir = os.path.join(work,exp)
 
+        cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+        with pyfits.open(cat_file) as pyf:
+            data = pyf[1].data
+        ccdnums = numpy.unique(data['ccdnum'])
+        for ccdnum in ccdnums:
+            nstars = ((data['ccdnum'] == ccdnum) & (data['flag'] == 0)).sum()
+            if nstars > 0 and nstars < 2000:
+                histnstars[ int(numpy.floor(nstars/10)) ] += 1
+            if nstars > 0:
+                meannstars += nstars
+                ngoodccd += 1
+                listnstars.append(nstars)
+        mask = data['flag'] == 0
+        de1 = data['e1'][mask] - data['psfex_e1'][mask]
+        de2 = data['e2'][mask] - data['psfex_e2'][mask]
+        meande1 += numpy.sum(de1)
+        meande2 += numpy.sum(de2)
+        varde1 += numpy.sum(de1*de1)
+        varde2 += numpy.sum(de2*de2)
+        nde += len(de1)
+        histde1 += numpy.histogram(de1, bins=200, range=(-1.e-1,1.e-1))[0]
+        histde2 += numpy.histogram(de2, bins=200, range=(-1.e-1,1.e-1))[0]
+
         stat_file = os.path.join(exp_dir, exp + ".json")
 
         # Read the json file 
@@ -202,6 +263,8 @@ def main():
             continue
         with open(stat_file,'r') as f:
             stats = json.load(f)
+
+        print "len stats = ",len(stats)
         ( expnum, 
           rho1_meanlogr,
           rho1_xip,
@@ -643,5 +706,126 @@ def main():
     print 'N with |rho2| > 2e-5 = ',count02
   
 
+    print 'Plot overall rho stats'
+
+    for key in ['griz', 'riz', 'g', 'r', 'i', 'z']:
+        stat_file = os.path.join(work, "rho_" + key + ".json")
+
+        # Read the json file 
+        with open(stat_file,'r') as f:
+            stats = json.load(f)
+
+        ( meanlogr,
+          rho1p,
+          rho1p_im,
+          rho1m,
+          rho1m_im,
+          var1,
+          rho2p,
+          rho2p_im,
+          rho2m,
+          rho2m_im,
+          var2,
+          rho3,
+          var3,
+          rho4,
+          var4 ) = stats[-1]
+
+        meanr = numpy.exp(meanlogr)
+        rho1p = numpy.array(rho1p)
+        rho2p = numpy.array(rho2p)
+        rho3 = numpy.array(rho3)
+        rho4 = numpy.array(rho4)
+        sig_rho1p = numpy.sqrt(var1)
+        sig_rho2p = numpy.sqrt(var2)
+        sig_rho3 = numpy.sqrt(var3)
+        sig_rho4 = numpy.sqrt(var4)
+        sqrtn = 1
+ 
+        plt.clf()
+        pretty_rho1(meanr, rho1p, sig_rho1p, sqrtn)
+        plt.savefig('rho1_' + key + '.png')
+        plt.savefig('rho1_' + key + '.pdf')
+
+        plt.clf()
+        pretty_rho2(meanr, rho2p, sig_rho2p, sqrtn)
+        plt.savefig('rho2_' + key + '.png')
+        plt.savefig('rho2_' + key + '.pdf')
+
+        plt.clf()
+        plt.title(r'SPTE $\rho_3$ (i.e. $\langle ds ds \rangle$) for DESDM PSFEx solution')
+        lines = plot_rho(meanr, rho3, sig_rho3, sqrtn)
+        plt.legend(lines, [r'$\rho_3(\theta)$'] )
+        plt.xlim( [0.5,300] )
+        plt.ylabel(r'$\rho_3$')
+        plt.savefig('rho3_' + key + '.png')
+        plt.savefig('rho3_' + key + '.pdf')
+
+        plt.clf()
+        plt.title(r'SPTE $\rho_4$ (i.e. $\langle s ds \rangle$) for DESDM PSFEx solution')
+        lines = plot_rho(meanr, rho4, sig_rho4, sqrtn)
+        plt.legend(lines, [r'$\rho_4(\theta)$'] )
+        plt.xlim( [0.5,300] )
+        plt.ylabel(r'$\rho_4$')
+        plt.savefig('rho4_' + key + '.png')
+        plt.savefig('rho4_' + key + '.pdf')
+
+    # Compute some stats and plot histograms
+    meande1 /= nde
+    meande2 /= nde
+    varde1 -= nde * meande1**2
+    varde2 -= nde * meande2**2
+    varde1 /= nde
+    varde2 /= nde
+    print 'nde = ',nde
+    print 'mean de1 = ',meande1
+    print 'sigma = ',numpy.sqrt(varde1)
+    print 'mean de2 = ',meande2
+    print 'sigma = ',numpy.sqrt(varde2)
+
+    plt.clf()
+    left = [ (i-100) * 1.e-3 for i in range(200) ]
+    plt.bar( left, histde1, width=1.e-3 )
+    plt.xlim( [-1.e-1,1.e-1] )
+    plt.xlabel(r'$e1_{psf} - e1_{model}$')
+    plt.ylabel(r'$N_{stars}$')
+    plt.title('Distribution of PSF e1 residuals')
+    import matplotlib.mlab as mlab
+    plt.plot(left,numpy.sum(histde1)*1.e-3*mlab.normpdf(left,meande1,numpy.sqrt(varde1)),
+             color='red')
+    plt.savefig('de1hist.png')
+    plt.savefig('de1hist.pdf')
+
+    plt.clf()
+    plt.bar( left, histde2, width=1.e-3 )
+    plt.xlim( [-1.e-1,1.e-1] )
+    plt.xlabel(r'$e2_{psf} - e2_{model}$')
+    plt.ylabel(r'$N_{stars}$')
+    plt.title('Distribution of PSF e2 residuals')
+    plt.plot(left,numpy.sum(histde2)*1.e-3*mlab.normpdf(left,meande2,numpy.sqrt(varde2)),
+             color='red')
+    plt.savefig('de2hist.png')
+    plt.savefig('de2hist.pdf')
+
+    plt.clf()
+    left = [ 10*i for i in range(200) ]
+    plt.bar( left, histnstars, width=10 )
+    plt.xlim( [0,2000] )
+    plt.xlabel(r'$N_{stars per chip}$')
+    plt.ylabel(r'$N_{chips}$')
+    plt.title('Distribution of number of stars per chip')
+    plt.savefig('nstarshist.png')
+    plt.savefig('nstarshist.pdf')
+
+    imax = numpy.argmax(histnstars)
+    meannstars /= ngoodccd
+    print 'mode nstars = ',(imax+0.5)*10.
+    print 'mean nstars = ',meannstars
+    listnstars.sort()
+    print 'mean nstars = ',sum(listnstars)/len(listnstars)
+    print 'median nstars = ',listnstars[len(listnstars)//2]
+
+
+ 
 if __name__ == "__main__":
     main()

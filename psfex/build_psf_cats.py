@@ -3,16 +3,16 @@
 
 # Define the flag values:
 
-MEAS_BAD_MEASUREMENT = 1
-MEAS_CENTROID_SHIFT = 2
-PSFEX_BAD_MEASUREMENT = 4
-PSFEX_CENTROID_SHIFT = 8
-PSFEX_FAILURE = 16
-DESDM_BAD_MEASUREMENT = 32
-DESDM_CENTROID_SHIFT = 64
-DESDM_FAILURE = 128
+NOT_USED = 1
+MEAS_BAD_MEASUREMENT = 2
+MEAS_CENTROID_SHIFT = 4
+PSFEX_BAD_MEASUREMENT = 8
+PSFEX_CENTROID_SHIFT = 16
+PSFEX_FAILURE = 32
+DESDM_BAD_MEASUREMENT = 64
+DESDM_CENTROID_SHIFT = 128
+DESDM_FAILURE = 256
 DESDM_FLAG_FACTOR = DESDM_BAD_MEASUREMENT / PSFEX_BAD_MEASUREMENT
-NO_FS_INDEX = 256
  
 def parse_args():
     import argparse
@@ -126,34 +126,49 @@ def read_findstars(exp_dir, root):
     # star_flag: 1 if findstars thought this was a star, 0 otherwise.
     return data
  
-def find_fs_index(used_data, fs_data):
-    """Find the index in the fs_data records corresponding to each star in used_data.
+def find_index(x1, y1, x2, y2):
+    """Find the index of the closest point in (x2,y2) to each (x1,y1)
+
+    Any points that do not have a corresponding point within 1 arcsec gets index = -1.
     """
     import numpy
-    index = numpy.zeros(len(used_data),dtype=int)
-    used_x = used_data['X_IMAGE']
-    used_y = used_data['Y_IMAGE']
-    fs_x = fs_data['x']
-    fs_y = fs_data['y']
-    for i in range(len(used_data)):
-        x = used_x[i]
-        y = used_y[i]
-        close = numpy.where( (fs_x > x-5.) &
-                             (fs_x < x+5.) &
-                             (fs_y > y-5.) &
-                             (fs_y < y+5.) )[0]
+    index = numpy.zeros(len(x1),dtype=int)
+    for i in range(len(x1)):
+        close = numpy.where( (x2 > x1[i]-1.) &
+                             (x2 < x1[i]+1.) &
+                             (y2 > y1[i]-1.) &
+                             (y2 < y1[i]+1.) )[0]
         if len(close) == 0:
-            print 'Could not find object near x,y = (%f,%f)'%(x,y)
+            #print 'Could not find object near x,y = (%f,%f)'%(x,y)
             index[i] = -1
         elif len(close) == 1:
             index[i] = close[0]
         else:
-            print 'Multiple objects found near x,y = (%f,%f)'%(x,y)
-            amin = numpy.argmin((fs_x[close] - x)**2 + (fs_y[close] - y)**2)
+            print 'Multiple objects found near x,y = (%f,%f)'%(x1[i],y1[i])
+            amin = numpy.argmin((x2[close] - x1[i])**2 + (y2[close] - y1[i])**2)
             print 'Found minimum at ',close[amin],', where (x,y) = (%f,%f)'%(
-                    fs_x[close[amin]], fs_y[close[amin]])
+                    x2[close[amin]], y2[close[amin]])
             index[i] = close[amin]
     return index
+
+ 
+def find_fs_index(used_data, fs_data):
+    """Find the index in the fs_data records corresponding to each star in used_data.
+    """
+    used_x = used_data['X_IMAGE']
+    used_y = used_data['Y_IMAGE']
+    fs_x = fs_data['x']
+    fs_y = fs_data['y']
+    return find_index(used_x, used_y, fs_x, fs_y)
+
+def find_used_index(fs_data, used_data):
+    """Find the index in the used_data records corresponding to each star in fs_data.
+    """
+    fs_x = fs_data['x']
+    fs_y = fs_data['y']
+    used_x = used_data['X_IMAGE']
+    used_y = used_data['Y_IMAGE']
+    return find_index(fs_x, fs_y, used_x, used_y)
 
 
 def measure_shapes(xlist, ylist, file_name, wcs):
@@ -214,10 +229,17 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         print 'Measure shape for star at ',x,y
         b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
-        subim = im[b]
-        subbp = bp_im[b]
-        subwt = wt_im[b]
-        shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
+
+        try:
+            subim = im[b]
+            subbp = bp_im[b]
+            subwt = wt_im[b]
+            shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
+        except:
+            print ' *** Bad measurement (caught exception).  Mask this one.'
+            flag_list[i] = MEAS_BAD_MEASUREMENT
+            continue
+
         #print 'shape_data = ',shape_data
         #print 'image_bounds = ',shape_data.image_bounds
         #print 'shape = ',shape_data.observed_shape
@@ -312,7 +334,12 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
         im = psf.drawImage(image=im, method='no_pixel')
         #print 'im = ',im.array
 
-        shape_data = im.FindAdaptiveMom(strict=False)
+        try:
+            shape_data = im.FindAdaptiveMom(strict=False)
+        except:
+            print ' *** Bad measurement (caught exception).  Mask this one.'
+            flag_list[i] = PSFEX_BAD_MEASUREMENT
+            continue
 
         if shape_data.moments_status != 0:
             print 'status = ',shape_data.moments_status
@@ -460,15 +487,16 @@ def main():
             print '   fraction used = ',float(used_area) / tot_area
 
             # Figure out which fs objects go with which used objects.
-            index = find_fs_index(used_data, fs_data)
-            print '   index = ',index
+            fs_index = find_fs_index(used_data, fs_data)
+            used_index = find_used_index(fs_data[mask], used_data)
+            print '   fs_index = ',fs_index
 
             # Check: This should be the same as the used bounds
-            alt_used_xmin = fs_data['x'][index].min()
-            alt_used_xmax = fs_data['x'][index].max()
-            alt_used_ymin = fs_data['y'][index].min()
-            alt_used_ymax = fs_data['y'][index].max()
-            print '   bounds from findstars[index] = ',
+            alt_used_xmin = fs_data['x'][fs_index].min()
+            alt_used_xmax = fs_data['x'][fs_index].max()
+            alt_used_ymin = fs_data['y'][fs_index].min()
+            alt_used_ymax = fs_data['y'][fs_index].max()
+            print '   bounds from findstars[fs_index] = ',
             print alt_used_xmin,alt_used_xmax,alt_used_ymin,alt_used_ymax
  
             # Get the magnitude range for each catalog.
@@ -478,17 +506,17 @@ def main():
             fs_magmin = fs_data['mag'][mask].min()
             fs_magmax = fs_data['mag'][mask].max()
             print '   magnitude range of fs stars = ',fs_magmin,fs_magmax
-            used_magmin = fs_data['mag'][index].min()
-            used_magmax = fs_data['mag'][index].max()
+            used_magmin = fs_data['mag'][fs_index].min()
+            used_magmax = fs_data['mag'][fs_index].max()
             print '   magnitude range of used stars = ',used_magmin,used_magmax
 
             # Get the wcs from the image file
             wcs = get_wcs(file_name)
 
             # Measure the shpes and sizes of the stars used by PSFEx.
-            x = used_data['X_IMAGE']
-            y = used_data['Y_IMAGE']
-            mag = fs_data['mag'][index]
+            x = fs_data['x'][mask]
+            y = fs_data['y'][mask]
+            mag = fs_data['mag'][mask]
             e1, e2, size, meas_flag = measure_shapes(x, y, file_name, wcs)
 
             # Measure the model shapes, sizes.
@@ -508,10 +536,10 @@ def main():
             print 'psfex_flag = ',psfex_flag
             print 'desdm_flag = ',desdm_flag
             print 'flag = ',flag
-            bad_index = numpy.where(index < 0)[0]
+            bad_index = numpy.where(used_index < 0)[0]
             print 'bad_index = ',bad_index
             for i in bad_index:
-                flag[i] |= NO_FS_INDEX
+                flag[i] |= NOT_USED
             print 'flag => ',flag
 
             # Compute ra,dec from the wcs:
@@ -520,7 +548,7 @@ def main():
             dec = [ c.dec / galsim.degrees for c in coord ]
 
             # Extend the column arrays with this chip's data.
-            ccdnum_col.extend([ccdnum] * n_used)
+            ccdnum_col.extend([ccdnum] * n_fs)
             x_col.extend(x)
             y_col.extend(y)
             ra_col.extend(ra)
@@ -536,6 +564,21 @@ def main():
             desdm_e1_col.extend(desdm_e1)
             desdm_e2_col.extend(desdm_e2)
             desdm_size_col.extend(desdm_size)
+            assert len(ccdnum_col) == len(x_col)
+            assert len(ccdnum_col) == len(y_col)
+            assert len(ccdnum_col) == len(ra_col)
+            assert len(ccdnum_col) == len(dec_col)
+            assert len(ccdnum_col) == len(mag_col)
+            assert len(ccdnum_col) == len(flag_col)
+            assert len(ccdnum_col) == len(e1_col)
+            assert len(ccdnum_col) == len(e2_col)
+            assert len(ccdnum_col) == len(size_col)
+            assert len(ccdnum_col) == len(psfex_e1_col)
+            assert len(ccdnum_col) == len(psfex_e2_col)
+            assert len(ccdnum_col) == len(psfex_size_col)
+            assert len(ccdnum_col) == len(desdm_e1_col)
+            assert len(ccdnum_col) == len(desdm_e2_col)
+            assert len(ccdnum_col) == len(desdm_size_col)
 
             if args.single_ccd:
                 break

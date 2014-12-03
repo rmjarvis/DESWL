@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use ('agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 #plt.style.use('SVA1StyleSheet.mplstyle')
 import pylab
 import treecorr
@@ -15,6 +16,7 @@ import homogenise_nz as hnz
 import fitsio as fio
 import numpy.lib.recfunctions as nlr
 import time
+import sys
 import ctypes
 import numpy.linalg as linalg
   
@@ -55,6 +57,7 @@ class CatalogStore(object):
   skybrite=[]
   airmass=[]
   fwhm=[]
+  colour=[]
 
   def __init__(self,cat,setup):
 
@@ -82,10 +85,10 @@ class CatalogStore(object):
         m=m2
         w=w2
       elif CatalogMethods.cat_name(cat)=='ngmix010':
-        dir='/share/des/sv/ngmix/v010/v010b/'
+        dir='/share/des/sv/ngmix/v009/'
         cuts=CatalogMethods.default_ngmix009_cuts()
         cols=np.array(['coadd_objects_id','ra','dec','exp_e_1','exp_e_2','psfrec_e_1','psfrec_e_2','psfrec_t','exp_e_sens_1','exp_e_sens_2','exp_e_cov_1_1','exp_e_cov_2_2','exp_e_cov_1_2','exp_t','exp_s2n_w'])
-        coadd,ra,dec,e1,e2,psf1,psf2,fwhm,s1,s2,cov11,cov22,cov12,radius,snr,zpeak=CatalogMethods.get_cat_cols_ng(dir,cols,cuts,False,noval)
+        coadd,ra,dec,e1,e2,psf1,psf2,fwhm,s1,s2,cov11,cov22,cov12,radius,snr,zpeak=CatalogMethods.get_cat_cols(dir,cols,cuts,False,noval)
         e1=-e1
         psf1=-psf1
         cov12=-cov12
@@ -104,7 +107,7 @@ class CatalogStore(object):
       tbins=7
       slop=0.1
       sep=np.array([1,120])
-      use_jk=False
+      use_jk=True
       bs=True
       wt=True
 
@@ -155,6 +158,15 @@ class CatalogStore(object):
         self.skybrite=np.mean(skybrite,axis=0)
         self.airmass=np.mean(airmass,axis=0)
         self.fwhm=np.mean(fwhm,axis=0)
+
+      match=np.genfromtxt('../catcutDES/cat_match_dec.dat', names=True)
+
+      mask1=np.in1d(coadd,match['coadd_objects_id'],assume_unique=True)
+      mask2=np.in1d(match['coadd_objects_id'],coadd,assume_unique=True)
+      match2=match[mask2]
+      sort=np.argsort(match2['coadd_objects_id'])[np.argsort(np.argsort(coadd[mask1]))]
+      match2=match2[sort]
+      self.colour=match2['mag_auto_r']-match2['mag_auto_g']
 
 class lin_shear_test_methods(object):
 
@@ -462,20 +474,23 @@ class split_systematics(object):
 
     arr1,tmp,me1,e1err,me2,e2err=lin_shear_test_methods.bin_means(array,cat,np.ones((len(cat.e1))).astype(bool))
 
-    slp1,tmp=np.polyfit(arr1, me1, 1)
-    slp2,tmp=np.polyfit(arr1, me2, 1)
+    slp1,b1=np.polyfit(arr1, me1, 1)
+    slp2,b2=np.polyfit(arr1, me2, 1)
 
     if cat.use_jk:
       e1err,e2err=jackknife_methods.lin_err0(array,cat)
 
-    plotting_methods.fig_create_e12vs(me1,me2,e1err,e2err,arr1,cat,label)
+    #plotting_methods.fig_create_e12vs(me1,me2,e1err,e2err,arr1,cat,label)
     print 'slope of e1 vs '+label,slp1
     print 'slope of e2 vs '+label,slp2
 
-    return
+    return arr1,me1,me2,e1err,e2err,slp1,slp2,b1,b2
 
   @staticmethod
   def split_gals_2pt_along_(array,cat,label):
+
+    jkst=cat.use_jk
+    cat.use_jk=False
 
     xip=np.zeros((cat.sbins+1,cat.tbins))
     xim=np.zeros((cat.sbins+1,cat.tbins))
@@ -498,26 +513,26 @@ class split_systematics(object):
         w21=list_nz_weights[1]
         mask1=mask
       theta,xip[i,:],xim[i,:],xiperr[i,:],tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask,w2)
-      if cat.use_jk:
-        xiperr[i,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,w2)
+      #if cat.use_jk:
+      #  xiperr[i,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,w2)
       plotting_methods.fig_open_xi_2pt0(theta*(1+.02*(i+1)),xip[i,:],xiperr[i,:],cat,'bin '+str(i+1))
 
     mask=np.ones((len(cat.coadd))).astype(bool)
     theta,xip[cat.sbins,:],tmp,xiperr[cat.sbins,:],tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask,np.ones((len(cat.coadd))))
+    dxip1=xip[0,:]-xip[cat.sbins,:]
+    dxip2=xip[cat.sbins-1,:]-xip[cat.sbins,:]
+    cat.use_jk=jkst
     if cat.use_jk:
-      xiperr[cat.sbins,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,np.ones((len(cat.coadd))))
-      dxip1,dxip2,xiperr1,xiperr2,chi21,chi22=jackknife_methods.xi_2pt_split_err0(cat,mask0,w20,mask1,w21)
+      #xiperr[cat.sbins,:],tmp,invcovp,tmp=jackknife_methods.xi_2pt_err0(cat,mask,np.ones((len(cat.coadd))))
+      xiperr1,xiperr2,chi2=jackknife_methods.xi_2pt_split_err0(cat,mask0,w20,mask1,w21)
     else:
-      dxip1=xip[0,:]-xip[cat.sbins,:]
-      dxip2=xip[cat.sbins-1,:]-xip[cat.sbins,:]
       xiperr1=xiperr[0,:]
       xiperr2=xiperr[cat.sbins-1,:]
-      chi21=0.
-      chi22=0.
+      chi2=0.
     plotting_methods.fig_open_xi_2pt0(theta,xip[cat.sbins,:],xiperr[cat.sbins,:],cat,'full')
     plotting_methods.fig_close_xi_2pt0(cat,label)
 
-    return theta,edge,xip[cat.sbins,:],xiperr[cat.sbins,:],dxip1,dxip2,xiperr1,xiperr2,chi21,chi22
+    return theta,edge,xip[cat.sbins,:],xiperr[cat.sbins,:],dxip1,dxip2,xiperr1,xiperr2,chi2
 
 
 class jackknife_methods(object):
@@ -547,13 +562,29 @@ class jackknife_methods(object):
     return chi2
 
   @staticmethod
-  def jk_corr_invcov(cov,cat):
+  def jk_corr_invcov_lin(cov,cat):
 
-    cov=np.zeros((cat.tbins,cat.tbins))
+    invcov=(cat.num_reg-cat.lbins-2)/(cat.num_reg-1)*linalg.inv(cov)
+
+    return invcov
+
+  @staticmethod
+  def jk_corr_invcov(cov,cat):
 
     invcov=(cat.num_reg-cat.tbins-2)/(cat.num_reg-1)*linalg.inv(cov)
 
     return invcov
+
+  @staticmethod
+  def jk_cov_lin(array,cat):
+
+    cov=np.zeros((cat.lbins,cat.lbins))
+
+    for i in xrange(cat.lbins):
+      for j in xrange(cat.lbins):
+        cov[i,j]=np.sum((array[:,i]-np.mean(array[:,i]))*(array[:,j]-np.mean(array[:,j])))/(cat.num_reg-1.)
+
+    return cov
 
   @staticmethod
   def jk_cov(array,cat):
@@ -577,8 +608,8 @@ class jackknife_methods(object):
       mask=(cat.regs!=i)
       arr1,tmp,e1[i,:],tmp,e2[i,:],tmp=lin_shear_test_methods.bin_means(array,cat,mask)
 
-    err1=np.sqrt(np.diagonal(jackknife_methods.jk_cov(e1,cat)))
-    err2=np.sqrt(np.diagonal(jackknife_methods.jk_cov(e2,cat)))
+    err1=np.sqrt(np.diagonal(jackknife_methods.jk_cov_lin(e1,cat)))
+    err2=np.sqrt(np.diagonal(jackknife_methods.jk_cov_lin(e2,cat)))
 
     return err1,err2
 
@@ -594,7 +625,7 @@ class jackknife_methods(object):
     for i in xrange(cat.num_reg):
       print 'jack_iter', i, time.time()-tmptime
       jkmask=(cat.regs!=i)
-      tmp,xip[i,:],xim[i,:],tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask],w2[jkmask[mask]])
+      tmp,xip[i,:],xim[i,:],tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask&mask,w2)
       print 'jack xip',xip[i,:]
     cat.use_jk=jkst
 
@@ -613,11 +644,7 @@ class jackknife_methods(object):
   @staticmethod
   def xi_2pt_split_err0(cat,mask0,w20,mask1,w21):
 
-    theta,xip0,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,np.ones((len(cat.coadd))).astype(bool),np.ones((len(cat.coadd))))
-    tmp,xip01,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask0],w20[jkmask[mask0]])
-    tmp,xip02,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask1],w21[jkmask[mask1]])
-
-
+    dxip=np.zeros((cat.num_reg,cat.tbins))
     dxip1=np.zeros((cat.num_reg,cat.tbins))
     dxip2=np.zeros((cat.num_reg,cat.tbins))
     tmptime=time.time()
@@ -625,28 +652,46 @@ class jackknife_methods(object):
     jkst=cat.use_jk
     cat.use_jk=False
     for i in xrange(cat.num_reg):
-      print 'jack_iter', i, time.time()-tmptime
+      print 'jack_iter_split', i, time.time()-tmptime
       jkmask=(cat.regs!=i)
-      tmp,xip1,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask0],w20[jkmask[mask0]])
-      tmp,xip2,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask[mask1],w21[jkmask[mask1]])
-      dxip1[i,:]=xip1-xip0
-      dxip2[i,:]=xip2-xip0
+      tmp,xip1,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask&mask0,w20[jkmask[mask0]])
+      tmp,xip2,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask&mask1,w21[jkmask[mask1]])
+      tmp,xip,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,jkmask,np.ones((len(cat.coadd)))[jkmask])
+      dxip[i,:]=xip2-xip1
+      dxip1[i,:]=xip1-xip
+      dxip2[i,:]=xip2-xip
       print 'jack dxip',dxip[i,:]
+    tmp,xip01,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask0,w20)
+    tmp,xip02,tmp,tmp,tmp=xi_2pt_shear_test_methods.xi_2pt(cat,mask1,w21)
     cat.use_jk=jkst
 
-    covp1=jackknife_methods.jk_cov(dxip1,cat.tbins,cat.num_reg)
-    covp2=jackknife_methods.jk_cov(dxip2,cat.tbins,cat.num_reg)
+    covp=jackknife_methods.jk_cov(dxip,cat)
+    covp1=jackknife_methods.jk_cov(dxip1,cat)
+    covp2=jackknife_methods.jk_cov(dxip2,cat)
 
-    #invcovp=jackknife_methods.jk_corr_invcov(covp,cat.tbins,cat.num_reg)
-    #invcovm=jackknife_methods.jk_corr_invcov(covm,cat.tbins,cat.num_reg)
+    if linalg.cond(covp) < 1/sys.float_info.epsilon:
+      invcovp=jackknife_methods.jk_corr_invcov(covp,cat)
+      chi2=jackknife_methods.jk_chi2(invcovp,xip02,xip01,cat)
+    else:
+      print 'chi2 val likely wrong, using approx due to singular covariance matrix'
+      chi2=jackknife_methods.jk_chi2(1./covp,xip02,xip01,cat)
 
-    xiperr1=np.sqrt(np.diagonal(covp1))
-    xiperr2=np.sqrt(np.diagonal(covp2))
+    if linalg.cond(covp1) < 1/sys.float_info.epsilon:
+      invcovp1=jackknife_methods.jk_corr_invcov(covp1,cat)
+      xiperr1=1./np.sqrt(np.diagonal(invcovp1))
+    else:
+      print 'xiperr1 val likely wrong, using approx due to singular covariance matrix'
+      xiperr1=np.sqrt(np.diagonal(covp1))
 
-    chi21=jk_chi2(1./covp1,xip01,xip0,cat)
-    chi22=jk_chi2(1./covp2,xip02,xip0,cat)
+    if linalg.cond(covp2) < 1/sys.float_info.epsilon:
+      invcovp2=jackknife_methods.jk_corr_invcov(covp2,cat)
+      xiperr2=1./np.sqrt(np.diagonal(invcovp2))
+    else:
+      print 'xiperr1 val likely wrong, using approx due to singular covariance matrix'
+      xiperr2=np.sqrt(np.diagonal(covp2))
 
-    return dxip1,dxip2,xiperr1,xiperr2,chi21,chi22
+
+    return xiperr1,xiperr2,chi2
 
 
   @staticmethod
@@ -692,7 +737,7 @@ class plotting_methods(object):
   @staticmethod
   def fig_create_e12vs(e1,e2,e1err,e2err,x,cat,label):
 
-    plt.figure(1)
+    plt.figure(10)
     plt.errorbar(x,e1, yerr=e1err, xerr=None,label='<e1>')
     plt.errorbar(x,e2, yerr=e2err, xerr=None,label='<e2>')
     plt.legend()
@@ -700,7 +745,7 @@ class plotting_methods(object):
     plt.xlabel(label)
     plt.ylim((-5e-3,5e-3))
     plt.savefig(CatalogMethods.cat_name(cat.cat)+'_nbins-'+str(cat.lbins)+'_biasorsens-'+str(cat.bs)+'_weight-'+str(cat.wt)+'_jk-'+str(cat.use_jk)+'_eVS'+label+'.png', bbox_inches='tight')
-    plt.close(1)
+    plt.close(10)
 
     return
 
@@ -1215,7 +1260,7 @@ class SVA1(object):
     print '..........'+label+'..........'
     print ' '
     print ' '
-    theta,edge,xip,xiperr,dxip1,dxip2,xiperr1,xiperr2,chi21,chi22=split_systematics.split_gals_2pt_along_(array,cat,label)
+    theta,edge,xip,xiperr,dxip1,dxip2,xiperr1,xiperr2,chi2=split_systematics.split_gals_2pt_along_(array,cat,label)
     edge=edge.astype(int)
     A1=SVA1.Fig_2ptPaper_amp(cat,xip,dxip1,xiperr1)
     A2=SVA1.Fig_2ptPaper_amp(cat,xip,dxip2,xiperr2)
@@ -1226,7 +1271,7 @@ class SVA1(object):
     print 'dxiperr1',xiperr1
     print 'dxip2',dxip2
     print 'dxiperr2',xiperr2
-    print 'chi',chi21,chi22
+    print 'chi',chi2
     print 'A',A1,A2
     ax=plt.subplot(r,c,n)
     plt.errorbar(theta[xip>0],xip[xip>0]*theta[xip>0],yerr=xiperr[xip>0]*theta[xip>0],marker='.',linestyle='',color='k')
@@ -1239,7 +1284,6 @@ class SVA1(object):
     plt.errorbar(theta[dxip2<0]*(1.4),-dxip2[dxip2<0]*theta[dxip2<0],yerr=xiperr2[dxip2<0]*theta[dxip2<0],marker='2',linestyle='',color='b')
     plt.yscale('log')
     plt.xscale('log')
-    plt.ylabel(r'$\theta\xi_+$')
     plt.xlim((1,200))
     plt.ylim((1e-6,9e-4))
     #plt.legend(loc='upper center',ncol=2, frameon=False,prop={'size':10})
@@ -1249,8 +1293,58 @@ class SVA1(object):
       plt.xlabel(r'$\theta$')
     if n%2==0:
       ax.set_yticklabels([])
+    else:
+      plt.ylabel(r'$\theta\xi_+$')
 
     return
+
+  @staticmethod
+  def Fig_ShearPaper_subplot(cat,fig,r,c,n,array,label):
+
+    plt.figure(fig)
+    print ' '
+    print ' '
+    print '..........'+label+'..........'
+    print ' '
+    print ' '
+    arr1,me1,me2,e1err,e2err,slp1,slp2,b1,b2=split_systematics.split_gals_lin_along_(array,cat,label)
+    print 'psf',arr1
+    print 'me',me1,me2
+    print 'err',e1err,e2err
+    print 'slp',slp1,slp2
+    print 'b',b1,b2
+    ax=plt.subplot(r,c,n)
+    if n==3:
+      plt.errorbar(arr1,me1,yerr=e1err,marker='.',linestyle='',color='r',label=r'$\langle e_1 \rangle$')
+      plt.errorbar(arr1,me2,yerr=e2err,marker='.',linestyle='',color='b',label=r'$\langle e_2 \rangle$')
+    else:
+      plt.errorbar(arr1,me1,yerr=e1err,marker='.',linestyle='',color='r')
+      plt.errorbar(arr1,me2,yerr=e2err,marker='.',linestyle='',color='b')
+    plt.errorbar(arr1,slp1*arr1+b1,marker='',linestyle=':',color='r')
+    plt.errorbar(arr1,slp2*arr1+b2,marker='',linestyle=':',color='b')
+    plt.ylim((-.0025,.0025))
+    plt.legend(loc='upper right',ncol=2, frameon=False,prop={'size':12})
+    if n<4:
+      ax.set_xticklabels([])
+    else:
+      if label=='psfe1':
+        plt.xlabel(r'$PSF\quad e_1$')
+      if label=='psfe2':
+        plt.xlabel(r'$PSF\quad e_2$')
+      if label=='psffwhm':
+        plt.xlabel(r'$PSF\quad FWHM$')
+    if (n==2)|(n==5):
+      ax.set_yticklabels([])
+      #plt.xlim((-.0075,.0225))
+    elif (n==3)|(n==6):
+      ax.set_yticklabels([])
+      #plt.xlim((-.0075,.0225))
+    else:
+      plt.ylabel(r'$\langle e \rangle$')
+      #plt.xlim((-.0025,.0175))
+
+    return
+
 
   @staticmethod
   def Fig1_2ptPaper(i3,ng):
@@ -1264,11 +1358,11 @@ class SVA1(object):
     SVA1.Fig_2ptPaper_subplot(ng,1,3,2,2,ng.snr,'snr')
     SVA1.Fig_2ptPaper_subplot(i3,1,3,2,3,i3.radius,'radius')
     SVA1.Fig_2ptPaper_subplot(ng,1,3,2,4,ng.radius,'radius')
-    SVA1.Fig_2ptPaper_subplot(i3,1,3,2,5,i3.snr,'colour')
-    SVA1.Fig_2ptPaper_subplot(ng,1,3,2,6,ng.snr,'colour')
+    SVA1.Fig_2ptPaper_subplot(i3,1,3,2,5,i3.colour,'colour')
+    SVA1.Fig_2ptPaper_subplot(ng,1,3,2,6,ng.colour,'colour')
     plt.figure(1)
     plt.subplots_adjust(hspace=0,wspace=0)
-    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig1.png', bbox_inches='tight')
+    plt.savefig('2ptPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.tbins)+'_Fig1.png', bbox_inches='tight')
     plt.close(1)   
 
     return
@@ -1290,7 +1384,7 @@ class SVA1(object):
     SVA1.Fig_2ptPaper_subplot(ng,2,3,2,6,ng.ebv,'ebv')
     plt.figure(2)
     plt.subplots_adjust(hspace=0,wspace=0)
-    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig2.png', bbox_inches='tight')
+    plt.savefig('2ptPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.tbins)+'_Fig2.png', bbox_inches='tight')
     plt.close(2)   
     
     return
@@ -1312,7 +1406,7 @@ class SVA1(object):
     SVA1.Fig_2ptPaper_subplot(ng,3,3,2,6,ng.airmass,'airmass')
     plt.figure(3)
     plt.subplots_adjust(hspace=0,wspace=0)
-    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig3.png', bbox_inches='tight')
+    plt.savefig('2ptPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.tbins)+'_Fig3.png', bbox_inches='tight')
     plt.close(3)   
     
     return
@@ -1335,7 +1429,7 @@ class SVA1(object):
     SVA1.Fig_2ptPaper_subplot(ng,4,3,2,6,ng.fwhm,'fwhm')
     plt.figure(4)
     plt.subplots_adjust(hspace=0,wspace=0)
-    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig4.png', bbox_inches='tight')
+    plt.savefig('2ptPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.tbins)+'_Fig4.png', bbox_inches='tight')
     plt.close(4)   
     
     return
@@ -1357,9 +1451,30 @@ class SVA1(object):
     SVA1.Fig_2ptPaper_subplot(ng,5,3,2,6,ng.psffwhm,'psffwhm')
     plt.figure(5)
     plt.subplots_adjust(hspace=0,wspace=0)
-    plt.savefig(CatalogMethods.cat_name(i3.cat)+'_nbins-'+str(i3.tbins)+'_2ptPaper_Fig5.png', bbox_inches='tight')
+    plt.savefig('2ptPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.tbins)+'_Fig5.png', bbox_inches='tight')
     plt.close(5)   
     
     return
 
-#split_gals_lin_along_(array,cat,label)
+  @staticmethod
+  def Fig1_ShearPaper(i3,ng):
+
+
+    print '...........'
+    print 'Figure 1'
+    print '...........'
+
+    SVA1.Fig_ShearPaper_subplot(i3,1,2,3,1,i3.psf1,'psfe1')    
+    SVA1.Fig_ShearPaper_subplot(i3,1,2,3,2,i3.psf2,'psfe2')    
+    SVA1.Fig_ShearPaper_subplot(i3,1,2,3,3,i3.psffwhm,'psffwhm')    
+    SVA1.Fig_ShearPaper_subplot(ng,1,2,3,4,ng.psf1,'psfe1')    
+    SVA1.Fig_ShearPaper_subplot(ng,1,2,3,5,ng.psf2,'psfe2')    
+    SVA1.Fig_ShearPaper_subplot(ng,1,2,3,6,ng.psffwhm,'psffwhm')    
+    plt.figure(1)
+    plt.subplots_adjust(hspace=0,wspace=0)
+    plt.savefig('ShearPaper_jk-'+str(i3.use_jk)+'_nbins-'+str(i3.lbins)+'_Fig1.png', bbox_inches='tight')
+    plt.close(1)   
+    
+    return
+
+

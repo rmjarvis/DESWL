@@ -1,0 +1,7 @@
+#!/bin/bash
+
+FILE=spte_gold_exp
+TAG=v4
+
+./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
+

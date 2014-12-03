@@ -52,53 +52,17 @@ def break_axes(ax, ax2):
     ax2.plot((-d,+d),(-d,+d), **kwargs)
     ax2.plot((-d,+d),(1-d,1+d), **kwargs)
 
+def get_data(runs, exps, work,
+             mask_list, used_list, ra_list, dec_list, x_list, y_list, m_list,
+             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list):
 
-def main():
-    import os
-    import glob
-    import galsim
-    import json
-    import numpy
     import astropy.io.fits as pyfits
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-
-    args = parse_args()
-
-    work = os.path.expanduser(args.work)
-    print 'work dir = ',work
-
-    if args.file != '':
-        print 'Read file ',args.file
-        with open(args.file) as fin:
-            data = [ line.split() for line in fin ]
-        runs, exps = zip(*data)
-    else:
-        runs = args.runs
-        exps = args.exps
+    import numpy
+    import os
 
     expinfo_file = 'exposure_info.fits'
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
-
-    mask_list = { 'griz' : [], 'riz' : [] }
-    used_list = { 'griz' : [], 'riz' : [] }
-
-    ra_list = { 'griz' : [], 'riz' : [] }
-    dec_list = { 'griz' : [], 'riz' : [] }
-    m_list = { 'griz' : [], 'riz' : [] }
-    x_list = { 'griz' : [], 'riz' : [] }
-    y_list = { 'griz' : [], 'riz' : [] }
-
-    e1_list = { 'griz' : [], 'riz' : [] }
-    e2_list = { 'griz' : [], 'riz' : [] }
-    s_list = { 'griz' : [], 'riz' : [] }
-
-    pe1_list = { 'griz' : [], 'riz' : [] }
-    pe2_list = { 'griz' : [], 'riz' : [] }
-    ps_list = { 'griz' : [], 'riz' : [] }
 
     for run,exp in zip(runs,exps):
 
@@ -204,6 +168,244 @@ def main():
 
     print '\nFinished processing all exposures'
 
+
+def bin_by_mag(m, ds, de1, de2, key):
+
+    import numpy
+    import matplotlib.pyplot as plt
+
+    # Bin by mag
+    mag_bins = numpy.linspace(10,17,71)
+    print 'mag_bins = ',mag_bins
+
+    index = numpy.digitize(m, mag_bins)
+    print 'len(index) = ',len(index)
+    bin_de1 = [de1[index == i].mean() for i in range(1, len(mag_bins))]
+    print 'bin_de1 = ',bin_de1
+    bin_de2 = [de2[index == i].mean() for i in range(1, len(mag_bins))]
+    print 'bin_de2 = ',bin_de2
+    bin_ds = [ds[index == i].mean() for i in range(1, len(mag_bins))]
+    print 'bin_ds = ',bin_ds
+    bin_de1_err = [ numpy.sqrt(de1[index == i].var() / len(de1[index == i])) 
+                    for i in range(1, len(mag_bins)) ]
+    print 'bin_de1_err = ',bin_de1_err
+    bin_de2_err = [ numpy.sqrt(de2[index == i].var() / len(de2[index == i])) 
+                    for i in range(1, len(mag_bins)) ]
+    print 'bin_de2_err = ',bin_de2_err
+    bin_ds_err = [ numpy.sqrt(ds[index == i].var() / len(ds[index == i])) 
+                    for i in range(1, len(mag_bins)) ]
+    print 'bin_ds_err = ',bin_ds_err
+
+    # Fix up nans
+    for i in range(1,len(mag_bins)):
+        if i not in index:
+            bin_de1[i-1] = 0.
+            bin_de2[i-1] = 0.
+            bin_ds[i-1] = 0.
+            bin_de1_err[i-1] = 0.
+            bin_de2_err[i-1] = 0.
+            bin_ds_err[i-1] = 0.
+    print 'fixed nans'
+
+    print 'index = ',index
+    print 'bin_de1 = ',bin_de1
+    print 'bin_de2 = ',bin_de2
+    print 'bin_ds = ',bin_ds
+
+    plt.clf()
+    plt.title('PSF Size residuals')
+    plt.xlim(10,16.5)
+    plt.ylim(-0.002,0.012)
+    plt.plot([10,16.5], [0,0], color='black')
+    plt.plot([13,13],[-1,1], color='red')
+    plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
+    plt.errorbar(mag_bins[:-1], bin_ds, yerr=bin_ds_err, color='blue', fmt='o')
+    plt.xlabel('Uncorrected Magnitude')
+    plt.ylabel('$size_{psf} - size_{model}$')
+    plt.savefig('dsize_mag_' + key + '.png')
+    plt.savefig('dsize_mag_' + key + '.pdf')
+
+    plt.clf()
+    plt.title('PSF Ellipticity residuals')
+    plt.xlim(10,16.5)
+    plt.ylim(-3.e-4,8.e-4)
+    plt.plot([10,16.5], [0,0], color='black')
+    plt.plot([13,13],[-1,1], color='red')
+    plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
+    e1_line = plt.errorbar(mag_bins[:-1], bin_de1, yerr=bin_de1_err, color='blue', fmt='o')
+    e2_line = plt.errorbar(mag_bins[:-1], bin_de2, yerr=bin_de2_err, color='green', fmt='o')
+    plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
+    plt.xlabel('Uncorrected Magnitude')
+    plt.ylabel('$e_{psf} - e_{model}$')
+    plt.savefig('de_mag_' + key + '.png')
+    plt.savefig('de_mag_' + key + '.pdf')
+
+
+def bin_by_chip_pos(x, ds, de1, de2, key, xy):
+
+    import numpy
+    import matplotlib.pyplot as plt
+
+    # Bin by chip x or y position
+    if xy == 'x':
+        xmax = 2048
+    else:
+        xmax = 4096
+
+    x_bins = numpy.linspace(0,xmax,129)
+    print 'x_bins = ',x_bins
+    index = numpy.digitize(x, x_bins)
+    print 'len(index) = ',len(index)
+    bin_de1 = [de1[index == i].mean() for i in range(1, len(x_bins))]
+    print 'bin_de1 = ',bin_de1
+    bin_de2 = [de2[index == i].mean() for i in range(1, len(x_bins))]
+    print 'bin_de2 = ',bin_de2
+    bin_ds = [ds[index == i].mean() for i in range(1, len(x_bins))]
+    print 'bin_ds = ',bin_ds
+    bin_de1_err = [ numpy.sqrt(de1[index == i].var() / len(de1[index == i])) 
+                    for i in range(1, len(x_bins)) ]
+    print 'bin_de1_err = ',bin_de1_err
+    bin_de2_err = [ numpy.sqrt(de2[index == i].var() / len(de2[index == i])) 
+                    for i in range(1, len(x_bins)) ]
+    print 'bin_de2_err = ',bin_de2_err
+    bin_ds_err = [ numpy.sqrt(ds[index == i].var() / len(ds[index == i])) 
+                    for i in range(1, len(x_bins)) ]
+    print 'bin_ds_err = ',bin_ds_err
+
+    # Fix up nans
+    for i in range(1,len(x_bins)):
+        if i not in index:
+            bin_de1[i-1] = 0.
+            bin_de2[i-1] = 0.
+            bin_ds[i-1] = 0.
+            bin_de1_err[i-1] = 0.
+            bin_de2_err[i-1] = 0.
+            bin_ds_err[i-1] = 0.
+    print 'fixed nans'
+
+    print 'index = ',index
+    print 'bin_de1 = ',bin_de1
+    print 'bin_de2 = ',bin_de2
+    print 'bin_ds = ',bin_ds
+
+    plt.clf()
+    plt.title('PSF Size residuals')
+    plt.xlim(0,xmax)
+    plt.ylim(0,0.0025)
+    plt.plot([0,xmax], [0,0], color='black')
+    plt.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
+    plt.xlabel('Chip '+xy+' position')
+    plt.ylabel('$size_{psf} - size_{model}$')
+    plt.savefig('dsize_'+xy+'_' + key + '.png')
+    plt.savefig('dsize_'+xy+'_' + key + '.pdf')
+
+    plt.clf()
+    plt.title('PSF Ellipticity residuals')
+    plt.xlim(0,xmax)
+    plt.ylim(-0.002,0.002)
+    plt.plot([0,xmax], [0,0], color='black')
+    e1_line = plt.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
+    e2_line = plt.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
+    plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
+    plt.xlabel('Chip '+xy+' position')
+    plt.ylabel('$e_{psf} - e_{model}$')
+    plt.savefig('de_'+xy+'_' + key + '.png')
+    plt.savefig('de_'+xy+'_' + key + '.pdf')
+
+    # Make broken x-axis. 
+    plt.clf()
+    f, (ax,ax2) = plt.subplots(1,2,sharey=True)
+    ax.set_xlim(0,200)
+    ax.set_ylim(0,0.0025)
+    ax.plot([0,xmax], [0,0], color='black')
+    ax.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
+
+    ax2.set_xlim(xmax-200,xmax)
+    ax2.set_ylim(0,0.0025)
+    ax2.plot([0,xmax], [0,0], color='black')
+    ax2.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
+
+    break_axes(ax,ax2)
+
+    ax.set_title('PSF Size residuals', x=1.08, y=1.03)
+    ax.set_xlabel('Chip '+xy+' position')
+    ax.xaxis.set_label_coords(1.08,-0.05)
+    ax.set_ylabel('$size_{psf} - size_{model}$')
+
+    plt.savefig('dsize_'+xy+'2_' + key + '.png')
+    plt.savefig('dsize_'+xy+'2_' + key + '.pdf')
+
+    plt.clf()
+    f, (ax,ax2) = plt.subplots(1,2,sharey=True)
+    ax.set_xlim(0,200)
+    ax.set_ylim(-0.002,0.002)
+    ax.plot([0,xmax], [0,0], color='black')
+    ax.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
+    ax.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
+
+    ax2.set_xlim(xmax-200,xmax)
+    ax2.set_ylim(-0.002,0.002)
+    ax2.plot([0,xmax], [0,0], color='black')
+    e1_line = ax2.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
+    e2_line = ax2.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
+    ax2.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
+
+    break_axes(ax,ax2)
+
+    ax.set_title('PSF Ellipticity residuals', x=1.08, y=1.03)
+    ax.set_xlabel('Chip '+xy+' position')
+    ax.xaxis.set_label_coords(1.08,-0.05)
+    ax.set_ylabel('$e_{psf} - e_{model}$')
+
+    plt.savefig('de_'+xy+'2_' + key + '.png')
+    plt.savefig('de_'+xy+'2_' + key + '.pdf')
+
+
+
+def main():
+    import os
+    import glob
+    import galsim
+    import json
+    import numpy
+    import matplotlib
+    matplotlib.use('Agg') # needs to be done before import pyplot
+
+    args = parse_args()
+
+    work = os.path.expanduser(args.work)
+    print 'work dir = ',work
+
+    if args.file != '':
+        print 'Read file ',args.file
+        with open(args.file) as fin:
+            data = [ line.split() for line in fin ]
+        runs, exps = zip(*data)
+    else:
+        runs = args.runs
+        exps = args.exps
+
+    mask_list = { 'griz' : [], 'riz' : [] }
+    used_list = { 'griz' : [], 'riz' : [] }
+
+    ra_list = { 'griz' : [], 'riz' : [] }
+    dec_list = { 'griz' : [], 'riz' : [] }
+    m_list = { 'griz' : [], 'riz' : [] }
+    x_list = { 'griz' : [], 'riz' : [] }
+    y_list = { 'griz' : [], 'riz' : [] }
+
+    e1_list = { 'griz' : [], 'riz' : [] }
+    e2_list = { 'griz' : [], 'riz' : [] }
+    s_list = { 'griz' : [], 'riz' : [] }
+
+    pe1_list = { 'griz' : [], 'riz' : [] }
+    pe2_list = { 'griz' : [], 'riz' : [] }
+    ps_list = { 'griz' : [], 'riz' : [] }
+
+    get_data(runs, exps, work,
+             mask_list, used_list, ra_list, dec_list, x_list, y_list, m_list,
+             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list)
+
     #for key in ra_list.keys():
     for key in ['riz']:
         mask = numpy.concatenate(mask_list[key])
@@ -234,290 +436,9 @@ def main():
         de2 = e2 - pe2
         ds = s - ps
 
-        # Bin by mag
-        mag_bins = numpy.linspace(10,17,71)
-        print 'mag_bins = ',mag_bins
-
-        index = numpy.digitize(m[mask], mag_bins)
-        print 'len(index) = ',len(index)
-        bin_de1 = [de1[mask][index == i].mean() for i in range(1, len(mag_bins))]
-        print 'bin_de1 = ',bin_de1
-        bin_de2 = [de2[mask][index == i].mean() for i in range(1, len(mag_bins))]
-        print 'bin_de2 = ',bin_de2
-        bin_ds = [ds[mask][index == i].mean() for i in range(1, len(mag_bins))]
-        print 'bin_ds = ',bin_ds
-        bin_de1_err = [ numpy.sqrt(de1[mask][index == i].var() / len(de1[mask][index == i])) 
-                        for i in range(1, len(mag_bins)) ]
-        print 'bin_de1_err = ',bin_de1_err
-        bin_de2_err = [ numpy.sqrt(de2[mask][index == i].var() / len(de2[mask][index == i])) 
-                        for i in range(1, len(mag_bins)) ]
-        print 'bin_de2_err = ',bin_de2_err
-        bin_ds_err = [ numpy.sqrt(ds[mask][index == i].var() / len(ds[mask][index == i])) 
-                       for i in range(1, len(mag_bins)) ]
-        print 'bin_ds_err = ',bin_ds_err
-
-        # Fix up nans
-        for i in range(1,len(mag_bins)):
-            if i not in index:
-                bin_de1[i-1] = 0.
-                bin_de2[i-1] = 0.
-                bin_ds[i-1] = 0.
-                bin_de1_err[i-1] = 0.
-                bin_de2_err[i-1] = 0.
-                bin_ds_err[i-1] = 0.
-        print 'fixed nans'
-
-        print 'index = ',index
-        print 'bin_de1 = ',bin_de1
-        print 'bin_de2 = ',bin_de2
-        print 'bin_ds = ',bin_ds
-
-        plt.clf()
-        plt.title('PSF Size residuals')
-        plt.xlim(10,16.5)
-        plt.ylim(-0.002,0.012)
-        plt.plot([10,16.5], [0,0], color='black')
-        plt.plot([13,13],[-1,1], color='red')
-        plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
-        plt.errorbar(mag_bins[:-1], bin_ds, yerr=bin_ds_err, color='blue', fmt='o')
-        plt.xlabel('Uncorrected Magnitude')
-        plt.ylabel('$size_{psf} - size_{model}$')
-        plt.savefig('dsize_mag_' + key + '.png')
-        plt.savefig('dsize_mag_' + key + '.pdf')
-
-        plt.clf()
-        plt.title('PSF Ellipticity residuals')
-        plt.xlim(10,16.5)
-        plt.ylim(-3.e-4,8.e-4)
-        plt.plot([10,16.5], [0,0], color='black')
-        plt.plot([13,13],[-1,1], color='red')
-        plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
-        e1_line = plt.errorbar(mag_bins[:-1], bin_de1, yerr=bin_de1_err, color='blue', fmt='o')
-        e2_line = plt.errorbar(mag_bins[:-1], bin_de2, yerr=bin_de2_err, color='green', fmt='o')
-        plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-        plt.xlabel('Uncorrected Magnitude')
-        plt.ylabel('$e_{psf} - e_{model}$')
-        plt.savefig('de_mag_' + key + '.png')
-        plt.savefig('de_mag_' + key + '.pdf')
-
-        # Bin by chip x position
-        x_bins = numpy.linspace(0,2048,129)
-        print 'x_bins = ',x_bins
-        index = numpy.digitize(x[used], x_bins)
-        print 'len(index) = ',len(index)
-        bin_de1 = [de1[used][index == i].mean() for i in range(1, len(x_bins))]
-        print 'bin_de1 = ',bin_de1
-        bin_de2 = [de2[used][index == i].mean() for i in range(1, len(x_bins))]
-        print 'bin_de2 = ',bin_de2
-        bin_ds = [ds[used][index == i].mean() for i in range(1, len(x_bins))]
-        print 'bin_ds = ',bin_ds
-        bin_de1_err = [ numpy.sqrt(de1[used][index == i].var() / len(de1[used][index == i])) 
-                        for i in range(1, len(x_bins)) ]
-        print 'bin_de1_err = ',bin_de1_err
-        bin_de2_err = [ numpy.sqrt(de2[used][index == i].var() / len(de2[used][index == i])) 
-                        for i in range(1, len(x_bins)) ]
-        print 'bin_de2_err = ',bin_de2_err
-        bin_ds_err = [ numpy.sqrt(ds[used][index == i].var() / len(ds[used][index == i])) 
-                       for i in range(1, len(x_bins)) ]
-        print 'bin_ds_err = ',bin_ds_err
-
-        # Fix up nans
-        for i in range(1,len(x_bins)):
-            if i not in index:
-                bin_de1[i-1] = 0.
-                bin_de2[i-1] = 0.
-                bin_ds[i-1] = 0.
-                bin_de1_err[i-1] = 0.
-                bin_de2_err[i-1] = 0.
-                bin_ds_err[i-1] = 0.
-        print 'fixed nans'
-
-        print 'index = ',index
-        print 'bin_de1 = ',bin_de1
-        print 'bin_de2 = ',bin_de2
-        print 'bin_ds = ',bin_ds
-
-        plt.clf()
-        plt.title('PSF Size residuals')
-        plt.xlim(0,2048)
-        plt.ylim(0,0.0025)
-        plt.plot([0,2048], [0,0], color='black')
-        plt.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-        plt.xlabel('Chip x position')
-        plt.ylabel('$size_{psf} - size_{model}$')
-        plt.savefig('dsize_x_' + key + '.png')
-        plt.savefig('dsize_x_' + key + '.pdf')
-
-        plt.clf()
-        plt.title('PSF Ellipticity residuals')
-        plt.xlim(0,2048)
-        plt.ylim(-0.002,0.002)
-        plt.plot([0,2048], [0,0], color='black')
-        e1_line = plt.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        e2_line = plt.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-        plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-        plt.xlabel('Chip x position')
-        plt.ylabel('$e_{psf} - e_{model}$')
-        plt.savefig('de_x_' + key + '.png')
-        plt.savefig('de_x_' + key + '.pdf')
-
-        # Make broken x-axis. 
-        plt.clf()
-        f, (ax,ax2) = plt.subplots(1,2,sharey=True)
-        ax.set_xlim(0,200)
-        ax.set_ylim(0,0.0025)
-        ax.plot([0,2048], [0,0], color='black')
-        ax.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-
-        ax2.set_xlim(2048-200,2048)
-        ax2.set_ylim(0,0.0025)
-        ax2.plot([0,2048], [0,0], color='black')
-        ax2.errorbar(x_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-
-        break_axes(ax,ax2)
-
-        ax.set_title('PSF Size residuals', x=1.08, y=1.03)
-        ax.set_xlabel('Chip x position')
-        ax.xaxis.set_label_coords(1.08,-0.05)
-        ax.set_ylabel('$size_{psf} - size_{model}$')
-
-        plt.savefig('dsize_x2_' + key + '.png')
-        plt.savefig('dsize_x2_' + key + '.pdf')
-
-        plt.clf()
-        f, (ax,ax2) = plt.subplots(1,2,sharey=True)
-        ax.set_xlim(0,200)
-        ax.set_ylim(-0.002,0.002)
-        ax.plot([0,2048], [0,0], color='black')
-        ax.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        ax.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-
-        ax2.set_xlim(2048-200,2048)
-        ax2.set_ylim(-0.002,0.002)
-        ax2.plot([0,2048], [0,0], color='black')
-        e1_line = ax2.errorbar(x_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        e2_line = ax2.errorbar(x_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-        ax2.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-
-        break_axes(ax,ax2)
-
-        ax.set_title('PSF Ellipticity residuals', x=1.08, y=1.03)
-        ax.set_xlabel('Chip x position')
-        ax.xaxis.set_label_coords(1.08,-0.05)
-        ax.set_ylabel('$e_{psf} - e_{model}$')
-
-        plt.savefig('de_x2_' + key + '.png')
-        plt.savefig('de_x2_' + key + '.pdf')
-
-
-        # Bin by chip y position
-        y_bins = numpy.linspace(0,4096,257)
-        print 'y_bins = ',y_bins
-        index = numpy.digitize(y[used], y_bins)
-        print 'len(index) = ',len(index)
-        bin_de1 = [de1[used][index == i].mean() for i in range(1, len(y_bins))]
-        print 'bin_de1 = ',bin_de1
-        bin_de2 = [de2[used][index == i].mean() for i in range(1, len(y_bins))]
-        print 'bin_de2 = ',bin_de2
-        bin_ds = [ds[used][index == i].mean() for i in range(1, len(y_bins))]
-        print 'bin_ds = ',bin_ds
-        bin_de1_err = [ numpy.sqrt(de1[used][index == i].var() / len(de1[used][index == i])) 
-                        for i in range(1, len(y_bins)) ]
-        print 'bin_de1_err = ',bin_de1_err
-        bin_de2_err = [ numpy.sqrt(de2[used][index == i].var() / len(de2[used][index == i])) 
-                        for i in range(1, len(y_bins)) ]
-        print 'bin_de2_err = ',bin_de2_err
-        bin_ds_err = [ numpy.sqrt(ds[used][index == i].var() / len(ds[used][index == i])) 
-                       for i in range(1, len(y_bins)) ]
-        print 'bin_ds_err = ',bin_ds_err
-
-        # Fix up nans
-        for i in range(1,len(y_bins)):
-            if i not in index:
-                bin_de1[i-1] = 0.
-                bin_de2[i-1] = 0.
-                bin_ds[i-1] = 0.
-                bin_de1_err[i-1] = 0.
-                bin_de2_err[i-1] = 0.
-                bin_ds_err[i-1] = 0.
-        print 'fixed nans'
-
-        print 'index = ',index
-        print 'bin_de1 = ',bin_de1
-        print 'bin_de2 = ',bin_de2
-        print 'bin_ds = ',bin_ds
-
-        plt.clf()
-        plt.title('PSF Size residuals')
-        plt.xlim(0,4096)
-        plt.ylim(0,0.002)
-        plt.plot([0,4096], [0,0], color='black')
-        plt.errorbar(y_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-        plt.ylabel('Chip y position')
-        plt.ylabel('$size_{psf} - size_{model}$')
-        plt.savefig('dsize_y_' + key + '.png')
-        plt.savefig('dsize_y_' + key + '.pdf')
-
-        plt.clf()
-        plt.title('PSF Ellipticity residuals')
-        plt.xlim(0,4096)
-        plt.ylim(-0.002,0.002)
-        plt.plot([0,4096], [0,0], color='black')
-        e1_line = plt.errorbar(y_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        e2_line = plt.errorbar(y_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-        plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-        plt.ylabel('Chip y position')
-        plt.ylabel('$e_{psf} - e_{model}$')
-        plt.savefig('de_y_' + key + '.png')
-        plt.savefig('de_y_' + key + '.pdf')
-
-        # Make broken x-axis. 
-        plt.clf()
-        f, (ax,ax2) = plt.subplots(1,2,sharey=True)
-        ax.set_xlim(0,200)
-        ax.set_ylim(0,0.0025)
-        ax.plot([0,4096], [0,0], color='black')
-        ax.errorbar(y_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-
-        ax2.set_xlim(4096-200,4096)
-        ax2.set_ylim(0,0.0025)
-        ax2.plot([0,4096], [0,0], color='black')
-        ax2.errorbar(y_bins[2:-3], bin_ds[2:-2], yerr=bin_ds_err[2:-2], color='blue', fmt='o')
-
-        break_axes(ax,ax2)
-
-        ax.set_title('PSF Size residuals', x=1.08, y=1.03)
-        ax.set_xlabel('Chip y position')
-        ax.xaxis.set_label_coords(1.08,-0.05)
-        ax.set_ylabel('$size_{psf} - size_{model}$')
-
-        plt.savefig('dsize_y2_' + key + '.png')
-        plt.savefig('dsize_y2_' + key + '.pdf')
-
-        plt.clf()
-        f, (ax,ax2) = plt.subplots(1,2,sharey=True)
-        ax.set_xlim(0,200)
-        ax.set_ylim(-0.002,0.002)
-        ax.plot([0,4096], [0,0], color='black')
-        ax.errorbar(y_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        ax.errorbar(y_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-
-        ax2.set_xlim(4096-200,4096)
-        ax2.set_ylim(-0.002,0.002)
-        ax2.plot([0,4096], [0,0], color='black')
-        e1_line = ax2.errorbar(y_bins[2:-3], bin_de1[2:-2], yerr=bin_de1_err[2:-2], color='blue', fmt='o')
-        e2_line = ax2.errorbar(y_bins[2:-3], bin_de2[2:-2], yerr=bin_de2_err[2:-2], color='green', fmt='o')
-        ax2.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-
-        break_axes(ax,ax2)
-
-        ax.set_title('PSF Ellipticity residuals', x=1.08, y=1.03)
-        ax.set_xlabel('Chip y position')
-        ax.xaxis.set_label_coords(1.08,-0.05)
-        ax.set_ylabel('$e_{psf} - e_{model}$')
-
-        plt.savefig('de_y2_' + key + '.png')
-        plt.savefig('de_y2_' + key + '.pdf')
+        bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
+        bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
+        bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
 
 
 if __name__ == "__main__":

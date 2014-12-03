@@ -21,7 +21,6 @@ import misc_funcs
 
 noval=999999
 
-print sys.argv[1]
 
 cat=misc_funcs.CatalogMethods.cat_num('im3shapev7')
 i3=misc_funcs.CatalogStore(cat,True)
@@ -29,18 +28,12 @@ i3=misc_funcs.CatalogStore(cat,True)
 cat=misc_funcs.CatalogMethods.cat_num('ngmix010')
 ng=misc_funcs.CatalogStore(cat,True)
 
-if sys.arv[1]=='fig1':
-  misc_funcs.SVA1.Fig1_2ptPaper(i3,ng)
-if sys.arv[1]=='fig2':
-  misc_funcs.SVA1.Fig2_2ptPaper(i3,ng)
-if sys.arv[1]=='fig3':
-  misc_funcs.SVA1.Fig3_2ptPaper(i3,ng)
-if sys.arv[1]=='fig4':
-  misc_funcs.SVA1.Fig4_2ptPaper(i3,ng)
-if sys.arv[1]=='fig5':
-  misc_funcs.SVA1.Fig5_2ptPaper(i3,ng)
-if sys.arv[1]=='fig6':
-  misc_funcs.SVA1.Fig1_ShearPaper(i3,ng)
+misc_funcs.SVA1.Fig1_2ptPaper(i3,ng)
+misc_funcs.SVA1.Fig2_2ptPaper(i3,ng)
+misc_funcs.SVA1.Fig3_2ptPaper(i3,ng)
+misc_funcs.SVA1.Fig4_2ptPaper(i3,ng)
+misc_funcs.SVA1.Fig5_2ptPaper(i3,ng)
+misc_funcs.SVA1.Fig1_ShearPaper(i3,ng)
 
 #misc_funcs.SVA1.Fig1_ShearPaper(i3,ng)
 

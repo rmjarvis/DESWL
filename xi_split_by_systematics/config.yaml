@@ -1,0 +1,29 @@
+# binning for photoz homogenisation
+photoz_min : 0.2
+photoz_max : 1.2
+photoz_nbins : 50
+
+
+# map from catalog column names to names used in this script
+# if you change the input catalogs format, you probably have to change this line
+columns: {photoz: 'ZP', e1: 'im3shape_r_e1', e2: 'im3shape_r_e2', SNR: 'im3shape_r_snr', ra: 'ALPHAWIN_J2000_R', de: 'DELTAWIN_J2000_R', info_flag: 'im3shape_r_info_flag', error_flag: 'im3shape_r_error_flag', m: 'im3shape_nbc_m', c1: 'im3shape_nbc_c1', c2: 'im3shape_nbc_c2', w: 'im3shape_w' } # im3shape-v7-matched
+
+# define SNR bins
+snr_bins: [ [10,100],[10,17],[17,25],[24,40],[40,100]]
+
+# define photo-z range
+photoz_bins: [ [0.2,1.0] ] 
+
+# define cuts for im3shape
+info_cuts: [1,2,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,65536,131072,262144,524288,1048576]
+
+# treecorr parameters
+treecorr_min_sep: 1 
+treecorr_max_sep: 200
+treecorr_n_bins: 5
+
+# select methos
+method: im3shape # im3shap or ngmix .. not sure if ngmix is implemented
+
+# where are the results files stored?
+results_dir: /Users/tomek/data/DES/im3shapev7nbcw-ngmix009-photoz/

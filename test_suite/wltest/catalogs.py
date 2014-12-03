@@ -8,6 +8,7 @@ Methods for loading in astropy tables from:
 import astropy.table
 import numpy as np
 import glob
+import os
 
 USELESS_COLUMNS = [
 	'covmat',
@@ -16,35 +17,40 @@ USELESS_COLUMNS = [
 	'time',
 ]
 
+USEFUL_COLUMNS = ['e1' , 'e2', 'mean_psf_e1_sky', 'mean_psf_e2_sky' , 'info_flag' , 'snr']
+
 class Catalog(astropy.table.Table):
 	@classmethod
-	def from_multiple_fits(cls, filenames, name, quiet=True):
+	def from_multiple_fits(cls, filenames, cat_name, quiet=True):
 		tables = []
 		for filename in filenames:
 			print " - ", filename
 			cat = astropy.table.Table.read(filename, format='fits')
 			removals = []
 			for name in cat.colnames:
-				for useless in USELESS_COLUMNS:
-					if name.startswith(useless):
-						removals.append(name)
-						break
+				# for useless in USELESS_COLUMNS:
+					# if name.startswith(useless):
+						# removals.append(name)
+						# break
+				if name not in USEFUL_COLUMNS:
+					removals.append(name)				
 			cat.remove_columns(removals)
 			tables.append(cat)
-		print
 		if len(tables)>1:
 			cat = astropy.table.vstack(tables, join_type='exact', metadata_conflicts='silent')
 		else:
 			cat = tables[0]
 		cat = cls(cat)
-		cat.name = name
+		cat.name = cat_name
 		return cat
 
 	@classmethod
 	def from_directory(cls, dirname):
 		print "Loading from directory: ", dirname
 		filenames = glob.glob(dirname+"/*.fits") + glob.glob(dirname+"/*.fits.gz")
-		cat = cls.from_multiple_fits(filenames, dirname)
+		print 'got %d files' % len(filenames)
+		cat_name=dirname.strip(os.path.sep).split(os.path.sep)[-1]
+		cat = cls.from_multiple_fits(filenames, cat_name)
 		return cat
 
 	@classmethod

@@ -541,7 +541,7 @@ class jackknife_methods(object):
   @staticmethod
   def load_jk_regs(ra,dec,healno):
 
-    regfile=np.genfromtxt('pix-list_im3shape-v7_ieflags_base-no_nside'+str(healno)+'-nest.txt')
+    regfile=np.genfromtxt('/share/des/sv/pix-list_im3shape-v7_ieflags_base-no_nside'+str(healno)+'-nest.txt')
 
     regs=np.zeros((len(ra)))
     for i in xrange(len(regfile)):

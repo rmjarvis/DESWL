@@ -53,7 +53,8 @@ def break_axes(ax, ax2):
     ax2.plot((-d,+d),(1-d,1+d), **kwargs)
 
 def get_data(runs, exps, work,
-             mask_list, used_list, ra_list, dec_list, x_list, y_list, m_list,
+             mask_list, used_list, ccd_list,
+             ra_list, dec_list, x_list, y_list, m_list,
              e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list):
 
     import astropy.io.fits as pyfits
@@ -86,11 +87,6 @@ def get_data(runs, exps, work,
         with pyfits.open(cat_file) as pyf:
             data = pyf[1].data.copy()
 
-        ccdnums = numpy.unique(data['ccdnum'])
-        #print 'ccdnums = ',ccdnums
-
-        stats = []
-
         mask = (data['flag'] <= 1)
         if mask.sum() == 0:
             print 'All objects in this exposure are flagged.'
@@ -101,6 +97,7 @@ def get_data(runs, exps, work,
 
         mask_list['griz'].append(mask)
         used_list['griz'].append(used)
+        ccd_list['griz'].append(data['ccdnum'])
 
         ra_list['griz'].append(data['ra'])
         dec_list['griz'].append(data['dec'])
@@ -119,6 +116,7 @@ def get_data(runs, exps, work,
         if filter not in ra_list.keys():
             mask_list[filter] = []
             used_list[filter] = []
+            ccd_list[filter] = []
             ra_list[filter] = []
             dec_list[filter] = []
             x_list[filter] = []
@@ -134,6 +132,7 @@ def get_data(runs, exps, work,
         if 'g' not in filter:
             mask_list['riz'].append(mask)
             used_list['riz'].append(used)
+            ccd_list['riz'].append(data['ccdnum'])
 
             ra_list['riz'].append(data['ra'])
             dec_list['riz'].append(data['dec'])
@@ -151,6 +150,7 @@ def get_data(runs, exps, work,
 
         mask_list[filter].append(mask)
         used_list[filter].append(used)
+        ccd_list[filter].append(data['ccdnum'])
 
         ra_list[filter].append(data['ra'])
         dec_list[filter].append(data['dec'])
@@ -361,6 +361,79 @@ def bin_by_chip_pos(x, ds, de1, de2, key, xy):
     plt.savefig('de_'+xy+'2_' + key + '.pdf')
 
 
+def bin_by_fov(ccd, x, y, ds, de1, de2, key):
+
+    import numpy
+    import matplotlib.pyplot as plt
+    from toFocal import toFocal
+
+    all_x = numpy.array([])
+    all_y = numpy.array([])
+    all_e1 = numpy.array([])
+    all_e2 = numpy.array([])
+    all_s = numpy.array([])
+
+    x_bins = numpy.linspace(0,2048,9)
+    y_bins = numpy.linspace(0,4096,17)
+
+    ccdnums = numpy.unique(ccd)
+    for ccdnum in ccdnums:
+        mask = (ccd == ccdnum)
+        print 'ccdnum = ',ccdnum,', nstar = ',mask.sum()
+        if mask.sum() < 100: continue
+
+        x_index = numpy.digitize(x[mask], x_bins)
+        y_index = numpy.digitize(y[mask], y_bins)
+
+        bin_de1 = numpy.array([ de1[mask][(x_index == i) & (y_index == j)].mean() 
+                    for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_de1 = ',bin_de1
+        bin_de2 = numpy.array([ de2[mask][(x_index == i) & (y_index == j)].mean() 
+                    for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_de2 = ',bin_de2
+        bin_ds = numpy.array([ ds[mask][(x_index == i) & (y_index == j)].mean() 
+                    for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_ds = ',bin_ds
+        bin_x = numpy.array([ x[mask][(x_index == i) & (y_index == j)].mean() 
+                  for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_x = ',bin_x
+        bin_y = numpy.array([ y[mask][(x_index == i) & (y_index == j)].mean() 
+                  for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_y = ',bin_y
+        bin_count = numpy.array([ ((x_index == i) & (y_index == j)).sum()
+                      for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
+        print 'bin_count = ',bin_count
+
+        focal_x, focal_y = toFocal(ccdnum, bin_x, bin_y)
+
+        mask2 = (bin_count > 0)
+        print 'num with count > 0 = ',mask2.sum()
+        all_x = numpy.append(all_x, focal_x[mask2])
+        all_y = numpy.append(all_y, focal_y[mask2])
+        all_e1 = numpy.append(all_e1, bin_de1[mask2])
+        all_e2 = numpy.append(all_e2, bin_de2[mask2])
+        all_s = numpy.append(all_s, bin_ds[mask2])
+
+
+    plt.clf()
+    plt.title('PSF Ellipticity residuals in DES focal plane')
+    theta = numpy.arctan2(all_e2,all_e1)/2.
+    r = numpy.sqrt(all_e1**2 + all_e2**2)
+    u = r*numpy.cos(theta)
+    v = r*numpy.sin(theta)
+    plt.xlim(-250,250)
+    plt.ylim(-250,250)
+    qv = plt.quiver(all_x,all_y,u,v, pivot='middle', scale_units='xy',
+                    headwidth=0., headlength=0., headaxislength=0.,
+                    width=0.001, scale=6.e-4, color='blue')
+    plt.quiverkey(qv, 0.10, 0.08, 0.01, "de = " + str(0.01),
+                  coordinates='axes', color='darkred', labelcolor='darkred',
+                  labelpos='E', fontproperties={'size':'x-small'})
+    plt.axis('off')
+    plt.savefig('de_fov_' + key + '.png')
+    plt.savefig('de_fov_' + key + '.pdf')
+
+ 
 
 def main():
     import os
@@ -387,12 +460,13 @@ def main():
 
     mask_list = { 'griz' : [], 'riz' : [] }
     used_list = { 'griz' : [], 'riz' : [] }
+    ccd_list = { 'griz' : [], 'riz' : [] }
 
     ra_list = { 'griz' : [], 'riz' : [] }
     dec_list = { 'griz' : [], 'riz' : [] }
-    m_list = { 'griz' : [], 'riz' : [] }
     x_list = { 'griz' : [], 'riz' : [] }
     y_list = { 'griz' : [], 'riz' : [] }
+    m_list = { 'griz' : [], 'riz' : [] }
 
     e1_list = { 'griz' : [], 'riz' : [] }
     e2_list = { 'griz' : [], 'riz' : [] }
@@ -403,13 +477,15 @@ def main():
     ps_list = { 'griz' : [], 'riz' : [] }
 
     get_data(runs, exps, work,
-             mask_list, used_list, ra_list, dec_list, x_list, y_list, m_list,
+             mask_list, used_list, ccd_list,
+             ra_list, dec_list, x_list, y_list, m_list,
              e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list)
 
     #for key in ra_list.keys():
     for key in ['riz']:
         mask = numpy.concatenate(mask_list[key])
         used = numpy.concatenate(used_list[key])
+        ccd = numpy.concatenate(ccd_list[key])
 
         ra = numpy.concatenate(ra_list[key])
         dec = numpy.concatenate(dec_list[key])
@@ -436,9 +512,12 @@ def main():
         de2 = e2 - pe2
         ds = s - ps
 
-        bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
-        bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
-        bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
+        #bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
+
+        #bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
+        #bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
+
+        bin_by_fov(ccd[used], x[used], y[used], ds[used], de1[used], de2[used], key)
 
 
 if __name__ == "__main__":

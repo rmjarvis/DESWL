@@ -1,0 +1,8 @@
+#!/bin/bash
+
+DATE=20141202
+#FILE=spte_gold_exp
+FILE=spte_gold_exp
+TAG=v4
+
+./run_wq_exp.py --njobs=50 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./build_psf_cats.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

@@ -201,11 +201,33 @@ def main():
         runs = args.runs
         exps = args.exps
 
+    expinfo_file = 'exposure_info.fits'
+    with pyfits.open(expinfo_file) as pyf:
+        expinfo = pyf[1].data
+
+    ra_list = { 'griz' : [], 'riz' : [] }
+    dec_list = { 'griz' : [], 'riz' : [] }
+    e1_list = { 'griz' : [], 'riz' : [] }
+    e2_list = { 'griz' : [], 'riz' : [] }
+    s_list = { 'griz' : [], 'riz' : [] }
+    pe1_list = { 'griz' : [], 'riz' : [] }
+    pe2_list = { 'griz' : [], 'riz' : [] }
+    ps_list = { 'griz' : [], 'riz' : [] }
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
         expnum = int(exp[6:])
         print 'expnum = ',expnum
+
+        if expnum not in expinfo['expnum']:
+            print 'expnum is not in expinfo!'
+            print 'expinfo[expnum] = ',expinfo['expnum']
+            raise RuntimeError("Could not find information about this expnum")
+        k = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
+        print 'k = ',k
+        filter = expinfo['filter'][k]
+        print 'filter[k] = ',filter
 
         exp_dir = os.path.join(work,exp)
         print 'exp_dir = ',exp_dir
@@ -219,103 +241,70 @@ def main():
 
         stats = []
 
-        for ccdnum in ccdnums:
-            print '\nProcessing ', ccdnum
-
-            key = (expnum, ccdnum)
-            if key in flag_dict:
-                flag = flag_dict[key]
-                print '   flag = ',flag
-                if flag & (113 << 15):
-                    print '   Catastrophic flag.  Skipping this file.'
-                    continue
-            else:
-                flag = 0
-                print '   not flagged'
-
-            mask = (data['ccdnum'] == ccdnum) & (data['flag'] == 0)
-            if mask.sum() == 0:
-                print '   All objects with this ccdnum are flagged.'
-                continue
-
-            ra = data['ra'][mask]
-            dec = data['dec'][mask]
-            e1 = data['e1'][mask]
-            e2 = data['e2'][mask]
-            size = data['size'][mask]
-
-            psfex_e1 = data['psfex_e1'][mask]
-            psfex_e2 = data['psfex_e2'][mask]
-            psfex_size = data['psfex_size'][mask]
-
-            rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,size,
-                                                 psfex_e1,psfex_e2,psfex_size,
-                                                 max_sep=20)
-
-            k10arcmin = int(round(numpy.log(10 / 0.5)/0.1))
-            #if numpy.abs(rho2.xip[k10arcmin]) > 1.e-4:
-            if False:
-                print '   rho2 at 10 arcmin = ',rho2.xip[k10arcmin]
-                print '   flag this chip as bad in blacklist (TODO!)'
-            else:
-                stats.append([ 
-                    int(ccdnum),
-                    rho1.meanlogr.tolist(),
-                    rho1.xip.tolist(),
-                    rho1.xim.tolist(),
-                    rho2.xip.tolist(),
-                    rho2.xim.tolist(),
-                    rho3.xi.tolist(),
-                    rho4.xi.tolist(),
-                    ])
-            print 'len stats = ',len(stats)
-
-            if args.single_ccd:
-                break
-
         mask = (data['flag'] == 0)
         if mask.sum() == 0:
             print 'All objects in this exposure are flagged.'
             print 'Probably due to astrometry flags. Skip this exposure.'
             continue
 
-        ra = data['ra'][mask]
-        dec = data['dec'][mask]
-        e1 = data['e1'][mask]
-        e2 = data['e2'][mask]
-        size = data['size'][mask]
+        ra_list['griz'].append(data['ra'][mask])
+        dec_list['griz'].append(data['dec'][mask])
+        e1_list['griz'].append(data['e1'][mask])
+        e2_list['griz'].append(data['e2'][mask])
+        s_list['griz'].append(data['size'][mask])
 
-        psfex_e1 = data['psfex_e1'][mask]
-        psfex_e2 = data['psfex_e2'][mask]
-        psfex_size = data['psfex_size'][mask]
+        pe1_list['griz'].append(data['psfex_e1'][mask])
+        pe2_list['griz'].append(data['psfex_e2'][mask])
+        ps_list['griz'].append(data['psfex_size'][mask])
 
-        rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,size,
-                                             psfex_e1,psfex_e2,psfex_size,
-                                             max_sep=100)
+        if filter not in ra_list.keys():
+            ra_list[filter] = []
+            dec_list[filter] = []
+            e1_list[filter] = []
+            e2_list[filter] = []
+            s_list[filter] = []
+            pe1_list[filter] = []
+            pe2_list[filter] = []
+            ps_list[filter] = []
 
-        desdm_e1 = data['desdm_e1'][mask]
-        desdm_e2 = data['desdm_e2'][mask]
-        desdm_size = data['desdm_size'][mask]
+        if 'g' not in filter:
+            ra_list['riz'].append(data['ra'][mask])
+            dec_list['riz'].append(data['dec'][mask])
+            e1_list['riz'].append(data['e1'][mask])
+            e2_list['riz'].append(data['e2'][mask])
+            s_list['riz'].append(data['size'][mask])
 
-        drho1, drho2, drho3, drho4 = measure_rho(ra,dec,e1,e2,size,
-                                                 desdm_e1,desdm_e2,desdm_size,
-                                                 max_sep=100)
+            pe1_list['riz'].append(data['psfex_e1'][mask])
+            pe2_list['riz'].append(data['psfex_e2'][mask])
+            ps_list['riz'].append(data['psfex_size'][mask])
 
-        #print 'rho1.xip = ',rho1.xip
-        #print 'rho1.xip_im = ',rho1.xip_im
-        #print 'rho1.xim = ',rho1.xim
-        #print 'rho1.xim_im = ',rho1.xim_im
-        #print 'rho2.xip = ',rho2.xip
-        #print 'rho2.xip_im = ',rho2.xip_im
-        #print 'rho2.xim = ',rho2.xim
-        #print 'rho2.xim_im = ',rho2.xim_im
-        #print 'rho3.xi = ',rho3.xi
-        #print 'rho4.xi = ',rho4.xi
-        # Write out the interesting stats for this ccd into a file, which we can 
-        # then pull all together into a single FITS catalog later.
-        stat_file = os.path.join(exp_dir, exp + ".json")
+        ra_list[filter].append(data['ra'][mask])
+        dec_list[filter].append(data['dec'][mask])
+        e1_list[filter].append(data['e1'][mask])
+        e2_list[filter].append(data['e2'][mask])
+        s_list[filter].append(data['size'][mask])
+
+        pe1_list[filter].append(data['psfex_e1'][mask])
+        pe2_list[filter].append(data['psfex_e2'][mask])
+        ps_list[filter].append(data['psfex_size'][mask])
+
+    print '\nFinished processing all exposures'
+
+    for key in ra_list.keys():
+        ra = numpy.concatenate(ra_list[key])
+        dec = numpy.concatenate(dec_list[key])
+        e1 = numpy.concatenate(e1_list[key])
+        e2 = numpy.concatenate(e2_list[key])
+        s = numpy.concatenate(s_list[key])
+        pe1 = numpy.concatenate(pe1_list[key])
+        pe2 = numpy.concatenate(pe2_list[key])
+        ps = numpy.concatenate(ps_list[key])
+
+        rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps,
+                                             max_sep=300)
+
+        stat_file = os.path.join(work, "rho_"+key+".json")
         stats.append([
-            int(expnum),
             rho1.meanlogr.tolist(),
             rho1.xip.tolist(),
             rho1.xip_im.tolist(),
@@ -330,29 +319,13 @@ def main():
             rho3.xi.tolist(),
             rho3.varxi.tolist(),
             rho4.xi.tolist(),
-            rho4.varxi.tolist(),
-            drho1.meanlogr.tolist(),
-            drho1.xip.tolist(),
-            drho1.xip_im.tolist(),
-            drho1.xim.tolist(),
-            drho1.xim_im.tolist(),
-            drho1.varxi.tolist(),
-            drho2.xip.tolist(),
-            drho2.xip_im.tolist(),
-            drho2.xim.tolist(),
-            drho2.xim_im.tolist(),
-            drho2.varxi.tolist(),
-            drho3.xi.tolist(),
-            drho3.varxi.tolist(),
-            drho4.xi.tolist(),
-            drho4.varxi.tolist(),
-            ])
-        print 'len stats = ',len(stats)
+            rho4.varxi.tolist()
+        ])
+        #print 'stats = ',stats
         with open(stat_file,'w') as f:
             json.dump(stats, f)
 
-    print '\nFinished processing all exposures'
-
+    print '\nFinished writing json files'
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+FILE=spte_gold_exp
+#FILE=test_exp
+TAG=v4
+
+./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
+

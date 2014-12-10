@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATE=20141202
+DATE=20141204_rho
 FILE=spte_gold_exp
 TAG=v4
 
-./run_wq_exp.py --njobs=200 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"
+./run_wq_exp.py --njobs=60 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

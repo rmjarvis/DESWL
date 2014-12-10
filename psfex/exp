@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATE=20141111
+DATE=20141111_exp
 FILE=spte_gold_exp
 TAG=v5
 

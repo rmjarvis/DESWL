@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATE=20141111
+DATE=20141111_go
 FILE=spte_e
 TAG=v5
 

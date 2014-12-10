@@ -293,7 +293,6 @@ def measure_shapes(xlist, ylist, file_name, wcs):
 
     return e1_list,e2_list,s_list,flag_list
 
-
 def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
     """Given x,y positions, a psfex solution file, and the wcs, measure shapes and sizes
     of the PSF model.
@@ -349,18 +348,127 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
 
         dx = shape_data.moments_centroid.x - im.trueCenter().x
         dy = shape_data.moments_centroid.y - im.trueCenter().y
-        #print 'centroid = ',shape_data.moments_centroid
-        #print 'trueCenter = ',im.trueCenter()
-        #print 'dcentroid = ',dx,dy
+        print 'centroid = ',shape_data.moments_centroid
+        print 'trueCenter = ',im.trueCenter()
+        print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > 0.1**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
             continue
 
-        #print 'shape = ',shape_data.observed_shape
-        e1_list[i] = shape_data.observed_shape.g1
-        e2_list[i] = shape_data.observed_shape.g2
-        s_list[i] = shape_data.moments_sigma * pixel_scale
+        g1 = shape_data.observed_shape.g1
+        g2 = shape_data.observed_shape.g2
+        s = shape_data.moments_sigma * pixel_scale
+
+        print 'g1,g2,s = ',g1,g2,s
+
+        e1_list[i] = g1
+        e2_list[i] = g2
+        s_list[i] = s
+
+    return e1_list,e2_list,s_list,flag_list
+
+
+def apply_wcs(wcs, g1, g2, s):
+    import numpy
+
+    scale = 2./(1.+g1*g1+g2*g2)
+    e1 = g1 * scale
+    e2 = g2 * scale
+    I = numpy.matrix( [[ 1 + e1, e2 ], [ e2, 1 - e1 ]] ) * s*s
+
+    J = wcs.getMatrix()
+    I = J * I * J.transpose()
+
+    e1 = (I[0,0] - I[1,1]) / (I[0,0] + I[1,1])
+    e2 = (2.*I[0,1]) / (I[0,0] + I[1,1])
+    s = numpy.sqrt( (I[0,0] + I[1,1]) / 2.)
+
+    esq = e1*e1 + e2*e2
+    scale = (1.-numpy.sqrt(1.-esq))/esq
+    g1 = e1 * scale
+    g2 = e2 * scale
+
+    return g1, g2, s
+
+def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
+    """Given x,y positions, a psfex solution file, and the wcs, measure shapes and sizes
+    of the PSF model.
+
+    We use the HSM module from GalSim to do this.
+
+    Also, this uses Erin's psfex module to render the images rather than the GalSim module.
+
+    Returns e1, e2, size, flag.
+    """
+    import galsim
+    import numpy
+    import psfex
+    print 'Read in PSFEx file: ',psfex_file_name
+
+    n_psf = len(xlist)
+    e1_list = [ 999. ] * n_psf
+    e2_list = [ 999. ] * n_psf
+    s_list = [ 999. ] * n_psf
+    flag_list = [ 0 ] * n_psf
+
+    try:
+        psf = psfex.PSFEx(psfex_file_name)
+    except Exception as e:
+        print 'Caught ',e
+        flag_list = [ PSFEX_FAILURE ] * n_psf
+        return e1_list,e2_list,s_list,flag_list
+
+    wcs = galsim.FitsWCS(file_name)
+
+    for i in range(n_psf):
+        x = xlist[i]
+        y = ylist[i]
+        print 'Measure PSFEx model shape at ',x,y,' with Erin\'s code.'
+
+        # Note that this code renders the image in the original coordinate system,
+        # rather than in RA/Dec oriented coordinates.  So we'll need to correct for that.
+        im_ar = psf.get_rec(y,x)
+        local_wcs = wcs.jacobian(galsim.PositionD(x,y))
+        print 'local wcs = ',local_wcs
+        print 'pixel scale = ',numpy.sqrt(local_wcs.pixelArea())
+        print 'psf center = ',psf.get_center(y,x)
+        pixel_scale= numpy.sqrt(local_wcs.pixelArea())
+        im = galsim.Image(array=im_ar, scale=pixel_scale)
+
+        try:
+            shape_data = im.FindAdaptiveMom(strict=False)
+        except:
+            print ' *** Bad measurement (caught exception).  Mask this one.'
+            flag_list[i] = PSFEX_BAD_MEASUREMENT
+            continue
+
+        if shape_data.moments_status != 0:
+            print 'status = ',shape_data.moments_status
+            print ' *** Bad measurement.  Mask this one.'
+            flag_list[i] = PSFEX_BAD_MEASUREMENT
+            continue
+
+        cen = psf.get_center(y,x)
+        true_center = galsim.PositionD( cen[1]+1, cen[0]+1 )
+        dx = shape_data.moments_centroid.x - true_center.x
+        dy = shape_data.moments_centroid.y - true_center.y
+        print 'centroid = ',shape_data.moments_centroid
+        print 'trueCenter = ',true_center
+        print 'dcentroid = ',dx,dy
+        if dx**2 + dy**2 > 0.5**2:
+            print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
+            flag_list[i] = PSFEX_CENTROID_SHIFT
+            continue
+        print 'shape = ',shape_data.observed_shape
+        print 'sigma = ',shape_data.moments_sigma * pixel_scale
+        g1,g2,s = apply_wcs(local_wcs, shape_data.observed_shape.g1, shape_data.observed_shape.g2,
+                            shape_data.moments_sigma)
+        print 'after wcs: ',g1,g2,s
+
+        e1_list[i] = g1
+        e2_list[i] = g2
+        s_list[i] = s
 
     return e1_list,e2_list,s_list,flag_list
 
@@ -425,6 +533,9 @@ def main():
         psfex_e1_col = []
         psfex_e2_col = []
         psfex_size_col = []
+        erin_e1_col = []
+        erin_e2_col = []
+        erin_size_col = []
         desdm_e1_col = []
         desdm_e2_col = []
         desdm_size_col = []
@@ -523,6 +634,8 @@ def main():
             psfex_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
             psfex_e1, psfex_e2, psfex_size, psfex_flag = measure_psfex_shapes(
                     x, y, psfex_file_name, file_name)
+            erin_e1, erin_e2, erin_size, erin_flag = measure_psfex_shapes_erin(
+                    x, y, psfex_file_name, file_name)
 
             # Measure the desdm model shapes, sizes.
             desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
@@ -531,9 +644,10 @@ def main():
             desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
 
             # Put all the flags together:
-            flag = [ m | p | d for m,p,d in zip(meas_flag,psfex_flag,desdm_flag) ]
+            flag = [ m | p | e | d for m,p,e,d in zip(meas_flag,psfex_flag,erin_flag,desdm_flag) ]
             print 'meas_flag = ',meas_flag
             print 'psfex_flag = ',psfex_flag
+            print 'erin_flag = ',erin_flag
             print 'desdm_flag = ',desdm_flag
             print 'flag = ',flag
             bad_index = numpy.where(used_index < 0)[0]
@@ -561,6 +675,9 @@ def main():
             psfex_e1_col.extend(psfex_e1)
             psfex_e2_col.extend(psfex_e2)
             psfex_size_col.extend(psfex_size)
+            erin_e1_col.extend(erin_e1)
+            erin_e2_col.extend(erin_e2)
+            erin_size_col.extend(erin_size)
             desdm_e1_col.extend(desdm_e1)
             desdm_e2_col.extend(desdm_e2)
             desdm_size_col.extend(desdm_size)
@@ -576,6 +693,9 @@ def main():
             assert len(ccdnum_col) == len(psfex_e1_col)
             assert len(ccdnum_col) == len(psfex_e2_col)
             assert len(ccdnum_col) == len(psfex_size_col)
+            assert len(ccdnum_col) == len(erin_e1_col)
+            assert len(ccdnum_col) == len(erin_e2_col)
+            assert len(ccdnum_col) == len(erin_size_col)
             assert len(ccdnum_col) == len(desdm_e1_col)
             assert len(ccdnum_col) == len(desdm_e2_col)
             assert len(ccdnum_col) == len(desdm_size_col)
@@ -597,6 +717,9 @@ def main():
             pyfits.Column(name='psfex_e1', format='E', array=psfex_e1_col),
             pyfits.Column(name='psfex_e2', format='E', array=psfex_e2_col),
             pyfits.Column(name='psfex_size', format='E', array=psfex_size_col),
+            pyfits.Column(name='erin_e1', format='E', array=erin_e1_col),
+            pyfits.Column(name='erin_e2', format='E', array=erin_e2_col),
+            pyfits.Column(name='erin_size', format='E', array=erin_size_col),
             pyfits.Column(name='desdm_e1', format='E', array=desdm_e1_col),
             pyfits.Column(name='desdm_e2', format='E', array=desdm_e2_col),
             pyfits.Column(name='desdm_size', format='E', array=desdm_size_col),

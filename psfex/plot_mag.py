@@ -481,8 +481,8 @@ def main():
              ra_list, dec_list, x_list, y_list, m_list,
              e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list)
 
-    #for key in ra_list.keys():
-    for key in ['riz']:
+    for key in ra_list.keys():
+    #for key in ['riz']:
         mask = numpy.concatenate(mask_list[key])
         used = numpy.concatenate(used_list[key])
         ccd = numpy.concatenate(ccd_list[key])
@@ -512,10 +512,10 @@ def main():
         de2 = e2 - pe2
         ds = s - ps
 
-        #bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
+        bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
 
-        #bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
-        #bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
+        bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
+        bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
 
         bin_by_fov(ccd[used], x[used], y[used], ds[used], de1[used], de2[used], key)
 

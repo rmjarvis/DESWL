@@ -214,7 +214,7 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         bkg_im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
     im -= bkg_im # Subtract off the sky background.
 
-    stamp_size = 32
+    stamp_size = 48
 
     n_psf = len(xlist)
     e1_list = [ 999. ] * n_psf

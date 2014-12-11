@@ -53,7 +53,7 @@ def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,
             raise Exception('target_nz_index may be larger than the number of bins lin split_list_cat')
 
 
-    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5,zorder = 0)
+    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='target',lw=5,zorder = 0)
     if plots: pl.legend()
     if plots: pl.xlabel('z')
     if plots: pl.ylabel('number of galaxies')
@@ -91,7 +91,7 @@ def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,
 
 
     if plots: pl.figure()
-    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='mean',lw=5,zorder = 0)
+    if plots: pl.plot(get_bins_centers(bins_z),mean_z,label='target',lw=5,zorder = 0)
     digitize_bins = bins_photoz
     list_weights_use = []
     logger.info('getting reweighted histogrgams for %d systematic bins' % n_bins)

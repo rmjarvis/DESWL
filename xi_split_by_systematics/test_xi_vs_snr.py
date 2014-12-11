@@ -34,7 +34,7 @@ def load_data():
 
     import glob;
     columns_list = [ config['columns'][name] for name in config['columns'].keys() ]
-    filelist_results = glob.glob('%s/DES*.gz'%config['results_dir'])
+    filelist_results = glob.glob(config['results_files'])
     list_data = []
     logger.info('found %d files' % len(filelist_results))
     for file_results in filelist_results[args.first:(args.first+args.num)]:
@@ -48,11 +48,21 @@ def load_data():
 
         res.dtype.names=config['columns'].keys()
 
-
         if config['method'] == 'im3shape':
             warnings.warn('using 1 as m1 and m2')
             res = add_col(res,'m1',res['m'])
             res = add_col(res,'m2',res['m'])
+        elif config['method'] == 'ngmix':
+            warnings.warn('using m=mean(m1,m2)')
+            m=(res['m1']+res['m2'])/2. -1
+            res['e1'] = -res['e1'].copy()
+            res = add_col(res,'m',m)
+            res = add_col(res,'c1',np.zeros(len(res)))
+            res = add_col(res,'c2',np.zeros(len(res)))
+            w=1./(2.*0.16**2.+res['cov11']+res['cov22']+2.*res['cov12'])
+            res = add_col(res,'w', w)
+        else:
+            raise Exception('unknown shear catalogs %s',config['method'])
 
         res_cut = apply_cuts(res)
         logger.info('%s size=%d/%d' % (file_results,len(res_cut),len(res)) )
@@ -67,24 +77,22 @@ def apply_cuts(res):
 
     if config['method'] == 'im3shape':
 
-        cut_vals = config['info_cuts']
-        select = (res['error_flag'] == 0) & (res['info_flag'] == 0) 
-        logger.debug('select on error_flag, catalog size %d' % (len(np.nonzero(select)[0]) ))
+        # cut_vals = config['info_cuts']
+        select = (res['error_flag'] == 0) & (res['info_flag'] == 0) & (res['ra']>56) & (res['ra']<94) & (res['de']<-42) & (res['sg']==1)
+        logger.debug('cuts done, catalog size %d' % (len(np.nonzero(select)[0]) ))
+        res_cut = res[select]
 
-        # for cv in cut_vals:
+    elif config['method'] == 'ngmix':    
 
-        #     select_cut =  (res['info_flag'] & cv) == 0
-        #     select = select & select_cut
-        #     logger.debug('select on %d, catalog size %d' % (cv,len(np.nonzero(select)[0]) ))
-
+        select = (res['flags'] == 0) & (res['arate'] > 0.4) & (res['arate'] < 0.6) & (res['snrt']>3) & (res['ra']>56) & (res['ra']<94) & (res['de']<-42) & (res['sg']==1)
+        logger.debug('cuts done, catalog size %d' % (len(np.nonzero(select)[0]) ))
         res_cut = res[select]
 
     else:
+        raise Exception('unknown shear catalogs %s',config['method'])
 
-        select = (res['error_flag'] == 0) 
-        logger.debug('select on error_flag, catalog size %d' % (len(np.nonzero(select)[0]) ))
-        res_cut = res[select]
-    
+
+   
     return res_cut
 
 def get_weights():
@@ -101,15 +109,14 @@ def get_weights():
         res_bin = res[select]
         res_bin_z = (res_bin['photoz'], res_bin['w'])
 
-        import pdb; pdb.set_trace()
-
         list_snr_bins_cats.append(res_bin_z)
 
-    list_weights = homogenise_nz.get_weights(list_snr_bins_cats,target_nz_index=0,label='snr',photoz_min=0.2,photoz_max=1.0)
+    label = 'snr.%s' % config['method']
+    list_weights = homogenise_nz.get_weights(list_snr_bins_cats,target_nz_index=0,label=label,photoz_min=0.3,photoz_max=1.3,plots=True)
 
 
     import cPickle as pickle
-    filename_pickle = 'weights.pp2'
+    filename_pickle = 'weights.%s.pp2' % (config['method'])
     pickle.dump(list_weights,open(filename_pickle,'w'))
     print 'saved ', filename_pickle
 
@@ -120,12 +127,11 @@ def get_xi_vs_snr():
 
     res = load_data()
 
-    n_photoz_bins = len(config['photoz_bins'])
     n_snr_bins = len(config['snr_bins'])
 
     list_bin_xi = []
 
-    filename_pickle = 'weights.pp2'
+    filename_pickle = 'weights.%s.pp2' % (config['method'])
     import cPickle as pickle; 
     list_weights = pickle.load(open(filename_pickle))
 
@@ -139,10 +145,10 @@ def get_xi_vs_snr():
             weights_use = list_weights[isb]
 
             if len(weights_use) != len(res_bin):
-            	raise Exception('different number of galaxies in weights and data - did you mess with the setting somewhere in the middle of the process?' % (len(list_weights),len(res_bin)))
+                raise Exception('different number of galaxies in weights %d and data %d - did you mess with settings somewhere in the middle of the process?' % (len(weights_use),len(res_bin)))
 
 
-            filename_xi = 'list_bin_xi.'
+            filename_xi = 'list_bin_xi.%s.' % config['method']
             if args.no_weights:
                 weights_use = np.ones_like(weights_use)
                 filename_xi = filename_xi + 'no-homogen.'
@@ -175,7 +181,7 @@ def plot_xi_vs_snr():
 
     titlestr = config['method'] + ': '
 
-    filename_xi = 'list_bin_xi.'
+    filename_xi = 'list_bin_xi.%s.' % config['method']
     if args.no_weights:
         filename_xi = filename_xi + 'no-homogen.'
         titlestr += 'no n(z) reweighting '
@@ -193,10 +199,6 @@ def plot_xi_vs_snr():
 
     list_bin_xi=pickle.load(open(filename_xi))
 
-    n_photoz_bins = len(config['photoz_bins'])
-
-
-
     dx=0.05
     for isb,snr_bin in enumerate(config['snr_bins']):
 
@@ -210,7 +212,7 @@ def plot_xi_vs_snr():
             pl.ylim([1e-3,1e2]);    
             pl.xlabel(r'$\theta$ [arcmin]');     
             pl.ylabel(r're[$\xi_{+}$] / $10^{-5}$') ;    
-            pl.legend(loc='lower center',ncol=2,mode='expand') 
+            pl.legend(framealpha=0.0,frameon=False, loc='lower center')
             # pl.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
             pl.title(titlestr)
 
@@ -222,7 +224,7 @@ def plot_xi_vs_snr():
             pl.ylim([1e-3,1e2]);    
             pl.xlabel(r'$\theta$ [arcmin]');     
             pl.ylabel(r're[$\xi_{-}$] / $10^{-5}$') ;    
-            pl.legend(loc='lower center',ncol=2,mode='expand') 
+            pl.legend(framealpha=0.0,frameon=False, loc='lower center')
             pl.title(titlestr)
 
             pl.figure(3)
@@ -233,7 +235,7 @@ def plot_xi_vs_snr():
             pl.ylim([1e-3,1e2]);    
             pl.xlabel(r'$\theta$ [arcmin]');     
             pl.ylabel(r're[$\xi_{-}$] / $10^{-5}$') ;    
-            pl.legend(loc='lower center',ncol=2,mode='expand') 
+            pl.legend(framealpha=0.0,frameon=False, loc='lower center')
             pl.title(titlestr)
 
 
@@ -244,14 +246,14 @@ def plot_xi_vs_snr():
     
     # f.subplots_adjust(hspace=0,wspace=0)
 
-    pl.figure()
-    logr,xip1,xim,stdxi,nbin = list_bin_xi[0][1]
-    logr,xip2,xim,stdxi,nbin = list_bin_xi[0][3]
-    pl.plot(np.exp(logr),xip1/xip2,'-o')
-    pl.xscale('log',nonposx='clip'); 
-    pl.xlabel(r'$\theta$ [arcmin]');     
-    pl.ylabel(r're[$\xi_{+}^{SNR=10-20} / \xi_{+}^{SNR=40-}$]') ;
-    pl.title('SNR=10-20 vs SNR=40- ')    
+    # pl.figure()
+    # logr,xip1,xim,stdxi,nbin = list_bin_xi[0][1]
+    # logr,xip2,xim,stdxi,nbin = list_bin_xi[0][3]
+    # pl.plot(np.exp(logr),xip1/xip2,'-o')
+    # pl.xscale('log',nonposx='clip'); 
+    # pl.xlabel(r'$\theta$ [arcmin]');     
+    # pl.ylabel(r're[$\xi_{+}^{SNR=10-20} / \xi_{+}^{SNR=40-}$]') ;
+    # pl.title('SNR=10-20 vs SNR=40- ')    
 
     
     pl.show()
@@ -267,20 +269,20 @@ def get_corr(res,weights):
     max_sep=config['treecorr_max_sep']
     sep_units='arcmin'
 
-    shape_cat = treecorr.Catalog(g1=res['e1'], g2=res['e2'], ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
+    shape_cat = treecorr.Catalog(g1=res['e1']-res['c1'], g2=res['e2']-res['c2'], ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights * res['w'])
     gg = treecorr.GGCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
     gg.process(shape_cat)
 
     responsivity_type = 'scalar'
 
     if responsivity_type == 'scalar': 
-        responsivity_cat = treecorr.Catalog(k=(1+res['m1']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
+        responsivity_cat = treecorr.Catalog(k=(1+res['m']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights * res['w'])
         mm = treecorr.KKCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
         mm.process(responsivity_cat)
         corr_xip = mm.xi
         corr_xim = mm.xi
     elif responsivity_type == 'vector':
-        responsivity_cat = treecorr.Catalog(g1=(1+res['m1']), g2=(1+res['m2']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights)
+        responsivity_cat = treecorr.Catalog(g1=(1+res['m1']), g2=(1+res['m2']), ra= res['ra'], dec= res['de'], ra_units='deg', dec_units='deg' , w = weights * res['w'])
         mm = treecorr.GGCorrelation(nbins=nbins, min_sep=min_sep, max_sep=max_sep, sep_units=sep_units,verbose=2)  
         mm.process(responsivity_cat)
         corr_xip = mm.xip

@@ -1,0 +1,13 @@
+setup_output runs run_psfex.pt, only setting up the directory structure
+go runs run_psfex.py, runs findstars and psfex
+relink runs run_psfex.py, skipping the findstars and psfex steps and just relinks files
+sync_to_nersc copies the psfex files and blacklist over to nersc
+exp runs build_exp_catalog.py, builds the catalog of information about exposures
+cats runs build_psf_cats.py, builds catalogs of PSF information for each exposure
+rho runs run_rho.py, computes the rho statistics for each exposure/ccd
+rho2 runs run_rho2.py, computes the rho statistics for the full data and each filter
+plots runs plot_rho.py, makes plots
+
+v3 uses degree 2,2, FEW_STARS = 50
+v4 uses degree 2,2, switched FEW_STARS to 20
+v5 uses degree 1,1

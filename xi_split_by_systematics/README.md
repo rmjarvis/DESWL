@@ -4,6 +4,7 @@ homogenise_nz.py module usage:
 
 --- using point estimators for 
 
+```
 # import module
 import homogenise_nz
 
@@ -37,7 +38,7 @@ nz_weight_bin1 = list_nz_weights[1]
 nz_weight_bin2 = list_nz_weights[2]
 
 # proceed with calculating xis 
-
+```
 
 
 

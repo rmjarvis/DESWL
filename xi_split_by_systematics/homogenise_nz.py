@@ -183,10 +183,13 @@ def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,label='systema
     n_z_bins = split_list_cat[0].shape[1]
 
     import scipy.sparse.linalg
-    
+
     for isb,vbin in enumerate(split_list_cat):
 
         R = split_list_cat[isb] / np.sum(split_list_cat[isb].flatten())
+
+        if np.any(np.isnan(R)) or np.any(np.isinf(R)):
+            raise Exception('nan of inf in R')
         # t = R.sum(axis=0) - target_pz # wtf?
         t = target_pz - R.sum(axis=0)# wtf?
         # t = target_pz # wtf?
@@ -195,11 +198,16 @@ def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,label='systema
         # weight_pz, residuals, rank, singular_values = np.linalg.lstsq(R.T,target_pz)
         # np.dot( np.linalg.inv( (np.dot(R,R.T)+np.eye(R.shape[0])*sigma) ) )
 
-        weight_pz, istop, itn, normr, normar, norma, conda, normx = scipy.sparse.linalg.lsmr(R.T, t, damp=sigma_regularisation, atol=1e-06, btol=1e-06, conlim=100000000.0, maxiter=None, show=False)
+        logger.debug('calculating weights for bin %d', isb)
+        from sklearn.linear_model import Ridge
+        
+        regression = Ridge(alpha = sigma_regularisation, fit_intercept=False, normalize=False, copy_X=False, max_iter=None, tol=0.00001, solver='auto')
+        regression.fit(R.T,t)
+        weight_pz = regression.coef_
+
+        logger.info('got weights for bin %d n_gals=%5d median_w=% 2.2e std(w) =% 2.2e' , isb, R.shape[0], np.median(weight_pz), np.std(weight_pz,ddof=1) )
 
         weight_pz += 1
-
-        logger.info('getting weights for bin %d n_gals=%5d median_w=% 2.2e norm_w =% 2.2e' , isb, R.shape[0], np.median(weight_pz), normx )
 
         # weights_kron = np.kron(np.ones([1,n_z_bins]),weight_pz[:,None])
         weighted_stack  = np.dot(R.T,weight_pz)

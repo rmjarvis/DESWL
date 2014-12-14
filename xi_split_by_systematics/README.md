@@ -47,8 +47,7 @@ There are some differences with respect to point-estimator-reweighting:
 get it from https://bitbucket.org/amaraa/wl-photoz, if you can't access it, ask Adam Amara for it.
 - you need to have the big h5 files from Christopher Bonnett.
 - statistical weights are included at the stage of pulling redshifts from the h5 file, not later.
-- there is a parameter that needs to be tuned: ```sigma_regularisation```, with default of ```1e-5```. This parameter is a prior on weights. We would like to make the weights as close to 1 as possible. If if ```sigma_regularisation``` is small, then the prior is weak, and large scatter in weights away from 1 is allowed.
-If ```sigma_regularisation``` is big, then the weights are close to one, but at the expense of imperfect redshift homogenisation. Do check the plots produced by ```get_weights_fullPZ``` to assess the quality of reweighting. This potentially could be automated, but I leave it to future volunteers.
+- there is a parameter that needs to be tuned: ```sigma_regularisation```, with default of ```5e-10```, which works for TPZ. This parameter controlls the prior on weights. We would like to make the weights as close to 1 as possible. If if ```sigma_regularisation``` is small, then the prior is weak, and large scatter in weights away from 1 is allowed. If ```sigma_regularisation``` is big, then the weights are close to one, but at the expense of imperfect redshift homogenisation. Do check the plots produced by ```get_weights_fullPZ``` to assess the quality of reweighting. This potentially could be automated, but I leave it to future volunteers.
 - For im3shape, it takes 2GB of RAM to load the redshift tables, for NGMIX it may to up to 6GB. If that's becomming a problem, let me know and I will downsample the redshift vector to save memory.
 
 Example usage:
@@ -79,9 +78,8 @@ Example usage:
         list_snr_bins_cats.append(pdf_array)
 
     # get the redshift weights
-    label = 'snr.%s' % config['method']
-    list_weights = homogenise_nz.get_weights_fullPZ(list_snr_bins_cats,z_values=z_values,target_nz_index=0,label=label,plots=True,sigma_regularisation=1e-5)
-
+	label = 'snr.%s.%s' % (config['method'],config['name_pzcode'])
+    list_weights = homogenise_nz.get_weights_fullPZ(list_snr_bins_cats,z_values=z_values,target_nz_index=0,label=label,plots=True,sigma_regularisation = 5e-10)
 ```
 
 

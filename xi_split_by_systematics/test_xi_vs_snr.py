@@ -142,8 +142,8 @@ def get_weights_fullPZ():
 
         list_snr_bins_cats.append(pdf_array)
 
-    label = 'snr.%s' % config['method']
-    list_weights = homogenise_nz.get_weights_fullPZ(list_snr_bins_cats,z_values=z_values,target_nz_index=0,label=label,plots=True)
+    label = 'snr.%s.%s' % (config['method'],config['name_pzcode'])
+    list_weights = homogenise_nz.get_weights_fullPZ(list_snr_bins_cats,z_values=z_values,target_nz_index=0,label=label,plots=True,sigma_regularisation = 1e-9)
 
     import cPickle as pickle
     filename_pickle = 'weights.%s.pp2' % (config['method'])

@@ -125,14 +125,12 @@ def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,
     return list_weights_use
 
 
-def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,normed_hist=True,label='systematics',plots=False):
+def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,label='systematics',plots=False,sigma_regularisation=1e-5):
     """
     @param split_list_cat list columns for redshifts and statistical weights of objects, each one corresponding to a bin split by systematics.
-    Example split_list_cat = [ (cat_airmass_low_z,cat_airmass_low_w) , (cat_airmass_high_z,cat_airmass_high_w) ].
+    Example split_list_cat = [ cat_airmass_low_coaddids , cat_airmass_high_coaddids ].
     For example cat_airmass = np.array(pyfits.getdata('DESXXXX-XXXX_cat.fits'))
     @param target_nz_index n(z) of this bin will be used as a target nz for reweighting of the other bins. If target_nz_index=-1 (default), then mean of all bins will be used.
-    @param redshift_col each of these catalogs has to have a column corresponding to redshift point estimate.
-    @param normed_hist if to use reweighting with normalised histograms (not much difference)
     @label title to pass for plots (example: 'airmass')
     @return return a list with weight vector for each systematic bin
     """
@@ -184,7 +182,6 @@ def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,normed_hist=Tr
 
     n_z_bins = split_list_cat[0].shape[1]
 
-    sigma = 1e-5
     import scipy.sparse.linalg
     
     for isb,vbin in enumerate(split_list_cat):
@@ -198,7 +195,7 @@ def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,normed_hist=Tr
         # weight_pz, residuals, rank, singular_values = np.linalg.lstsq(R.T,target_pz)
         # np.dot( np.linalg.inv( (np.dot(R,R.T)+np.eye(R.shape[0])*sigma) ) )
 
-        weight_pz, istop, itn, normr, normar, norma, conda, normx = scipy.sparse.linalg.lsmr(R.T, t, damp=sigma, atol=1e-06, btol=1e-06, conlim=100000000.0, maxiter=None, show=False)
+        weight_pz, istop, itn, normr, normar, norma, conda, normx = scipy.sparse.linalg.lsmr(R.T, t, damp=sigma_regularisation, atol=1e-06, btol=1e-06, conlim=100000000.0, maxiter=None, show=False)
 
         weight_pz += 1
 

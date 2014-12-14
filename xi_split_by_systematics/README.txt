@@ -1,7 +1,8 @@
 xi_split_by_systematics
-TODO: add a functionality to use fill p(z) for each galaxy instead of redshift point estimate
 
 homogenise_nz.py module usage:
+
+--- using point estimators for 
 
 # import module
 import homogenise_nz

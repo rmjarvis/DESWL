@@ -127,11 +127,11 @@ def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,
 
 def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,label='systematics',plots=False,sigma_regularisation=1e-5):
     """
-    @param split_list_cat list columns for redshifts and statistical weights of objects, each one corresponding to a bin split by systematics.
-    Example split_list_cat = [ cat_airmass_low_coaddids , cat_airmass_high_coaddids ].
-    For example cat_airmass = np.array(pyfits.getdata('DESXXXX-XXXX_cat.fits'))
+    @param split_list_cat list columns for redshifts, each one corresponding to a bin split by systematics. Each element of the list is an array with dimensions n_gals x n_redshift_bins.
+    Example split_list_cat = [ cat_airmass_low_PZarray , cat_airmass_high_PZarray ].
     @param target_nz_index n(z) of this bin will be used as a target nz for reweighting of the other bins. If target_nz_index=-1 (default), then mean of all bins will be used.
-    @label title to pass for plots (example: 'airmass')
+    @param label title to pass for plots (example: 'airmass')
+    @param sigma_regularisation regularisation parameter for finding weights: high-> weights closer to 1, possibly worse match, low-> weights more scattered, better match.
     @return return a list with weight vector for each systematic bin
     """
     if plots: import pylab as pl

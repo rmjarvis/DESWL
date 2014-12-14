@@ -5,7 +5,7 @@ import yaml, argparse, sys, logging , pyfits, fitsio
 import numpy as np
 import matplotlib.pyplot as pl; print 'using matplotlib backend' , pl.get_backend()
 pl.rcParams['image.interpolation'] = 'nearest' ;
-import shutil, plotstools, warnings; warnings.simplefilter("once")
+import shutil, tktools, warnings; warnings.simplefilter("once")
 
 logger = logging.getLogger("test_xi_vs_snr")
 logger.setLevel(logging.INFO)
@@ -114,6 +114,36 @@ def get_weights():
     label = 'snr.%s' % config['method']
     list_weights = homogenise_nz.get_weights(list_snr_bins_cats,target_nz_index=0,label=label,photoz_min=0.3,photoz_max=1.3,plots=True)
 
+
+    import cPickle as pickle
+    filename_pickle = 'weights.%s.pp2' % (config['method'])
+    pickle.dump(list_weights,open(filename_pickle,'w'))
+    print 'saved ', filename_pickle
+
+    import pdb; pdb.set_trace()
+    pl.show()
+
+def get_weights_fullPZ():
+
+    import homogenise_nz
+ 
+    res = load_data()
+
+    list_snr_bins_cats = []
+
+    for isb,snr_bin in enumerate(config['snr_bins']):
+
+        select = (res['SNR'] > snr_bin[0]) & (res['SNR'] < snr_bin[1]) 
+        res_bin = res[select]
+      
+        import DES_pdf_stacker
+        pdf_array, z_values = DES_pdf_stacker.return_pdf_array(res_bin['coadd_id'],config['name_pzcode'],config['filename_photoz_h5'],weight=res_bin['w'])
+        # pdf_array, z_values = homogenise_nz.return_pdf_array(res_bin['coadd_id'],config['name_pzcode'],config['filename_photoz_h5'],weight=res_bin['w'])
+
+        list_snr_bins_cats.append(pdf_array)
+
+    label = 'snr.%s' % config['method']
+    list_weights = homogenise_nz.get_weights_fullPZ(list_snr_bins_cats,z_values=z_values,target_nz_index=0,label=label,plots=True)
 
     import cPickle as pickle
     filename_pickle = 'weights.%s.pp2' % (config['method'])
@@ -308,7 +338,7 @@ def get_corr(res,weights):
 
 def main():
 
-    valid_actions = ['plot_xi_vs_snr','get_xi_vs_snr','get_weights']
+    valid_actions = ['plot_xi_vs_snr','get_xi_vs_snr','get_weights','get_weights_fullPZ']
 
     description = 'test_xi_vs_snr'
     parser = argparse.ArgumentParser(description=description, add_help=True)

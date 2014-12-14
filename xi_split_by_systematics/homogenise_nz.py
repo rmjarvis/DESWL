@@ -11,150 +11,6 @@ stream_handler.setFormatter(log_formatter)
 logger.addHandler(stream_handler)
 logger.propagate = False
 
-# global index of coadd objects ids for store
-all_ids=None
-
-def return_pdf_array(obj_ids,identifier,filename_photoz_h5,weight=None):
-    """
-    functions returns the stacked pfd of array of  coadd_objects_id's
-    
-    input:
-    obj_ids : numpy type (int) array with coadd_objects_id
-    identifier:
-    string, either SKYNET,TPZ,ANNZ2,ZEBRA
-    
-    returns panda data frame with columsn 'z' and 'pdf'
-    
-    """
-    import pandas as pd
-
-    if identifier == 'SKYNET':
-        z_max = 2.0
-        nbins = 200
-        key = 'SkyNet_v_1_2'
-    elif identifier == 'SKYNET_MAG_AUTO':
-        z_max = 2.0
-        nbins = 200
-        key = 'SkyNet_v_12_mag_auto'
-    elif identifier == 'TPZ':
-        z_max = 1.5
-        nbins = 200
-        key = 'TPZ'
-    elif identifier == 'ANNZ':
-        z_max = 1.5
-        nbins = 150
-        key = 'ANNZ'
-    elif identifier == 'ZEBRA':
-        z_max = 2.0
-        nbins = 201
-        key = 'ZEBRA'
-    else:
-        raise KeyError('Identifier must be in [SKYNET, SKYNET_MAG_AUTO, TPZ, ANNZ, ZEBRA]')
-    
-    pdf_array = _return_array(nbins, filename_photoz_h5, key, obj_ids,weight)
-        
-    if identifier == 'TPZ':
-        dz = 0.007475
-        z_edges = np.linspace(0.005-dz/2, 1.5-dz/2, 201)
-    else:
-        z_edges = np.linspace(0.0, z_max, nbins + 1)
-    z_values = (z_edges[1:] + z_edges[:-1]) / 2.0
-    
-    return pdf_array, z_values
-    
-def _return_array(nbins, pdf_file, key, obj_ids,weight=None):
-    """docstring for _return_stack"""
-
-    import numpy as np
-
-    # first use pandas to get the list of columns
-    import pandas 
-    store=pandas.HDFStore(pdf_file)
-    row=store.select(key,start=0,stop=1)
-    cols=[cn for cn in row.columns]
-    cols.remove('z_mean')
-    cols.remove('z_peak')
-    n_cols = len(cols)
-    logger.info('found %d columns',n_cols)
-    sorting = np.argsort(cols)
-    invsort = np.argsort(sorting)
-    store.close()
-
-    # we will use the h5py for slicing 
-    # another wierd thing is that if I use h5py first, without opening and closing with pandas, it throws exception
-    # apparently its a bug in current version
-
-    import h5py
-    store=h5py.File(pdf_file)
-
-    # first create index 
-    global all_ids
-    if all_ids==None: 
-        logger.info('loading indexing')
-        all_ids = np.array(store[key]['table'][:]['index'])
-    else:
-        logger.info('using existing indexing')
-    
-    # sort coadd ids 
-    all_index_sorting = np.argsort(all_ids)
-    all_ids_sorted = all_ids[all_index_sorting]
-
-    # sort the objects array
-    obj_index_sorting = np.argsort(obj_ids)
-    obj_index_invsorting = np.argsort(obj_index_sorting)
-    obj_ids_sorted = obj_ids[obj_index_sorting]
-
-    # match - get indices of coadd ids
-    logger.debug('matching')
-    obj_index_sorted = np.searchsorted(all_ids_sorted,obj_ids_sorted)
-    obj_index = all_index_sorting[obj_index_sorted]
-    n_gals_total = len(obj_index)
-
-    # choose partitioning
-    n_per_part = 100
-    n_parts=n_gals_total/n_per_part+1
-
-    # get container for parts
-    list_obj_pdf = []
-
-    # select data
-    for ni in range(n_parts):
-        istart = ni*n_per_part
-        iend = (ni+1)*n_per_part
-        obj_index_part = obj_index[istart:iend]
-        obj_pdf = np.array(store[key]['table'][list(obj_index_part)]['values_block_0'])
-        obj_pdf = obj_pdf[:,invsort]
-        list_obj_pdf.append(obj_pdf)
-        if ni % int(n_parts/10) == 0 : logger.info('read %7d/%7d objects' , ni*n_per_part, n_gals_total )
-
-    # in place join parts
-    obj_pdf = np.concatenate(list_obj_pdf,axis=0)
-
-    # test
-    # obj_pdf = all_ids[list(obj_index)]
-
-    # in place copy to save memory
-    obj_pdf = obj_pdf[obj_index_invsorting]
-
-    # normalise and reweight 
-    obj_pdf = obj_pdf * (weight/obj_pdf.sum(axis=1))[:,np.newaxis]
-
-    logger.info('got array with %d galaxies, total memory size %2.3f GB' % (obj_pdf.shape[0],obj_pdf.nbytes/1.0e9))
-
-    # close the sore
-    store.close()
-
-    # no point in upgrading to 32, waste of memory
-    return obj_pdf.astype('float32')
-
-def _normalize_pdf(pdf_all,dz):
-    """
-    returns normalized pdf
-    """    
-    area = np.trapz(pdf_all, dx=dz)
-    return pdf_all/area
-
-
 def get_weights(split_list_cat,target_nz_index=-1,photoz_min=0.2,photoz_max=1.2,photoz_nbins=50,normed_hist=True,label='systematics',plots=False):
     """
     @param split_list_cat list columns for redshifts and statistical weights of objects, each one corresponding to a bin split by systematics.
@@ -368,18 +224,21 @@ def get_weights_fullPZ(split_list_cat,z_values,target_nz_index=-1,normed_hist=Tr
     if plots: pl.savefig(filename_fig)
     if plots: logger.info('wrote %s' % (filename_fig))
 
-    if plots: pl.figure()
-    pl.hist(list_weights_use[0],200)
+    if plots: 
+        for ip in range(len(list_weights_use)):
+            pl.figure()
+            pl.hist(list_weights_use[ip],200,label='bin %d'%ip,histtype='step')
+            pl.axvline(1,color='k')
+            pl.legend(framealpha=0.0,frameon=False)
+            pl.xlabel('weight value')
+            filename_fig = 'weights_hist.bin%d.%s.eps' % (ip,label)
+            pl.savefig(filename_fig)
+            logger.info('wrote %s' % (filename_fig))
 
-    if plots: pl.figure()
-    pl.hist(list_weights_use[1],200)
 
-    if plots: pl.figure()
-    pl.hist(list_weights_use[2],200)
 
-    pl.show()
+    # if plots: pl.show()
 
-    import pdb; pdb.set_trace()
     return list_weights_use
 
 

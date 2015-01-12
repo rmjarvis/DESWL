@@ -91,6 +91,8 @@ def parse_args():
                         help='remove the top mags using mag_auto')
     parser.add_argument('--nbright_stars', default=10, type=int,
                         help='use median of this many brightest stars for min mag')
+    parser.add_argument('--max_mag', default=-1, type=float,
+                        help='only use stars brighter than this mag')
     parser.add_argument('--use_tapebumps', default=1, type=int,
                         help='avoid stars in or near tape bumps')
     parser.add_argument('--tapebump_extra', default=2, type=float,
@@ -294,7 +296,7 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
     return new_cat_file, nstars, ntot
 
 def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
-                     mag_cut, nbright_stars,
+                     mag_cut, nbright_stars, max_mag,
                      use_tapebumps, tapebump_extra, fwhm):
     """Remove stars that are considered bad for some reason.
 
@@ -327,12 +329,21 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
         print '   median of brightest %d is '%nbright_stars, min_star
 
         mag_mask = data['MAG_AUTO'] > (min_star+mag_cut)
-        print '   select stars dimmer than ',min_star+mag_cut
+        print '   select stars dimmer than',min_star+mag_cut
         print '   which includes %d stars'%numpy.count_nonzero(mag_mask)
-            
+
         data = data[mag_mask]
         print '   after exclude bright: len(data) = ',len(data)
         new_cat_file = new_cat_file.replace('psfcat','psfcat_magcut_%0.1f'%mag_cut)
+
+    if max_mag > 0:
+        mag_mask = (data['MAG_AUTO'] < max_mag)
+        print '   also select stars brighter than',max_mag
+        print '   which now includes %d stars'%numpy.count_nonzero(mag_mask)
+
+        data = data[mag_mask]
+        print '   after exclude faint: len(data) = ',len(data)
+        new_cat_file = new_cat_file.replace('psfcat','psfcat_maxmag_%0.1f'%max_mag)
 
     if use_tapebumps:
         data = exclude_tapebumps(tbdata[ccdnum], data, tapebump_extra * fwhm)
@@ -562,10 +573,10 @@ def main():
 
 
                 # If we want to cut the brighest magnitudes
-                if args.mag_cut>0 or args.use_tapebumps:
+                if args.mag_cut>0 or args.use_tapebumps or args.max_mag>0:
                     cat_file, nstars = remove_bad_stars(
                             wdir, root, ccdnum, cat_file, tbdata,
-                            args.mag_cut, args.nbright_stars,
+                            args.mag_cut, args.nbright_stars, args.max_mag,
                             args.use_tapebumps, args.tapebump_extra, fwhm)
                     # Recheck this.
                     if nstars < FEW_STARS:

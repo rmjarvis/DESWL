@@ -10,4 +10,11 @@ plots runs plot_rho.py, makes plots
 
 v3 uses degree 2,2, FEW_STARS = 50
 v4 uses degree 2,2, switched FEW_STARS to 20
-v5 uses degree 1,1
+v5 uses degree 2,2, max_mag = 16
+v6 uses degree 2,2, FEW_STARS = 20, max_mag = 17, PSF_SAMP = 1, PSF_SIZE = 51,51
+
+psf = normal psf cats
+psf2 has Erin's psfex model as erin_*
+psf3 uses lanczos 5 instead of 3 in GalSim des module
+psf4 uses 16x16 stamps rather than 32x32
+psf5 subtracts off the sky estimated from a 2 pixel border around stamp

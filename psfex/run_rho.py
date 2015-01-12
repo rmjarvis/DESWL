@@ -59,8 +59,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     # From Barney's paper: http://arxiv.org/pdf/0904.3056v2.pdf
     # rho1 = < (e-em)* (e-em) >     Barney originally called this D1.
     # rho2 = Re < e* (e-em) >       Barney's D2 is actually 2x this.
-    # rho3 = < (s-sm) (s-sm) >      Not in Barney's paper, but an obvious extension.
-    # rho4 = < s (s-sm) >           Ditto.
+    # rho3 = < (s^2-sm^2)/s^2 (s^2-sm^2)/s^2 >  Not in Barney's paper
 
     #print 'ra = ',ra
     #print 'dec = ',dec
@@ -69,7 +68,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              g1=(e1-m_e1), g2=(e2-m_e2))
     dscat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                             k=(s-m_s))
+                             k=(s**2-m_s**2)/s**2)
 
     rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
                                   bin_size=0.1, verbose=1)
@@ -95,13 +94,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     #print 'rho3 = ',rho3.xi
     #print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
 
-    rho4 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho4.process(scat, dscat)
-    #print 'rho4 = ',rho4.xi
-    #print 'rho4.sigma = ',numpy.sqrt(rho4.varxi)
-
-    return rho1,rho2,rho3,rho4
+    return rho1,rho2,rho3
 
 
 def main():
@@ -172,9 +165,9 @@ def main():
             psfex_e2 = data['psfex_e2'][mask]
             psfex_size = data['psfex_size'][mask]
 
-            rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,size,
-                                                 psfex_e1,psfex_e2,psfex_size,
-                                                 max_sep=20)
+            rho1, rho2, rho3 = measure_rho(ra,dec,e1,e2,size,
+                                           psfex_e1,psfex_e2,psfex_size,
+                                           max_sep=20)
 
             k10arcmin = int(round(numpy.log(10 / 0.5)/0.1))
             #if numpy.abs(rho2.xip[k10arcmin]) > 1.e-4:
@@ -190,7 +183,6 @@ def main():
                     rho2.xip.tolist(),
                     rho2.xim.tolist(),
                     rho3.xi.tolist(),
-                    rho4.xi.tolist(),
                     ])
             print 'len stats = ',len(stats)
 
@@ -213,17 +205,17 @@ def main():
         psfex_e2 = data['psfex_e2'][mask]
         psfex_size = data['psfex_size'][mask]
 
-        rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,size,
-                                             psfex_e1,psfex_e2,psfex_size,
-                                             max_sep=100)
+        rho1, rho2, rho3 = measure_rho(ra,dec,e1,e2,size,
+                                       psfex_e1,psfex_e2,psfex_size,
+                                       max_sep=100)
 
         desdm_e1 = data['desdm_e1'][mask]
         desdm_e2 = data['desdm_e2'][mask]
         desdm_size = data['desdm_size'][mask]
 
-        drho1, drho2, drho3, drho4 = measure_rho(ra,dec,e1,e2,size,
-                                                 desdm_e1,desdm_e2,desdm_size,
-                                                 max_sep=100)
+        drho1, drho2, drho3 = measure_rho(ra,dec,e1,e2,size,
+                                          desdm_e1,desdm_e2,desdm_size,
+                                          max_sep=100)
 
         #print 'rho1.xip = ',rho1.xip
         #print 'rho1.xip_im = ',rho1.xip_im
@@ -234,7 +226,6 @@ def main():
         #print 'rho2.xim = ',rho2.xim
         #print 'rho2.xim_im = ',rho2.xim_im
         #print 'rho3.xi = ',rho3.xi
-        #print 'rho4.xi = ',rho4.xi
         # Write out the interesting stats for this ccd into a file, which we can 
         # then pull all together into a single FITS catalog later.
         stat_file = os.path.join(exp_dir, exp + ".json")
@@ -253,8 +244,6 @@ def main():
             rho2.varxi.tolist(),
             rho3.xi.tolist(),
             rho3.varxi.tolist(),
-            rho4.xi.tolist(),
-            rho4.varxi.tolist(),
             drho1.meanlogr.tolist(),
             drho1.xip.tolist(),
             drho1.xip_im.tolist(),
@@ -268,8 +257,6 @@ def main():
             drho2.varxi.tolist(),
             drho3.xi.tolist(),
             drho3.varxi.tolist(),
-            drho4.xi.tolist(),
-            drho4.varxi.tolist(),
             ])
         print 'len stats = ',len(stats)
         with open(stat_file,'w') as f:

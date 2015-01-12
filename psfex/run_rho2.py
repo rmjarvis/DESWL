@@ -59,8 +59,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     # From Barney's paper: http://arxiv.org/pdf/0904.3056v2.pdf
     # rho1 = < (e-em)* (e-em) >     Barney originally called this D1.
     # rho2 = Re < e* (e-em) >       Barney's D2 is actually 2x this.
-    # rho3 = < (s-sm) (s-sm) >      Not in Barney's paper, but an obvious extension.
-    # rho4 = < s (s-sm) >           Ditto.
+    # rho3 = < (s^2-sm^2)/s^2 (s^2-sm^2)/s^2 >  Not in Barney's paper
 
     #print 'ra = ',ra
     #print 'dec = ',dec
@@ -69,7 +68,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              g1=(e1-m_e1), g2=(e2-m_e2))
     dscat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                             k=(s-m_s))
+                             k=(s**2-m_s**2)/s**2)
 
     rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
                                   bin_size=0.1, verbose=1)
@@ -95,13 +94,7 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     #print 'rho3 = ',rho3.xi
     #print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
 
-    rho4 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho4.process(scat, dscat)
-    #print 'rho4 = ',rho4.xi
-    #print 'rho4.sigma = ',numpy.sqrt(rho4.varxi)
-
-    return rho1,rho2,rho3,rho4
+    return rho1,rho2,rho3
 
 
 def main():
@@ -235,8 +228,8 @@ def main():
         pe2 = numpy.concatenate(pe2_list[key])
         ps = numpy.concatenate(ps_list[key])
 
-        rho1, rho2, rho3, rho4 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps,
-                                             max_sep=300)
+        rho1, rho2, rho3 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps,
+                                       max_sep=300)
 
         stat_file = os.path.join(work, "rho_"+key+".json")
         stats.append([
@@ -253,8 +246,6 @@ def main():
             rho2.varxi.tolist(),
             rho3.xi.tolist(),
             rho3.varxi.tolist(),
-            rho4.xi.tolist(),
-            rho4.varxi.tolist()
         ])
         #print 'stats = ',stats
         with open(stat_file,'w') as f:

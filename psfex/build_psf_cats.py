@@ -349,9 +349,9 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
 
         dx = shape_data.moments_centroid.x - im.trueCenter().x
         dy = shape_data.moments_centroid.y - im.trueCenter().y
-        print 'centroid = ',shape_data.moments_centroid
-        print 'trueCenter = ',im.trueCenter()
-        print 'dcentroid = ',dx,dy
+        #print 'centroid = ',shape_data.moments_centroid
+        #print 'trueCenter = ',im.trueCenter()
+        #print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > 0.1**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
@@ -361,7 +361,7 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
         g2 = shape_data.observed_shape.g2
         s = shape_data.moments_sigma * pixel_scale
 
-        print 'g1,g2,s = ',g1,g2,s
+        #print 'g1,g2,s = ',g1,g2,s
 
         e1_list[i] = g1
         e2_list[i] = g2
@@ -420,6 +420,13 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
         flag_list = [ PSFEX_FAILURE ] * n_psf
         return e1_list,e2_list,s_list,flag_list
 
+    if psf._psfex is None:
+        # Erin doesn't throw an exception for errors.
+        # The _psfex attribute just ends up as None, so check for that.
+        print 'psf._psfex is None'
+        flag_list = [ PSFEX_FAILURE ] * n_psf
+        return e1_list,e2_list,s_list,flag_list
+
     wcs = galsim.FitsWCS(file_name)
 
     for i in range(n_psf):
@@ -431,9 +438,9 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
         # rather than in RA/Dec oriented coordinates.  So we'll need to correct for that.
         im_ar = psf.get_rec(y,x)
         local_wcs = wcs.jacobian(galsim.PositionD(x,y))
-        print 'local wcs = ',local_wcs
-        print 'pixel scale = ',numpy.sqrt(local_wcs.pixelArea())
-        print 'psf center = ',psf.get_center(y,x)
+        #print 'local wcs = ',local_wcs
+        #print 'pixel scale = ',numpy.sqrt(local_wcs.pixelArea())
+        #print 'psf center = ',psf.get_center(y,x)
         pixel_scale= numpy.sqrt(local_wcs.pixelArea())
         im = galsim.Image(array=im_ar, scale=pixel_scale)
 
@@ -454,18 +461,18 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
         true_center = galsim.PositionD( cen[1]+1, cen[0]+1 )
         dx = shape_data.moments_centroid.x - true_center.x
         dy = shape_data.moments_centroid.y - true_center.y
-        print 'centroid = ',shape_data.moments_centroid
-        print 'trueCenter = ',true_center
-        print 'dcentroid = ',dx,dy
+        #print 'centroid = ',shape_data.moments_centroid
+        #print 'trueCenter = ',true_center
+        #print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > 0.5**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
             continue
-        print 'shape = ',shape_data.observed_shape
-        print 'sigma = ',shape_data.moments_sigma * pixel_scale
+        #print 'shape = ',shape_data.observed_shape
+        #print 'sigma = ',shape_data.moments_sigma * pixel_scale
         g1,g2,s = apply_wcs(local_wcs, shape_data.observed_shape.g1, shape_data.observed_shape.g2,
                             shape_data.moments_sigma)
-        print 'after wcs: ',g1,g2,s
+        #print 'after wcs: ',g1,g2,s
 
         e1_list[i] = g1
         e2_list[i] = g2

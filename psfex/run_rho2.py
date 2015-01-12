@@ -33,67 +33,6 @@ def parse_args():
     return args
 
 
-def read_blacklists(tag):
-    """Read the psfex blacklist file and the other blacklists.
-
-    Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
-    """
-    import astropy.io.fits as pyfits
-    import numpy
-    d = {}  # The dict will be indexed by (expnum, ccdnum)
-    print 'reading blacklists'
-
-    # First read Eli's astrometry flags
-    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
-    eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
-    with pyfits.open(eli_file) as pyf:
-        data = pyf[1].data
-        for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
-            key = (int(expnum), int(ccdnum))
-            d[key] = int(flag)
-    print 'after astrom, len(d) = ',len(d)
-
-    # Then Alex and Steve's blacklists
-    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L588)
-    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-sv-uniq.txt'
-    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-sv-uniq.txt'
-    with open(ghost_file) as f:
-        for line in f:
-            expnum, ccdnum = line.split()
-            key = (int(expnum), int(ccdnum))
-            if key in d:
-                d[key] |= (1 << 10)
-            else:
-                d[key] = (1 << 10)
-    with open(streak_file) as f:
-        for line in f:
-            expnum, ccdnum = line.split()
-            key = (int(expnum), int(ccdnum))
-            if key in d:
-                d[key] |= (1 << 13)
-            else:
-                d[key] = (1 << 13)
-    print 'after ghost, streak, len(d) = ',len(d)
-
-    # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
-    if tag:
-        psfex_file += '-' + tag
-    psfex_file += '.txt'
-    with open(psfex_file) as f:
-        for line in f:
-            run, exp, ccdnum, flag = line.split()
-            expnum = exp[6:]
-            key = (int(expnum), int(ccdnum))
-            flag = int(flag)
-            if key in d:
-                d[key] |= (flag << 15)
-            else:
-                d[key] = (flag << 15)
-    print 'after psfex, len(d) = ',len(d)
-
-    return d
-
 def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     """Compute the rho statistics
     """
@@ -129,8 +68,6 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
                             g1=e1, g2=e2)
     decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              g1=(e1-m_e1), g2=(e2-m_e2))
-    scat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                            k=s)
     dscat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              k=(s-m_s))
 
@@ -176,8 +113,6 @@ def main():
     import astropy.io.fits as pyfits
 
     args = parse_args()
-
-    flag_dict = read_blacklists(args.tag)
 
     # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)

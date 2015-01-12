@@ -13,6 +13,7 @@ DESDM_BAD_MEASUREMENT = 64
 DESDM_CENTROID_SHIFT = 128
 DESDM_FAILURE = 256
 DESDM_FLAG_FACTOR = DESDM_BAD_MEASUREMENT / PSFEX_BAD_MEASUREMENT
+BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure blacklist flag
  
 def parse_args():
     import argparse
@@ -472,6 +473,68 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
 
     return e1_list,e2_list,s_list,flag_list
 
+def read_blacklists(tag):
+    """Read the psfex blacklist file and the other blacklists.
+
+    Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
+    """
+    import astropy.io.fits as pyfits
+    import numpy
+    d = {}  # The dict will be indexed by (expnum, ccdnum)
+    print 'reading blacklists'
+
+    # First read Eli's astrometry flags
+    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
+    eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
+    with pyfits.open(eli_file) as pyf:
+        data = pyf[1].data
+        for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
+            key = (int(expnum), int(ccdnum))
+            d[key] = int(flag)
+    print 'after astrom, len(d) = ',len(d)
+
+    # Then Alex and Steve's blacklists
+    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L588)
+    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-sv-uniq.txt'
+    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-sv-uniq.txt'
+    with open(ghost_file) as f:
+        for line in f:
+            expnum, ccdnum = line.split()
+            key = (int(expnum), int(ccdnum))
+            if key in d:
+                d[key] |= (1 << 10)
+            else:
+                d[key] = (1 << 10)
+    with open(streak_file) as f:
+        for line in f:
+            expnum, ccdnum = line.split()
+            key = (int(expnum), int(ccdnum))
+            if key in d:
+                d[key] |= (1 << 13)
+            else:
+                d[key] = (1 << 13)
+    print 'after ghost, streak, len(d) = ',len(d)
+
+    # And finally the PSFEx blacklist file.
+    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
+    if tag:
+        psfex_file += '-' + tag
+    psfex_file += '.txt'
+    with open(psfex_file) as f:
+        for line in f:
+            run, exp, ccdnum, flag = line.split()
+            expnum = exp[6:]
+            key = (int(expnum), int(ccdnum))
+            flag = int(flag)
+            if key in d:
+                d[key] |= (flag << 15)
+            else:
+                d[key] = (flag << 15)
+    print 'after psfex, len(d) = ',len(d)
+
+    return d
+
+
 def main():
     import os
     import glob
@@ -494,6 +557,8 @@ def main():
         pass
 
     datadir = '/astro/u/astrodat/data/DES'
+
+    flag_dict = read_blacklists(args.tag)
 
     if args.file != '':
         print 'Read file ',args.file
@@ -550,6 +615,16 @@ def main():
                 continue
             print '   root, ccdnum = ',root,ccdnum
             print '   desdm_dir = ',desdm_dir
+
+            key = (expnum, ccdnum)
+            if key in flag_dict:
+                black_flag = flag_dict[key]
+                print '   blacklist flag = ',black_flag
+                if black_flag & (113 << 15):
+                    print '   Catastrophic flag.  Skipping this file.'
+                    continue
+            else:
+                black_flag = 0
 
             # Read the star data.  From both findstars and the PSFEx used file.
             fs_data = read_findstars(exp_dir, root)
@@ -650,11 +725,24 @@ def main():
             print 'erin_flag = ',erin_flag
             print 'desdm_flag = ',desdm_flag
             print 'flag = ',flag
+
+            # Add in flags for bad indices
             bad_index = numpy.where(used_index < 0)[0]
             print 'bad_index = ',bad_index
             for i in bad_index:
                 flag[i] |= NOT_USED
             print 'flag => ',flag
+
+            # If the ccd is blacklisted, everything gets the blacklist flag
+            if black_flag:
+                print 'black_flag = ',black_flag
+                print 'type(black_flag) = ',type(black_flag)
+                print 'type(flag[0]) = ',type(flag[0])
+                print 'type(flag[0] | black_flag) = ',type(flag[0] | black_flag)
+                black_flag *= BLACK_FLAG_FACTOR
+                print 'black_flag => ',black_flag
+                flag = [ f | black_flag for f in flag ]
+                print 'flag => ',flag
 
             # Compute ra,dec from the wcs:
             coord = [ wcs.toWorld(galsim.PositionD(xx,yy)) for xx,yy in zip(x,y) ]
@@ -710,7 +798,7 @@ def main():
             pyfits.Column(name='ra', format='E', array=ra_col),
             pyfits.Column(name='dec', format='E', array=dec_col),
             pyfits.Column(name='mag', format='E', array=mag_col),
-            pyfits.Column(name='flag', format='I', array=flag_col),
+            pyfits.Column(name='flag', format='J', array=flag_col),
             pyfits.Column(name='e1', format='E', array=e1_col),
             pyfits.Column(name='e2', format='E', array=e2_col),
             pyfits.Column(name='size', format='E', array=size_col),

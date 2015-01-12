@@ -120,7 +120,7 @@ def read_blacklists(tag):
 def read_image_header(img_file):
     """Read some information from the image header.
 
-    Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, wcs
+    Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, sky, sigsky, fwhm, wcs
     """
     #print 'Start read_image_header'
     import galsim
@@ -163,16 +163,17 @@ def read_image_header(img_file):
         ha = h['HA']
         ha = galsim.HMS_Angle(ha) / galsim.degrees
 
-        # AIRMASS should already be a float I think, but just make sure.
-        airmass = h['AIRMASS']
-        airmass = float(airmass)
-        #print 'airmass = ',airmass
+        # A few more items to grab from the header:
+        airmass = float(h['AIRMASS'])
+        sky = float(h['SKYBRITE'])
+        sigsky = float(h['SKYSIGMA'])
+        fwhm = float(h['FWHM'])
 
         # Use Galsim to read WCS
         wcs = galsim.FitsWCS(header=h)
         #print 'wcs = ',wcs
 
-    return date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, wcs
+    return date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, sky, sigsky, fwhm, wcs
  
 def convert_to_year(date, time):
     """Given string representations of the date and time, convert to a decimal year.
@@ -271,6 +272,9 @@ def main():
     teldec_col = []  # The dec of the telescopt pointing (degrees)
     ha_col = []      # The hour angle (degrees)
     airmass_col = [] # The airmass
+    sky_col = []     # The median sky level
+    sigsky_col = []  # The mean noise level from the sky
+    fwhm_col = []    # An estimate of the seeing
     flag_col = []    # A bitmask flag for the ccd (or possibly the whole exposure)
     corner0_ra_col = []  # The ra,dec of the 4 corners of the chip (degrees)
     corner0_dec_col = []
@@ -320,11 +324,12 @@ def main():
                 continue
             print '   root, ccdnum = ',root,ccdnum
 
-            date, time, filter, ccdnum2, detpos, telra, teldec, ha, airmass, wcs = \
-                read_image_header(file_name)
+            (date, time, filter, ccdnum2, detpos, telra, teldec, ha, 
+                airmass, sky, sigsky, fwhm, wcs) = read_image_header(file_name)
             print '   date, time = ',date,time
-            print '   filter, ccdnum, detpos = ',filter,ccdnum,detpos
-            print '   telra, teldec, ha, airmass = ',telra, teldec, ha, airmass
+            print '   filter, ccdnum, detpos = ', filter,ccdnum,detpos
+            print '   telra, teldec, ha = ', telra, teldec, ha
+            print '   airmass, sky, sigsky, fwhm = ', airmass, sky, sigsky, fwhm
             if ccdnum != ccdnum2:
                 raise ValueError("CCDNUM from FITS header doesn't match ccdnum from file name.")
 
@@ -365,6 +370,9 @@ def main():
             teldec_col.append(teldec)
             ha_col.append(ha)
             airmass_col.append(airmass)
+            sky_col.append(sky)
+            sigsky_col.append(sigsky)
+            fwhm_col.append(fwhm)
             flag_col.append(flag)
             corner0_ra_col.append(corners[0].ra / galsim.degrees)
             corner0_dec_col.append(corners[0].dec / galsim.degrees)
@@ -416,6 +424,9 @@ def main():
         pyfits.Column(name='teldec', format='E', unit='deg', array=teldec_col),
         pyfits.Column(name='ha', format='E', unit='deg', array=ha_col),
         pyfits.Column(name='airmass', format='E', array=airmass_col),
+        pyfits.Column(name='sky', format='E', array=sky_col),
+        pyfits.Column(name='sigsky', format='E', array=sigsky_col),
+        pyfits.Column(name='fwhm', format='E', array=fwhm_col),
         pyfits.Column(name='flag', format='J', array=flag_col),
         pyfits.Column(name='corner0_ra', format='E', unit='deg', array=corner0_ra_col),
         pyfits.Column(name='corner0_dec', format='E', unit='deg', array=corner0_dec_col),

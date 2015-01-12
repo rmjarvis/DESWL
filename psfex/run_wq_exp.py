@@ -88,6 +88,9 @@ if args.njobs != 1:
 
 runs, exps = zip(*data)
 
+if args.njobs > nexps:
+    args.njobs = nexps
+
 import math
 n_per_job = int(math.ceil(float(nexps) / float(args.njobs)))
 print 'njobs = ',args.njobs

@@ -485,6 +485,7 @@ def main():
              airmass_list, sky_list, sigsky_list, fwhm_list,
              ra_list, dec_list, x_list, y_list, m_list,
              e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='psfex')
+             #e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='erin')
 
     #for key in ra_list.keys():
     for key in ['riz']:
@@ -565,10 +566,10 @@ def main():
         #mask2 = mask & (airmass>med_airmass)
         #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highairmass')
 
-        #mask2 = mask & (fwhm<med_fwhm)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowfwhm')
-        #mask2 = mask & (fwhm>med_fwhm)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highfwhm')
+        mask2 = mask & (fwhm<med_fwhm)
+        bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowfwhm')
+        mask2 = mask & (fwhm>med_fwhm)
+        bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highfwhm')
 
         #bin_by_mag(m[mask], s[mask] - numpy.mean(s[mask]),
         #           e1[mask] - numpy.mean(e1[mask]), e2[mask] - numpy.mean(e2[mask]), key)

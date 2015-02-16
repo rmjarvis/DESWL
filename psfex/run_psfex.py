@@ -81,7 +81,7 @@ def parse_args():
                         help='make symlinks in output dir, rather than move files')
 
     # Options
-    parser.add_argument('--rm_files', default=False, action='store_const', const=True,
+    parser.add_argument('--rm_files', default=1, type=int,
                         help='remove unpacked files after finished')
     parser.add_argument('--run_psfex', default=1, type=int,
                         help='run psfex on files')
@@ -412,6 +412,8 @@ def remove_temp_files(wdir, root, *args):
     for save in args:
         if save in files:
             files.remove(save)
+        else:
+            print 'WARNING: %s not found in %s'%(save,wdir)
 
     print '   Removing the following files from ',wdir
     for f in files:
@@ -596,9 +598,10 @@ def main():
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     
+                psf_file = os.path.join(wdir,root+'_psfcat.psf')
+                used_file = os.path.join(wdir,root+'_psfcat.used.fits')
+                json_file = os.path.join(wdir,root+'.json')
                 if args.run_psfex:
-                    psf_file = os.path.join(wdir,root+'_psfcat.psf')
-                    used_file = os.path.join(wdir,root+'_psfcat.used.fits')
                     success = run_psfex(wdir, root, cat_file, psf_file, used_file, logfile,
                             args.psfex_dir, args.psfex_config)
                     if success:
@@ -608,7 +611,7 @@ def main():
                         flag |= PSFEX_FAILURE
 
                 if args.rm_files:
-                    remove_temp_files(wdir, root, psf_file, used_file)
+                    remove_temp_files(wdir, root, psf_file, used_file, json_file)
 
 
             except NoStarsException:

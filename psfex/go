@@ -1,8 +1,9 @@
 #!/bin/bash
 
-DATE=20141111_go
-FILE=spte_e
-TAG=v5
+DATE=20150615_go
+FILE=sva1-extra
+#FILE=test1_tb
+TAG=v4
 
-#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sv-$TAG.txt
-./run_wq_exp.py --njobs=221 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --mag_cut=3.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"
+/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-sva1x-$TAG.txt
+./run_wq_exp.py --njobs=120 --cores_per_job=2 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"

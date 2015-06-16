@@ -1,7 +1,9 @@
 #!/bin/bash
 
-DATE=20141111_exp
-FILE=spte_gold_exp
-TAG=v5
+DATE=20150312_exp
+#FILE=spte_gold_exp
+FILE=gold_exp
+#FILE=test_exp
+TAG=v4
 
-./run_wq_exp.py --njobs=1 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./build_exp_catalog.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"
+./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./build_exp_catalog.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

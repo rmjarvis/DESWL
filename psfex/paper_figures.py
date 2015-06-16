@@ -211,14 +211,16 @@ def get_ngmix_epoch_data(use_gold=True):
             except:
                 continue
 
-            try:
-                round_file = os.path.join(ngmix_dir, 'make-round/v6/output',
-                                          os.path.basename(file)[:-10] + 'round.fits')
-                print 'read ',round_file
-                with pyfits.open(round_file) as f:
-                    round = f[1].data
-            except:
-                continue
+            if False:
+                try:
+                    round_file = os.path.join(ngmix_dir, 'make-round/v6/output',
+                                            os.path.basename(file)[:-10] + 'round.fits')
+                    print 'read ',round_file
+                    with pyfits.open(round_file) as f:
+                        round = f[1].data
+                except:
+                    continue
+                assert len(fits) == len(round)
 
             meds_files = meta['meds_file']
             ccdnums = []
@@ -227,17 +229,16 @@ def get_ngmix_epoch_data(use_gold=True):
                     ccdnums.append(get_ccdnums_from_file(f['image_info'].data['image_path']))
             print 'ccdnums = ',ccdnums
 
-            assert len(fits) == len(round)
-
             if use_gold:
                 use1 = numpy.in1d(fits['id'], fcat['coadd_objects_id'][all_ng])
             else:
-                use1 = ( (fits['flags'] == 0) & (round['round_flags'] == 0) &
-                         (fits['exp_flags'] == 0) & (round['exp_round_flags'] == 0) &
-                         (0.4 < fits['exp_arate']) & (fits['exp_arate'] < 0.6) &
-                         (round['exp_s2n_r'] > 15) & (round['exp_T_r']/fits['psfrec_T'] > 0.15) &
-                         (fits['exp_g_sens'][:,0] > 0.0) & (fits['exp_g_sens'][:,1] > 0.0)
-                       )
+                use1 = ( (fits['flags'] == 0) & (fits['exp_flags'] == 0) )
+                #use1 = ( (fits['flags'] == 0) & (round['round_flags'] == 0) &
+                         #(fits['exp_flags'] == 0) & (round['exp_round_flags'] == 0) &
+                         #(0.4 < fits['exp_arate']) & (fits['exp_arate'] < 0.6) &
+                         #(round['exp_s2n_r'] > 15) & (round['exp_T_r']/fits['psfrec_T'] > 0.15) &
+                         #(fits['exp_g_sens'][:,0] > 0.0) & (fits['exp_g_sens'][:,1] > 0.0)
+                       #)
 
             print 'nobject = ',len(fits)
             print 'nuse = ',sum(use1)
@@ -757,31 +758,28 @@ def wmean(e, w, mask):
     import numpy
     return numpy.sum(e[mask] * w[mask]) / numpy.sum(w[mask])
 
-def evscol(ccd, x, y, e1, e2, w, filename, title=None):
+def evscol(ccd, x, y, e1, e2, s, w, filename, title=None):
     import matplotlib.pyplot as plt
     import numpy
 
     # Bin data by column
-    ncols_per_bin = 4
-    bins = numpy.linspace(0, 2048, 2048/ncols_per_bin + 1)
+    ncols_per_bin = 8
+    skip = 20
+    bins = numpy.linspace(skip, 2048-skip, (2048-2*skip)/ncols_per_bin + 1)
     print 'bins = ',bins
-
-    # Remove 20 columns on each side.
-    nbins_remove = 20 / ncols_per_bin
-    bins = bins[nbins_remove : -nbins_remove]
-    print 'bins => ',bins
 
     # Find mean e1, e2 in each bin
     denom = numpy.histogram(x, bins, weights=w)[0]
+    #index = numpy.digitize(x, bins)
     e1_bins = numpy.histogram(x, bins, weights=e1*w)[0] / denom
+    #e1_bins = [numpy.mean(e1[index == i]) for i in range(1, len(bins))]
     print 'e1_bins = ',e1_bins
     e2_bins = numpy.histogram(x, bins, weights=e2*w)[0] / denom
+    #e2_bins = [numpy.mean(e2[index == i]) for i in range(1, len(bins))]
     print 'e2_bins = ',e2_bins
     x_bins = numpy.histogram(x, bins, weights=x*w)[0] / denom
+    #x_bins = [numpy.mean(x[index == i]) for i in range(1, len(bins))]
     print 'x_bins = ',x_bins
-    #index = numpy.digiize(x, bins)
-    #e1_bins = [wmean(e1, w, index == i) for i in range(1, len(bins))]
-    #e2_bins = [wmean(e2, w, index == i) for i in range(1, len(bins))]
 
     # Make 3 axes, where the first one spans the whole row.
     # cf. http://matplotlib.org/users/gridspec.html
@@ -791,25 +789,36 @@ def evscol(ccd, x, y, e1, e2, w, filename, title=None):
     ax2 = plt.subplot2grid( (2,2), (1,0) )
     ax3 = plt.subplot2grid( (2,2), (1,1) )
 
+    # Draw a line through the mean e1, e2 to help guide the eye
+    sw = numpy.sum(w)
+    mean_e1 = numpy.sum(e1*w)/sw
+    mean_e2 = numpy.sum(e2*w)/sw
+    ax1.plot( [0,2048], [mean_e1, mean_e1], color='red', ls='--', lw=0.5)
+    ax2.plot( [0,2048], [mean_e1, mean_e1], color='red', ls='--', lw=0.5)
+    ax3.plot( [0,2048], [mean_e1, mean_e1], color='red', ls='--', lw=0.5)
+    ax1.plot( [0,2048], [mean_e2, mean_e2], color='blue', ls='--', lw=0.5)
+    ax2.plot( [0,2048], [mean_e2, mean_e2], color='blue', ls='--', lw=0.5)
+    ax3.plot( [0,2048], [mean_e2, mean_e2], color='blue', ls='--', lw=0.5)
+
     # Plot data on first three axes:
-    ax1.scatter(x_bins, e1_bins, marker='o', color='red', s=1.0, label=r'$\langle e_1 \rangle$')
-    ax1.scatter(x_bins, e2_bins, marker='o', color='blue', s=1.0, label=r'$\langle e_2 \rangle$')
+    ax1.scatter(x_bins, e1_bins, marker='o', color='red', s=1.5, label=r'$\langle e_1 \rangle$')
+    ax1.scatter(x_bins, e2_bins, marker='o', color='blue', s=1.5, label=r'$\langle e_2 \rangle$')
 
-    ax2.scatter(x_bins, e1_bins, marker='o', color='red', s=2.0)
-    ax2.scatter(x_bins, e2_bins, marker='o', color='blue', s=2.0)
+    ax2.scatter(x_bins, e1_bins, marker='o', color='red', s=3.0)
+    ax2.scatter(x_bins, e2_bins, marker='o', color='blue', s=3.0)
 
-    ax3.scatter(x_bins, e1_bins, marker='o', color='red', s=2.0)
-    ax3.scatter(x_bins, e2_bins, marker='o', color='blue', s=2.0)
+    ax3.scatter(x_bins, e1_bins, marker='o', color='red', s=3.0)
+    ax3.scatter(x_bins, e2_bins, marker='o', color='blue', s=3.0)
 
     # Draw the legend only once
-    ax1.legend(loc=(0.75, 0.08), fontsize=15)
+    ax1.legend(loc=(0.05, 0.04), fontsize=10, frameon=True)#, fancybox=True)
 
     # Limit the axis ranges
-    ax1.set_xlim(0, 2047)    # Show the whole range, but no points in first or last 20.
-    ax2.set_xlim(0, 110)     # Note: go 10 past where the last point will be drawn.
-    ax3.set_xlim(1937,2047)  # Likewise, start 10 before first point.
+    ax1.set_xlim(0, 2048)    # Show the whole range, but no points in first or last 20.
+    ax2.set_xlim(0, 75)
+    ax3.set_xlim(1973,2048)
 
-    ymin = -0.006
+    ymin = -0.004
     ymax = 0.003
     ax1.set_ylim(ymin, ymax)
     ax2.set_ylim(ymin, ymax)
@@ -824,14 +833,17 @@ def evscol(ccd, x, y, e1, e2, w, filename, title=None):
     ax3.yaxis.set_ticklabels([])           # Don't label the y ticks.
 
     # It wants to label ever 0.001, but I think it looks nicer every 0.002.
-    ax1.yaxis.set_ticks( numpy.arange(-0.006, 0.004, 0.002) )
-    ax2.yaxis.set_ticks( numpy.arange(-0.006, 0.004, 0.002) )
-    ax3.yaxis.set_ticks( numpy.arange(-0.006, 0.004, 0.002) )
+    ax1.yaxis.set_ticks( numpy.arange(-0.004, 0.004, 0.002) )
+    ax2.yaxis.set_ticks( numpy.arange(-0.004, 0.004, 0.002) )
+    ax3.yaxis.set_ticks( numpy.arange(-0.004, 0.004, 0.002) )
+
+    ax2.xaxis.set_ticks( numpy.arange(0, 80, 20) )
+    ax3.xaxis.set_ticks( numpy.arange(1980, 2060, 20) )
 
     # Make little diagonal cuts to make the discontinuity clearer:
     # cf. http://stackoverflow.com/questions/5656798/python-matplotlib-is-there-a-way-to-make-a-discontinuous-axis
     d = .03 # how big to make the diagonal lines in axes coordinates
-    m = 0.7  # slope of the cut lines
+    m = 0.6  # slope of the cut lines
     # arguments to pass plot, just so we don't keep repeating them
     kwargs = dict(transform=ax2.transAxes, color='k', clip_on=False)
     ax2.plot((1-m*d,1+m*d),(-d,+d), **kwargs) # top-left diagonal
@@ -857,12 +869,12 @@ def evscol(ccd, x, y, e1, e2, w, filename, title=None):
 
     # Shade in a grey region where the chips are masked
     ax1.fill_between([0,15],[ymin,ymin], [ymax,ymax], color='LightGrey')
-    ax1.fill_between([2032,2047],[ymin,ymin], [ymax,ymax], color='LightGrey')
+    ax1.fill_between([2033,2048],[ymin,ymin], [ymax,ymax], color='LightGrey')
     ax2.fill_between([0,15],[ymin,ymin], [ymax,ymax], color='LightGrey')
-    ax3.fill_between([2032,2047],[ymin,ymin], [ymax,ymax], color='LightGrey')
+    ax3.fill_between([2033,2048],[ymin,ymin], [ymax,ymax], color='LightGrey')
 
     if title is not None:
-        fig.text(0.80, 0.85, title, fontsize=16)
+        fig.text(0.77, 0.57, title, fontsize=16)
 
     plt.savefig(filename)
 

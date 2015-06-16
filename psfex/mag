@@ -1,10 +1,11 @@
 #!/bin/bash
 
 FILE=spte_gold_exp
+#FILE=spte_a1
 #FILE=test_exp
 TAG=v4
 
-#./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
+./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
 
-DATE=20141205_mag
-./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./plot_mag.py --work=~/work/psfex_rerun/$TAG --tag=$TAG"
+#DATE=20141220_mag
+#./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./plot_mag.py --work=~/work/psfex_rerun/$TAG --tag=$TAG"

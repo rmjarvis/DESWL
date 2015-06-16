@@ -177,7 +177,7 @@ def parse_file_name(file_name):
     return root, ccdnum
 
 
-def unpack_file(file_name, wdir, logfile):
+def unpack_file(file_name, wdir):
     """Create the unpacked file in the work directory if necessary.
 
     If the unpacked file already exists, then a link is made.
@@ -192,8 +192,7 @@ def unpack_file(file_name, wdir, logfile):
 
         img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
         print '   unpacking fz file'
-        cmd = 'funpack -O {outf} {inf} >> {log} 2>&1'.format(
-            outf=img_file, inf=file_name, log=logfile)
+        cmd = 'funpack -O {outf} {inf}'.format(outf=img_file, inf=file_name)
         print cmd
         os.system(cmd)
     
@@ -228,22 +227,22 @@ def read_image_header(img_file):
     return sat, fwhm
  
 
-def run_sextractor(wdir, root, img_file, sat, fwhm, logfile,
+def run_sextractor(wdir, root, img_file, sat, fwhm, 
                    sex_dir, sex_config, sex_params, sex_filter, sex_nnw):
     """Run sextractor, but only if the output file does not exist yet.
     """
     cat_file = os.path.join(wdir,root+'_psfcat.fits')
 
     print '   running sextractor'
-    cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat} >> {log} 2>&1".format(
+    cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat}".format(
         sex_dir=sex_dir, img_file=img_file, config=sex_config,
         cat_file=cat_file, params=sex_params, filter=sex_filter,
-        nnw=sex_nnw, fwhm=fwhm, log=logfile, sat=sat)
+        nnw=sex_nnw, fwhm=fwhm, sat=sat)
     print cat_cmd
     os.system(cat_cmd)
     return cat_file
 
-def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
+def run_findstars(wdir, root, cat_file, fs_dir, fs_config):
     """Run findstars, and return a new updated catalog file to use.
     """
     import pyfits
@@ -253,21 +252,21 @@ def run_findstars(wdir, root, cat_file, logfile, fs_dir, fs_config):
 
     # run find stars
     print '   running findstars'
-    findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ >> {log} 2>&1'.format(
-            fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
-            wdir=wdir, log=logfile)
+    findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/'.format(
+            fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, wdir=wdir)
     print findstars_cmd
     os.system(findstars_cmd)
 
     if not os.path.exists(star_file):
         print '   Error running findstars.  Rerun with verbose=2.'
-        findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ verbose=2 debug_ext=_fs.debug >> {log} 2>&1'.format(
+        findstars_cmd = '{fs_dir}/findstars {fs_config} root={root} cat_ext=_psfcat.fits stars_file={star_file} input_prefix={wdir}/ verbose=2 debug_ext=_fs.debug'.format(
             fs_dir=fs_dir, fs_config=fs_config, root=root, star_file=star_file, 
-            wdir=wdir, log=logfile)
+            wdir=wdir)
         print findstars_cmd
         os.system(findstars_cmd)
         print '   The debug file is',root + '_fs.debug'
-        return None, None, None
+        if not os.path.exists(star_file):
+            return None, None, None
 
     # Make a mask based on which objects findstars decided are stars.
     with pyfits.open(star_file) as pyf:
@@ -379,16 +378,15 @@ def get_fwhm(cat_file):
     return numpy.median(flux_radius)
 
 
-def run_psfex(wdir, root, cat_file, psf_file, used_file, logfile, psfex_dir, psfex_config):
+def run_psfex(wdir, root, cat_file, psf_file, used_file, psfex_dir, psfex_config):
     """Run PSFEx
 
     Returns True if successful, False if there was a catastrophic failure and no output 
     file was written.
     """
     print '   running psfex'
-    psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} >> {log} 2>&1'.format(
-            psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file,
-            log=logfile)
+    psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file}'.format(
+            psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file)
     print psf_cmd
     os.system(psf_cmd)
 
@@ -451,7 +449,7 @@ def main():
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)
-    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1tb'
     if args.tag:
         blacklist_file += '-' + args.tag
     blacklist_file += '.txt'
@@ -519,9 +517,6 @@ def main():
         except:
             if not os.path.exists(wdir): raise
 
-        # Outputs of shell commands will be logged here.
-        logfile = os.path.join(wdir, 'log.'+exp)
-
         # The input directory from the main DESDM reduction location.
         input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
 
@@ -543,7 +538,7 @@ def main():
 
                 if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                     # Unpack the image file if necessary
-                    img_file = unpack_file(file_name, wdir, logfile)
+                    img_file = unpack_file(file_name, wdir)
 
                     # extract the saturation level, this is how desdm runs sextractor
                     # we need the fwhm for class star
@@ -551,7 +546,7 @@ def main():
                     sat, fwhm = read_image_header(img_file)
                     print '   fwhm = ',fwhm
 
-                    cat_file = run_sextractor(wdir, root, img_file, sat, fwhm, logfile,
+                    cat_file = run_sextractor(wdir, root, img_file, sat, fwhm, 
                                               args.sex_dir, args.sex_config, args.sex_params, 
                                               args.sex_filter, args.sex_nnw)
 
@@ -559,8 +554,7 @@ def main():
                 if args.use_findstars:
                     tmp = cat_file
                     cat_file, nstars, ntot = run_findstars(
-                            wdir, root, cat_file, logfile,
-                            args.findstars_dir, args.findstars_config)
+                            wdir, root, cat_file, args.findstars_dir, args.findstars_config)
                     if cat_file == None:
                         print '     -- flag for findstars failure'
                         flag |= FINDSTARS_FAILURE
@@ -598,11 +592,12 @@ def main():
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     
+                star_file = os.path.join(wdir,root+'_findstars.fits')
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
                 json_file = os.path.join(wdir,root+'.json')
                 if args.run_psfex:
-                    success = run_psfex(wdir, root, cat_file, psf_file, used_file, logfile,
+                    success = run_psfex(wdir, root, cat_file, psf_file, used_file, 
                             args.psfex_dir, args.psfex_config)
                     if success:
                         move_files(wdir, odir, psf_file,
@@ -610,8 +605,9 @@ def main():
                     else:
                         flag |= PSFEX_FAILURE
 
+                print 'rm_files = ',args.rm_files
                 if args.rm_files:
-                    remove_temp_files(wdir, root, psf_file, used_file, json_file)
+                    remove_temp_files(wdir, root, star_file, psf_file, used_file, json_file)
 
 
             except NoStarsException:

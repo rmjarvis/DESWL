@@ -174,7 +174,6 @@ def load_ng_data():
     trcov = numpy.concatenate(trcov)
 
     return num, t, flux, snr, tsnr, flag, t_r, snr_r, flag_r, e, e_psf, t_psf, sens, chisq, trcov
-    num_ng, t_ng, flux_ng, snr_ng, tsnr_ng, flag_ng, tr_ng, snrr_ng, flagr_ng, e_ng, epsf_ng, tpsf_ng, sens_ng, chisq_ng, trcov_ng = tests.load_ng_data()
 
 def load_truth():
     import pyfits

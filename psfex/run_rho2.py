@@ -67,34 +67,32 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
                             g1=e1, g2=e2)
     decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              g1=(e1-m_e1), g2=(e2-m_e2))
-    dscat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                             k=(s**2-m_s**2)/s**2)
+    dt = (s**2-m_s**2)/s**2
+    print 'mean dt = ',numpy.mean(dt)
+    dtcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
+                             k=dt, g1=dt*e1, g2=dt*e2)
 
     rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
                                   bin_size=0.1, verbose=1)
     rho1.process(decat)
-    #print 'rho1 = ',rho1.xip
-    #print 'rho1.xip_im = ',rho1.xip_im
-    #print 'rho1.xim = ',rho1.xim
-    #print 'rho1.xim_im = ',rho1.xim_im
-    #print 'rho1.sigma = ',numpy.sqrt(rho1.varxi)
 
     rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
                                   bin_size=0.1, verbose=1)
     rho2.process(ecat, decat)
-    #print 'rho2 = ',rho2.xip
-    #print 'rho2.xip_im = ',rho2.xip_im
-    #print 'rho2.xim = ',rho2.xim
-    #print 'rho2.xim_im = ',rho2.xim_im
-    #print 'rho2.sigma = ',numpy.sqrt(rho2.varxi)
 
     rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
                                   bin_size=0.1, verbose=1)
-    rho3.process(dscat)
-    #print 'rho3 = ',rho3.xi
-    #print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
+    rho3.process(dtcat)
 
-    return rho1,rho2,rho3
+    rho4 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=0.1, verbose=1)
+    rho4.process(dtcat, decat)
+
+    rho5 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=0.1, verbose=1)
+    rho5.process(dtcat)
+
+    return rho1,rho2,rho3,rho4,rho5
 
 
 def main():
@@ -129,7 +127,7 @@ def main():
         runs = args.runs
         exps = args.exps
 
-    expinfo_file = 'exposure_info.fits'
+    expinfo_file = 'exposure_info_' + args.tag + '.fits'
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
@@ -219,6 +217,7 @@ def main():
     print '\nFinished processing all exposures'
 
     for key in ra_list.keys():
+        print key
         ra = numpy.concatenate(ra_list[key])
         dec = numpy.concatenate(dec_list[key])
         e1 = numpy.concatenate(e1_list[key])
@@ -228,8 +227,7 @@ def main():
         pe2 = numpy.concatenate(pe2_list[key])
         ps = numpy.concatenate(ps_list[key])
 
-        rho1, rho2, rho3 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps,
-                                       max_sep=300)
+        rho1, rho2, rho3, rho4, rho5 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps, max_sep=300)
 
         stat_file = os.path.join(work, "rho_"+key+".json")
         stats.append([
@@ -246,6 +244,16 @@ def main():
             rho2.varxi.tolist(),
             rho3.xi.tolist(),
             rho3.varxi.tolist(),
+            rho4.xip.tolist(),
+            rho4.xip_im.tolist(),
+            rho4.xim.tolist(),
+            rho4.xim_im.tolist(),
+            rho4.varxi.tolist(),
+            rho5.xip.tolist(),
+            rho5.xip_im.tolist(),
+            rho5.xim.tolist(),
+            rho5.xim_im.tolist(),
+            rho5.varxi.tolist(),
         ])
         #print 'stats = ',stats
         with open(stat_file,'w') as f:

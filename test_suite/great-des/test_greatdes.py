@@ -2075,6 +2075,72 @@ def snr_vs_trcov(snr, trcov, mask, filename=None):
     else:
         plt.savefig(filename)
 
+def build_m_vs_z_ngmix():
+    import numpy
+    import tests
+    # Pull out the complete script for building the m_vs_z plot for ngmix.
+
+    # Read in the ngmix data
+    num_ng, t_ng, flux_ng, snr_ng, tsnr_ng, flag_ng, tr_ng, snrr_ng, flagr_ng, e_ng, epsf_ng, tpsf_ng, sens_ng, chisq_ng, trcov_ng = tests.load_ng_data()
+
+    # Read in the truth data
+    num_true, r_true, f_true, e_true, e_raw, g_app, id_cosmos, srcn, z, use = tests.load_truth()
+
+    # Find the index into truth values that refer to the corresponding ngmix values
+    # i.e. num_true[ng] == num_ng
+    ng = numpy.in1d(num_true, num_ng)
+    assert numpy.all(num_true[ng] == num_ng)
+
+    # Select good objects
+    good_ng = (flag_ng == 0) & (flagr_ng == 0) & (sens_ng.real > 0) & (sens_ng.imag > 0) & (use[ng])
+
+    # Convert ngmix sensitivity into m,c terminology.
+    c0 = numpy.zeros(len(e_ng))
+    m_ng = (sens_ng.real + sens_ng.imag)/2. - 1.
+
+    # Calculate the ngmix weights.
+    w_ng = 1. / (2 * 0.22**2 + trcov_ng)
+
+    # Define the mask that we apply in the data
+    mask_ng = good_ng & (snrr_ng > 15) & (tr_ng/tpsf_ng > 0.15)
+
+    # Plot m vs z.  (Wrongly called e here, but that's what it means.)
+    tests.mean_e_vs_z(z[ng], e_ng, m_ng, c0, g_app[ng], e_true[ng], epsf_ng, w_ng, mask_ng, title=r'ngmix $(S/N)_r > 15$, $Tr/Tp > 0.15$, normal $w$', filename='mvsz_ngmix.pdf')
+
+    # Make unweighted version
+    w1 = numpy.ones(len(e_ng))
+    tests.mean_e_vs_z(z[ng], e_ng, m_ng, c0, g_app[ng], e_true[ng], epsf_ng, w1, mask_ng, title=r'ngmix $(S/N)_r > 15$, $Tr/Tp > 0.15$, $w=1$', filename='mvsz_ngmix_unweighted.pdf')
+
+    # Load im3shape catalog
+    num_im, r_im, rgp_im, f_im, snrw_im, flag_im, e_im, snrr_im, disc_im, niter_im, chisq_im, minres_im, maxres_im, info_im, epsf_im, fwhmpsf_im, trcov_im, detcov_im, varr_im, vare_im = tests.load_im_data()
+    im = numpy.in1d(num_true, num_im)
+    assert numpy.all(num_true[im] == num_im)
+    good_im = (flag_im == 0) & (info_im == 0)
+    mask_im = good_im & (snrw_im > 15) & (rgp_im > 1.2)
+
+    # Find indices between ng and im catalogs
+    # im_ng gives the index into the im catalog to get objects also in ng
+    im_ng = numpy.in1d(num_im, num_ng)
+    # ng_im gives the index into the ng catalog to get objects also in im
+    ng_im = numpy.in1d(num_ng, num_im)
+    assert numpy.all(num_im[im_ng] == num_ng[ng_im])
+
+    # mask_c is the combined mask.  Can be used with any of the catalogs by first
+    # applying the appropriate mask to get objects that are in both.
+    assert len(mask_ng[ng_im]) == len(mask_im[im_ng])
+    mask_c = mask_ng[ng_im] & mask_im[im_ng]
+    assert len(mask_c) == len(num_true[ng & im])
+    assert len(mask_c) == len(num_ng[ng_im])
+    assert len(mask_c) == len(num_im[im_ng])
+
+    # m_true for the matched catalog:
+    print 'm_true for matched catalog: ',tests.calc_mc(e_true[ng&im][mask_c], g_app[ng&im][mask_c])[:2]
+
+    # m vs z for ngmix shapes on the matched catalog
+    tests.mean_e_vs_z(z[ng&im], e_ng[ng_im], m_ng[ng_im], c0[ng_im], g_app[ng&im], e_true[ng&im], epsf_ng[ng_im], w_ng[ng_im], mask_c, title=r'ngmix shears on matched selection, normal $w$', filename='mvsz_ngmix_match.pdf')
+    tests.mean_e_vs_z(z[ng&im], e_ng[ng_im], m_ng[ng_im], c0[ng_im], g_app[ng&im], e_true[ng&im], epsf_ng[ng_im], w1[ng_im], mask_c, title=r'ngmix shears on matched selection, $w=1$', filename='mvsz_ngmix_match_unweighted.pdf')
+
+
 def main():
     import numpy
     num_im, r_im, rgp_im, f_im, snrw_im, flag_im, e_im, snrr_im, disc_im, niter_im, chisq_im, minres_im, maxres_im, info_im, epsf_im, fwhmpsf_im, trcov_im, detcov_im, varr_im, vare_im = tests.load_im_data()
@@ -2126,4 +2192,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+    build_m_vs_z_ngmix()

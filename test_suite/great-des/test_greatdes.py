@@ -104,6 +104,45 @@ def load_im_data():
     return num, rad, rgp, flux, snr, flag, e, round_snr, is_disc, niter, chisq, min_res, max_res, info, psf_e, psf_fwhm, trcov, detcov, var_r, var_e
 
 
+
+def load_im_sv():
+    import pyfits
+    import glob
+    import numpy
+    #files = sorted(glob.glob('results/im3shape/results-disc/main_cats/nbc.meds.*.fits'))
+    files = sorted(glob.glob('/astro/u/astrodat/data/DES/wlpipe/im3shape_v9/full_cats/*.fits'))
+
+    rad = []
+    rgp = []
+    snr = []
+    flag = []
+    e = []
+    is_disc = []
+    info = []
+
+    for f in files:
+        with pyfits.open(f) as pyf:
+            data = pyf[1].data
+            print f, len(data)
+            rad.append(data['radius'].copy())
+            rgp.append(data['mean_rgpp_rp'].copy())
+            snr.append(data['snr'].copy())
+            flag.append(data['error_flag'].copy())
+            e.append(data['e1'] + 1j * data['e2'])
+            is_disc.append( (data['bulge_flux'] == 0.) )
+            info.append(data['info_flag'].copy())
+
+    rad = numpy.concatenate(rad)
+    rgp = numpy.concatenate(rgp)
+    snr = numpy.concatenate(snr)
+    flag = numpy.concatenate(flag)
+    e = numpy.concatenate(e)
+    is_disc = numpy.concatenate(is_disc)
+    info = numpy.concatenate(info)
+
+    return rad, rgp, snr, flag, e, is_disc, info
+
+
 def load_ng_data():
     import pyfits
     import glob
@@ -913,11 +952,12 @@ def nbc(e, e_true, g_app, e_psf, rgp, snr, disc, w, mask, title='NBC solution', 
             sample = mask & (rgp >= rmin) & (rgp < rmax) & (snr >= smin) & (snr < smax)
             if numpy.sum(sample) == 0:
                 continue
-            e_corr = (e[sample] - c_corr[sample]) / (1. + numpy.mean(m_corr[sample]))
+            means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+            e_corr = (e[sample] - c_corr[sample]) / means
             s[j] = numpy.mean(snr[sample])
             print 'sj = ',s[j]
             print 'mean c_corr = ',numpy.mean(c_corr[sample])
-            print 'mean m_corr = ',numpy.mean(m_corr[sample])
+            print 'mean m_corr = ',means-1
             e_comp = e_corr - e_true[sample]
             m1, _, sm1, _ = linear_fit(e_comp.real, g_app[sample].real, w[sample])
             m2, _, sm2, _ = linear_fit(e_comp.imag, g_app[sample].imag, w[sample])
@@ -1000,11 +1040,12 @@ def nbc(e, e_true, g_app, e_psf, rgp, snr, disc, w, mask, title='NBC solution', 
             sample = mask & (rgp >= rmin) & (rgp < rmax) & (snr >= smin) & (snr < smax)
             if numpy.sum(sample) == 0:
                 continue
-            e_corr = (e[sample] - c_corr[sample]) / (1. + numpy.mean(m_corr[sample]))
+            means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+            e_corr = (e[sample] - c_corr[sample]) / means
             s[j] = numpy.mean(snr[sample])
             print 'sj = ',s[j]
             print 'mean c_corr = ',numpy.mean(c_corr[sample])
-            print 'mean m_corr = ',numpy.mean(m_corr[sample])
+            print 'mean m_corr = ',means-1
             e_comp = e_corr - e_true[sample]
             a1, _, sa1, _ = linear_fit(e_comp.real, e_psf[sample].real, w[sample])
             a2, _, sa2, _ = linear_fit(e_comp.imag, e_psf[sample].imag, w[sample])
@@ -1029,15 +1070,14 @@ def nbc(e, e_true, g_app, e_psf, rgp, snr, disc, w, mask, title='NBC solution', 
 
     return m_corr, c_corr
 
-def mean_x_vs_y(x, y, w, mask, xlabel, ylabel, filename, title=None):
-    import matplotlib.pyplot as plt
-    import matplotlib
+def plot_mean_x_vs_y(ax, x, y, w=None, mask=None, color='red', fmt='o', label=None, line=False, nx=10):
     import numpy
-    plt.style.use('supermongo')
-    matplotlib.rcParams.update({'font.size': 8})
-    fig, ax = plt.subplots(1, 1)
 
-    nx = 10
+    if w is None:
+        w = numpy.ones(len(x))
+    if mask is None:
+        mask = numpy.ones(len(x),dtype=bool)
+
     sortx = numpy.sort(x[mask])
     print len(sortx)
     deciles = numpy.array([ sortx[i*len(sortx)/nx] for i in range(nx) ] + [ sortx[-1] ])
@@ -1058,12 +1098,23 @@ def mean_x_vs_y(x, y, w, mask, xlabel, ylabel, filename, title=None):
         sy[j] = numpy.sum(w[sample]**2 * (y[sample]-my[j])**2) / numpy.sum(w[sample])**2
 
     sy = numpy.sqrt(sy)
-
     print 'mx = ',mx
-
-    ax.errorbar(mx[use], my[use], yerr=sy[use], color='red', fmt='o')
+    if line:
+        ax.plot(mx[use], my[use], color=color, label=label)
+    else:
+        ax.errorbar(mx[use], my[use], yerr=sy[use], color=color, fmt=fmt, label=label)
     if min(my[use]) < 0 and max(my[use]) > 0:
         ax.plot( [mx[0],mx[-1]], [0.,0.], color='k')
+
+
+def mean_x_vs_y(x, y, w, mask, xlabel, ylabel, filename, title=None):
+    import matplotlib.pyplot as plt
+    import matplotlib
+    plt.style.use('supermongo')
+    matplotlib.rcParams.update({'font.size': 8})
+    fig, ax = plt.subplots(1, 1)
+
+    plot_mean_x_vs_y(ax, x, y, w, mask)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     if title is not None:
@@ -1123,13 +1174,17 @@ def alpha_vs_x(e, e_true, g_app, e_psf, x, w, mask, label, filename, title=None,
         a1_t[j], _, sa1_t[j], _ = linear_fit(e_true[sample].real-g_app[sample].real, e_psf[sample].real, w[sample])
         a2_t[j], _, sa2_t[j], _ = linear_fit(e_true[sample].imag-g_app[sample].imag, e_psf[sample].imag, w[sample])
         if corr:
-            e_corr = (e[sample] - c_corr[sample]) / (1. + numpy.mean(m_corr[sample]))
+            means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+            e_corr = (e[sample] - c_corr[sample]) / means
             a1_c[j], _, sa1_c[j], _ = linear_fit(e_corr.real-g_app[sample].real, e_psf[sample].real, w[sample])
             a2_c[j], _, sa2_c[j], _ = linear_fit(e_corr.imag-g_app[sample].imag, e_psf[sample].imag, w[sample])
             
     print 'mx = ',mx
-    print 'alpha1 = ',a1_t
-    print 'alpha2 = ',a2_t
+    print 'alpha1_t = ',a1_t
+    print 'alpha2_t = ',a2_t
+    if corr:
+        print 'alpha1_c = ',a1_c
+        print 'alpha2_c = ',a2_c
 
     if title is None or 'ngmix' not in title:
         ax.errorbar(mx[use], a1[use], yerr=sa1[use], color='red', fmt='o', label=r'$\alpha_1$ measured shapes')
@@ -1159,12 +1214,16 @@ def alpha_vs_x(e, e_true, g_app, e_psf, x, w, mask, label, filename, title=None,
         a1_t[j], _, sa1_t[j], _ = linear_fit(e_true[sample].real-g_app[sample].real, g_app[sample].real, w[sample])
         a2_t[j], _, sa2_t[j], _ = linear_fit(e_true[sample].imag-g_app[sample].imag, g_app[sample].imag, w[sample])
         if corr:
-            e_corr = (e[sample] - c_corr[sample]) / (1. + numpy.mean(m_corr[sample]))
+            means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+            e_corr = (e[sample] - c_corr[sample]) / means
             a1_c[j], _, sa1_c[j], _ = linear_fit(e_corr.real-g_app[sample].real, g_app[sample].real, w[sample])
             a2_c[j], _, sa2_c[j], _ = linear_fit(e_corr.imag-g_app[sample].imag, g_app[sample].imag, w[sample])
     print 'mx = ',mx
-    print 'm1 = ',a1_t
-    print 'm2 = ',a2_t
+    print 'm1_t = ',a1_t
+    print 'm2_t = ',a2_t
+    if corr:
+        print 'm1_c = ',a1_c
+        print 'm2_c = ',a2_c
 
     if title is None or 'ngmix' not in title:
         ax.errorbar(mx[use], a1[use], yerr=sa1[use], color='red', fmt='o', label=r'$m_1$ true shapes')
@@ -1426,7 +1485,8 @@ def old_nbc(e, e_true, g_app, rgp, snr, w, mask, title='nbc', filename=None, mas
             smin = snr_bins[j]
             smax = snr_bins[j+1]
             sample = mask & (rgp >= rmin) & (rgp < rmax) & (snr >= smin) & (snr < smax)
-            e_corr[sample] /= 1. + numpy.mean(m_corr[sample])
+            means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+            e_corr[sample] /= means
     plot_nbc(ax, rgp, snr, e_corr, g_app, w, mask, rgp_bins, snr_bins, e_true=e_true)
 
     ax.plot( [snr_bins[0],snr_bins[-1]], [0.,0.], color='k')
@@ -1528,7 +1588,8 @@ def nbc_c(e, e_true, g_app, e_psf, rgp, cov, w, mask, title=None, filename=None,
         a2[j], _, sa2[j], _ = linear_fit(e[sample].imag-g_app[sample].real, e_psf[sample].imag, w[sample])
         a1_t[j], _, sa1_t[j], _ = linear_fit(e_true[sample].real-g_app[sample].real, e_psf[sample].real, w[sample])
         a2_t[j], _, sa2_t[j], _ = linear_fit(e_true[sample].imag-g_app[sample].real, e_psf[sample].imag, w[sample])
-        e_corr[sample] /= 1. + numpy.mean(m_corr[sample])
+        means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+        e_corr[sample] /= means
         a1_c[j], _, sa1_c[j], _ = linear_fit(e_corr[sample].real-g_app[sample].real, e_psf[sample].real, w[sample])
         a2_c[j], _, sa2_c[j], _ = linear_fit(e_corr[sample].imag-g_app[sample].real, e_psf[sample].imag, w[sample])
     print 'alpha1 = ',a1_c
@@ -1585,7 +1646,8 @@ def nbc_c(e, e_true, g_app, e_psf, rgp, cov, w, mask, title=None, filename=None,
         a1_t[j], _, sa1_t[j], _ = linear_fit(e_true[sample].real-g_app[sample].real, e_psf[sample].real, w[sample])
         a2_t[j], _, sa2_t[j], _ = linear_fit(e_true[sample].imag-g_app[sample].real, e_psf[sample].imag, w[sample])
 
-        e_corr[sample] /= 1. + numpy.mean(m_corr[sample])
+        means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+        e_corr[sample] /= means
         a1_c[j], _, sa1_c[j], _ = linear_fit(e_corr[sample].real-g_app[sample].real, e_psf[sample].real, w[sample])
         a2_c[j], _, sa2_c[j], _ = linear_fit(e_corr[sample].imag-g_app[sample].real, e_psf[sample].imag, w[sample])
     print 'alpha1 = ',a1_c
@@ -1663,7 +1725,8 @@ def nbc_cov(e, e_true, g_app, e_psf, rgp, cov, w, mask, filename=None, mask_fit=
         m_t[j] = (m1 + m2) / 2.
         sm_t[j] = (sigm1 + sigm2) / numpy.sqrt(2.)  # Not really right, but fine for now.
 
-        e_corr[sample] /= 1. + numpy.mean(m_corr[sample])
+        means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+        e_corr[sample] /= means
         m1, m2, sigm1, sigm2 = calc_m(e_corr[sample], g_app[sample], w[sample])
         m_c[j] = (m1 + m2) / 2.
         sm_c[j] = (sigm1 + sigm2) / numpy.sqrt(2.)  # Not really right, but fine for now.
@@ -1810,7 +1873,8 @@ def mean_e_vs_z(z, e, m_corr, c_corr, g_app, e_true, e_psf, w, mask, title='e vs
 
     for i in range(nz):
         mask2 = mask & (z > zbins[i]) & (z < zbins[i+1])
-        ee = (e[mask2] - c_corr[mask2]) / (1. + numpy.mean(m_corr[mask2]))
+        means = 1. + numpy.sum(w[mask2] * m_corr[mask2]) / numpy.sum(w[mask2])
+        ee = (e[mask2] - c_corr[mask2]) / means
         mc = calc_mc(ee, g_app[mask2], w[mask2])
         m1[i], m2[i], c1[i], c2[i], sigm1[i], sigm2[i], sigc1[i], sigc2[i] = mc
         alpha1[i], _, sigalpha1[i], _ = linear_fit(ee.real-g_app[mask2].real, e_psf[mask2].real, w[mask2])
@@ -1919,7 +1983,8 @@ def e_vs_epsf(e, e_true, g_app, e_psf, w, mask, title='', filename=None, m_corr=
             if c_corr is not None:
                 e_corr -= c_corr[sample]
             if m_corr is not None:
-                e_corr /= (1. + numpy.mean(m_corr[sample]))
+                means = 1. + numpy.sum(w[sample] * m_corr[sample]) / numpy.sum(w[sample])
+                e_corr /= means
             me1[j] = numpy.sum(w[sample] * e_corr.real) / numpy.sum(w[sample])
             me2[j] = numpy.sum(w[sample] * e_corr.imag) / numpy.sum(w[sample])
             mepsf[j] = numpy.sum(w[sample] * epsf[sample]) / numpy.sum(w[sample])
@@ -2075,6 +2140,105 @@ def snr_vs_trcov(snr, trcov, mask, filename=None):
     else:
         plt.savefig(filename)
 
+def comparison_histograms(e_im, snr_im, rgp_im, r_im, disc_im, e_sv, snr_sv, rgp_sv, r_sv, disc_sv, 
+                          filename1, filename2, logsn=True):
+    import matplotlib.pyplot as plt
+    import numpy
+
+    fig, axes = plt.subplots(1, 3)
+
+    ax = axes[0]
+    e_im = numpy.abs(e_im)
+    #e_im = e_im[e_im<0.9]
+    e_sv = numpy.abs(e_sv)
+    #e_sv = e_sv[e_sv<0.9]
+    n, bins, patches = ax.hist(e_im, bins=500, histtype='step', color='red', normed=1, label='GREAT-DES')
+    ax.hist(e_sv, bins=bins, histtype='step', color='blue', normed=1, label='SV data')
+    ax.set_xlabel(r'$|e|$')
+    ax.set_ylabel(r'$N$')
+    ax.set_yticks([]) 
+    ax.set_xticks([0., 0.2, 0.4, 0.6, 0.8]) 
+    ax.set_xlim(0,0.9)
+    ax.legend(loc='upper right', fontsize=10)
+
+    ax = axes[1]
+    n, bins, patches = ax.hist(rgp_im, bins=500, histtype='step', color='red', normed=1, label='GREAT-DES')
+    ax.hist(rgp_sv, bins=bins, histtype='step', color='blue', normed=1, label='SV data')
+    ax.set_xlabel(r'$R_{gp}/R_p$')
+    ax.set_ylabel(r'$N$')
+    ax.set_yticks([]) 
+    ax.set_xticks([1.2, 1.4, 1.6, 1.8, 2.0]) 
+    ax.set_xlim(1.15,2.)
+    ax.legend(loc='upper right', fontsize=10)
+
+    ax = axes[2]
+    m = snr_im < 100
+    n, bins, patches = ax.hist(snr_im[m], bins=500, histtype='step', color='red', normed=1, label='GREAT-DES')
+    m = snr_sv < 100
+    ax.hist(snr_sv[m], bins=bins, histtype='step', color='blue', normed=1, label='SV data')
+    ax.set_xlabel(r'$(S/N)_w$')
+    ax.set_ylabel(r'$N$')
+    ax.set_yticks([]) 
+    if logsn:
+        ax.set_xlim(10.,100.)
+        ax.set_xscale('log')
+    else:
+        ax.set_xlim(10.,100.)
+    ax.legend(loc='upper right', fontsize=10)
+
+    #print fig.get_size_inches()  # Default is apparently 8,6
+    fig.set_size_inches(12.,4.)
+    plt.tight_layout()
+    plt.savefig(filename1)
+    fig, axes = plt.subplots(1, 3)
+
+    ax = axes[0]
+    plot_mean_x_vs_y(ax, snr_im, r_im, color='red', label='GREAT-DES', line=True, nx=50)
+    plot_mean_x_vs_y(ax, snr_sv, r_sv, color='blue', label='SV data', line=True, nx=50)
+    ax.set_xlabel(r'$(S/N)_w$')
+    ax.set_ylabel(r'$\langle R_g \rangle$ (arcsec)')
+    ax.set_ylim(0.4,1.0)
+    ax.set_yticks([0.4, 0.6, 0.8, 1.0]) 
+    if logsn:
+        ax.set_xlim(10.,100.)
+        ax.set_xscale('log')
+    else:
+        ax.set_xlim(10.,100.)
+    ax.legend(loc='upper left', fontsize=10)
+
+    ax = axes[1]
+    plot_mean_x_vs_y(ax, snr_im, rgp_im, color='red', label='GREAT-DES', line=True, nx=50)
+    plot_mean_x_vs_y(ax, snr_sv, rgp_sv, color='blue', label='SV data', line=True, nx=50)
+    ax.set_xlabel(r'$(S/N)_w$')
+    ax.set_ylabel(r'$\langle R_{gp}/R_p \rangle$')
+    ax.set_ylim(1.2,1.6)
+    ax.set_yticks([1.2, 1.3, 1.4, 1.5, 1.6]) 
+    if logsn:
+        ax.set_xlim(10.,100.)
+        ax.set_xscale('log')
+    else:
+        ax.set_xlim(10.,100.)
+    ax.legend(loc='upper left', fontsize=10)
+
+    ax = axes[2]
+    plot_mean_x_vs_y(ax, snr_im, 1.-disc_im, color='red', label='GREAT-DES', line=True, nx=50)
+    plot_mean_x_vs_y(ax, snr_sv, 1.-disc_sv, color='blue', label='SV data', line=True, nx=50)
+    ax.set_xlabel(r'$(S/N)_w$')
+    ax.set_ylabel(r'Bulge fraction')
+    ax.set_ylim(0.,0.8)
+    ax.set_yticks([0., 0.2, 0.4, 0.6, 0.8]) 
+    if logsn:
+        ax.set_xlim(10.,100.)
+        ax.set_xscale('log')
+    else:
+        ax.set_xlim(10.,100.)
+    ax.legend(loc='upper left', fontsize=10)
+
+    fig.set_size_inches(12.,4.)
+    plt.tight_layout()
+    plt.savefig(filename2)
+
+
 def build_m_vs_z_ngmix():
     import numpy
     import tests
@@ -2135,6 +2299,10 @@ def build_m_vs_z_ngmix():
 
     # m_true for the matched catalog:
     print 'm_true for matched catalog: ',tests.calc_mc(e_true[ng&im][mask_c], g_app[ng&im][mask_c])[:2]
+    s_match = 1. + numpy.sum(w_ng[ng_im] * m_ng[ng_im]) / numpy.sum(w_ng[ng_im])
+    print 'm_ngmix for matched catalog: ',tests.calc_mc(e_ng[ng_im][mask_c]/s_match, g_app[ng&im][mask_c], w=w_ng[ng_im])[:2]
+    s_ave = 1. + numpy.sum(w_ng[mask_ng] * m_ng[mask_ng]) / numpy.sum(w_ng[mask_ng])
+    print 'm_ngmix ngmix cuts: ',tests.calc_mc(e_ng[mask_ng]/s_ave, g_app[ng][mask_ng], w_ng[mask_ng])[:2]
 
     # m vs z for ngmix shapes on the matched catalog
     tests.mean_e_vs_z(z[ng&im], e_ng[ng_im], m_ng[ng_im], c0[ng_im], g_app[ng&im], e_true[ng&im], epsf_ng[ng_im], w_ng[ng_im], mask_c, title=r'ngmix shears on matched selection, normal $w$', filename='mvsz_ngmix_match.pdf')
@@ -2189,8 +2357,17 @@ def main():
     # As a function of z:
     tests.calc_mc(e_true[ng&im&(z<0.8)][mask_c[z[ng&im]<0.8]], g_app[ng&im&(z<0.8)][mask_c[z[ng&im]<0.8]])
 
+def figure11():
+    # Make figure 11
+    num_im, r_im, rgp_im, f_im, snrw_im, flag_im, e_im, snrr_im, disc_im, niter_im, chisq_im, minres_im, maxres_im, info_im, epsf_im, fwhmpsf_im, trcov_im, detcov_im, varr_im, vare_im = tests.load_im_data()
+    r_sv, rgp_sv, snr_sv, flag_sv, e_sv, disc_sv, info_sv = tests.load_im_sv()
+    f_im = (flag_im == 0) & (info_im == 0)
+    f_sv = (flag_sv == 0) & (info_sv == 0)
+    tests.comparison_histograms(e_im[f_im], snrw_im[f_im], rgp_im[f_im], r_im[f_im], disc_im[f_im], e_sv[f_sv], snr_sv[f_sv], rgp_sv[f_sv], r_sv[f_sv], disc_sv[f_sv], 'h1.pdf', 'h2.pdf')
+
 
 
 if __name__ == '__main__':
     #main()
-    build_m_vs_z_ngmix()
+    #build_m_vs_z_ngmix()
+    figure11()

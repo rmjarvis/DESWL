@@ -484,7 +484,7 @@ def get_im3shape_epoch_data(use_gold=True):
 
 
 
-def psfex_resid(m, de1, de2, ds):
+def psfex_resid(m, de1, de2, ds, key=None):
 
     import matplotlib
     matplotlib.use('Agg') # needs to be done before import pyplot
@@ -561,6 +561,7 @@ def psfex_resid(m, de1, de2, ds):
     plt.xlabel('Uncorrected Magnitude')
     #plt.ylabel(r'$e_{\rm psf} - \langle e_{\rm psf} \rangle$')
     plt.ylabel(r'$e_{\rm psf} - e_{\rm model}$')
+    fig.tight_layout()
     plt.savefig('fig6.eps')
 
 
@@ -677,7 +678,8 @@ def make_psf_whiskers(x, y, e1, e2, s, de1, de2, ds):
     print 'Done ax[1]'
 
     fig.set_size_inches(7.5,4.0)
-    plt.savefig('psf_whiskers.eps')
+    fig.tight_layout()
+    plt.savefig('both_psf_whiskers.eps')
 
 def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=None, ref=0.01, 
                   ref_name='$e$', alt_ref=None):
@@ -738,21 +740,25 @@ def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=Non
     #ax.set_ylabel('X Position (degrees)')
 
     #fig.set_size_inches(7.5,4.0)
-    plt.savefig(filename)
+    #fig.tight_layout()
+    plt.savefig(filename, bbox_inches='tight')
     print 'wrote',filename
 
 def psf_whiskers(ccd, x, y, e1, e2, s, de1, de2, ds):
-    psf_binned_data = bin_by_fov(ccd, x, y, e1, e2, s)
+    psf_binned_data = bin_by_fov(ccd, x, y, e1, e2, s, nwhisk=4)
     make_whiskers(*psf_binned_data, filename='psf_whiskers.eps', scale=3, title='PSF', 
-                  ref=0.01, alt_ref=0.05)
-    resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, ds)
-    make_whiskers(*resid_binned_data, filename='resid_whiskers.eps', scale=1., title=title, 
-                  ref=0.01, alt_ref=0.05, ref_name=r'$\delta e$')
+                  ref=0.01, alt_ref=0.03)
+    resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, ds, nwhisk=4)
+    make_whiskers(*resid_binned_data, filename='resid_whiskers.eps', scale=0.3, title='PSF residual',
+                  ref=0.01, alt_ref=0.03, ref_name=r'$\delta e$')
+    resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, ds, nwhisk=4)
+    make_whiskers(*resid_binned_data, filename='sm_resid_whiskers.eps', scale=3, title='PSF residual',
+                  ref=0.01, alt_ref=0.03, ref_name=r'$\delta e$')
     #make_psf_whiskers(x,y,e1,e2,s,de1,de2,ds)
 
 def gal_whiskers(ccd, x, y, e1, e2, s, w, filename, scale=1, title=None):
-    binned_data = bin_by_fov(ccd, x, y, e1, e2, s, w=w, nwhisk=5*scale)
-    make_whiskers(*binned_data, filename=filename, scale=scale, title=title)
+    binned_data = bin_by_fov(ccd, x, y, e1, e2, s, w=w, nwhisk=4*scale)
+    make_whiskers(*binned_data, filename=filename, scale=0.5*scale, title=title)
 
 def wmean(e, w, mask):
     import numpy
@@ -876,14 +882,15 @@ def evscol(ccd, x, y, e1, e2, s, w, filename, title=None):
     if title is not None:
         fig.text(0.77, 0.57, title, fontsize=16)
 
+    fig.tight_layout()
     plt.savefig(filename)
 
 
 def main():
-    if False:
+    if True:
         psf_data = get_psf_data()
         (mask, used, ccd, ra, dec, x, y, m, e1, e2, s, de1, de2, ds) = psf_data
-        psfex_resid(m[mask], de1[mask], de2[mask], ds[mask])
+        #psfex_resid(m[mask], de1[mask], de2[mask], ds[mask])
 
         psf_whiskers(ccd[used], x[used], y[used], e1[used], e2[used], s[used],
                     de1[used], de2[used], ds[used])

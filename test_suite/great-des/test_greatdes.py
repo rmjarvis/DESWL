@@ -2142,6 +2142,7 @@ def snr_vs_trcov(snr, trcov, mask, filename=None):
 
 def comparison_histograms(e_im, snr_im, rgp_im, r_im, disc_im, e_sv, snr_sv, rgp_sv, r_sv, disc_sv, 
                           filename1, filename2, logsn=True):
+    import matplotlib
     import matplotlib.pyplot as plt
     import numpy
 
@@ -2168,7 +2169,8 @@ def comparison_histograms(e_im, snr_im, rgp_im, r_im, disc_im, e_sv, snr_sv, rgp
     ax.set_ylabel(r'$N$')
     ax.set_yticks([]) 
     ax.set_xticks([1.2, 1.4, 1.6, 1.8, 2.0]) 
-    ax.set_xlim(1.15,2.)
+    ax.set_xlim(1.2,2.)
+    #ax.axvline(1.2, color='blue', linestyle='--')
     ax.legend(loc='upper right', fontsize=10)
 
     ax = axes[2]
@@ -2180,10 +2182,14 @@ def comparison_histograms(e_im, snr_im, rgp_im, r_im, disc_im, e_sv, snr_sv, rgp
     ax.set_ylabel(r'$N$')
     ax.set_yticks([]) 
     if logsn:
-        ax.set_xlim(10.,100.)
+        ax.set_xlim(15.,100.)
         ax.set_xscale('log')
     else:
-        ax.set_xlim(10.,100.)
+        ax.set_xlim(15.,100.)
+    ax.set_xticks([20, 50, 100]) 
+    # cf. http://stackoverflow.com/questions/14530113/set-ticks-with-logarithmic-scale
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax.axvline(15, color='blue', linestyle='--')
     ax.legend(loc='upper right', fontsize=10)
 
     #print fig.get_size_inches()  # Default is apparently 8,6
@@ -2197,42 +2203,51 @@ def comparison_histograms(e_im, snr_im, rgp_im, r_im, disc_im, e_sv, snr_sv, rgp
     plot_mean_x_vs_y(ax, snr_sv, r_sv, color='blue', label='SV data', line=True, nx=50)
     ax.set_xlabel(r'$(S/N)_w$')
     ax.set_ylabel(r'$\langle R_g \rangle$ (arcsec)')
-    ax.set_ylim(0.4,1.0)
-    ax.set_yticks([0.4, 0.6, 0.8, 1.0]) 
+    ax.set_ylim(0.4,0.9)
+    ax.set_yticks([0.4, 0.6, 0.8]) 
     if logsn:
-        ax.set_xlim(10.,100.)
+        ax.set_xlim(15.,100.)
         ax.set_xscale('log')
     else:
-        ax.set_xlim(10.,100.)
-    ax.legend(loc='upper left', fontsize=10)
+        ax.set_xlim(15.,100.)
+    ax.set_xticks([20, 50, 100]) 
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax.axvline(15, color='blue', linestyle='--')
+    ax.legend(loc='upper right', fontsize=10)
 
     ax = axes[1]
     plot_mean_x_vs_y(ax, snr_im, rgp_im, color='red', label='GREAT-DES', line=True, nx=50)
     plot_mean_x_vs_y(ax, snr_sv, rgp_sv, color='blue', label='SV data', line=True, nx=50)
     ax.set_xlabel(r'$(S/N)_w$')
     ax.set_ylabel(r'$\langle R_{gp}/R_p \rangle$')
-    ax.set_ylim(1.2,1.6)
-    ax.set_yticks([1.2, 1.3, 1.4, 1.5, 1.6]) 
+    ax.set_ylim(1.3,1.6)
+    ax.set_yticks([1.3, 1.4, 1.5, 1.6]) 
     if logsn:
-        ax.set_xlim(10.,100.)
+        ax.set_xlim(15.,100.)
         ax.set_xscale('log')
     else:
-        ax.set_xlim(10.,100.)
-    ax.legend(loc='upper left', fontsize=10)
+        ax.set_xlim(15.,100.)
+    ax.set_xticks([20, 50, 100]) 
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax.axvline(15, color='blue', linestyle='--')
+    ax.legend(loc='upper right', fontsize=10)
 
     ax = axes[2]
     plot_mean_x_vs_y(ax, snr_im, 1.-disc_im, color='red', label='GREAT-DES', line=True, nx=50)
     plot_mean_x_vs_y(ax, snr_sv, 1.-disc_sv, color='blue', label='SV data', line=True, nx=50)
     ax.set_xlabel(r'$(S/N)_w$')
     ax.set_ylabel(r'Bulge fraction')
-    ax.set_ylim(0.,0.8)
-    ax.set_yticks([0., 0.2, 0.4, 0.6, 0.8]) 
+    ax.set_ylim(0.,0.6)
+    ax.set_yticks([0., 0.2, 0.4, 0.6]) 
     if logsn:
-        ax.set_xlim(10.,100.)
+        ax.set_xlim(15.,100.)
         ax.set_xscale('log')
     else:
-        ax.set_xlim(10.,100.)
-    ax.legend(loc='upper left', fontsize=10)
+        ax.set_xlim(15.,100.)
+    ax.set_xticks([20, 50, 100]) 
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax.axvline(15, color='blue', linestyle='--')
+    ax.legend(loc='upper right', fontsize=10)
 
     fig.set_size_inches(12.,4.)
     plt.tight_layout()
@@ -2360,9 +2375,11 @@ def main():
 def figure11():
     # Make figure 11
     num_im, r_im, rgp_im, f_im, snrw_im, flag_im, e_im, snrr_im, disc_im, niter_im, chisq_im, minres_im, maxres_im, info_im, epsf_im, fwhmpsf_im, trcov_im, detcov_im, varr_im, vare_im = tests.load_im_data()
-    r_sv, rgp_sv, snr_sv, flag_sv, e_sv, disc_sv, info_sv = tests.load_im_sv()
+    r_sv, rgp_sv, snrw_sv, flag_sv, e_sv, disc_sv, info_sv = tests.load_im_sv()
     f_im = (flag_im == 0) & (info_im == 0)
     f_sv = (flag_sv == 0) & (info_sv == 0)
+    f_im = f_im & (snrw_im > 15) & (rgp_im > 1.2)
+    f_sv = f_sv & (snrw_sv > 15) & (rgp_sv > 1.2)
     tests.comparison_histograms(e_im[f_im], snrw_im[f_im], rgp_im[f_im], r_im[f_im], disc_im[f_im], e_sv[f_sv], snr_sv[f_sv], rgp_sv[f_sv], r_sv[f_sv], disc_sv[f_sv], 'h1.pdf', 'h2.pdf')
 
 

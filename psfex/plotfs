@@ -1,0 +1,9 @@
+#!/bin/bash
+
+DATE=20150701_fs
+FILE=test_exp
+#FILE=test1_exp
+TAG=v4
+
+./run_wq_exp.py --njobs=10 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./plot_fs.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"
+#./run_wq_exp.py --njobs=1 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./plot_fs.py --tag=$TAG --work=~/work/psfex_rerun/$TAG --single_ccd"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-version=v4
-user=mjarvis@carver.nersc.gov
+version=v1
+user=mjarvis@edison.nersc.gov
 nersc=/global/project/projectdirs/des/wl/desdata
 
 for run in $( ls "$DESDATA/EXTRA/red" ); do
@@ -19,5 +19,5 @@ for run in $( ls "$DESDATA/EXTRA/red" ); do
     fi
 done
 
-echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-sva1x-$version.txt $user:$nersc/EXTRA/blacklists"
-rsync -rz $DESDATA/EXTRA/blacklists/psfex-sva1x-$version.txt $user:$nersc/EXTRA/blacklists
+echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-*-$version.txt $user:$nersc/EXTRA/blacklists"
+rsync -rz $DESDATA/EXTRA/blacklists/psfex-*-$version.txt $user:$nersc/EXTRA/blacklists

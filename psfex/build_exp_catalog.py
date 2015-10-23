@@ -66,20 +66,22 @@ def read_blacklists(tag):
     d = {}  # The dict will be indexed by (expnum, ccdnum)
     print 'reading blacklists'
 
-    # First read Eli's astrometry flags
-    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
-    eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
-    with pyfits.open(eli_file) as pyf:
-        data = pyf[1].data
-        for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
-            key = (int(expnum), int(ccdnum))
-            d[key] = int(flag)
-    print 'after astrom, len(d) = ',len(d)
+    if False:
+        # First read Eli's astrometry flags
+        # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
+        eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
+        with pyfits.open(eli_file) as pyf:
+            data = pyf[1].data
+            for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
+                key = (int(expnum), int(ccdnum))
+                d[key] = int(flag)
+        print 'after astrom, len(d) = ',len(d)
 
     # Then Alex and Steve's blacklists
     # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L588)
-    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-sv-uniq.txt'
-    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-sv-uniq.txt'
+    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-y1-uniq.txt'
+    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-y1-uniq.txt'
+    noise_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/noise-y1-uniq.txt'
     with open(ghost_file) as f:
         for line in f:
             expnum, ccdnum = line.split()
@@ -99,7 +101,7 @@ def read_blacklists(tag):
     print 'after ghost, streak, len(d) = ',len(d)
 
     # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
+    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
     if tag:
         psfex_file += '-' + tag
     psfex_file += '.txt'
@@ -122,9 +124,11 @@ def read_image_header(img_file):
 
     Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, sky, sigsky, fwhm, wcs
     """
-    #print 'Start read_image_header'
+    print 'Start read_image_header'
+    print img_file
     import galsim
-    import fitsio
+    #import fitsio
+    import pyfits
 
     if img_file.endswith('fz'):
         hdu = 1
@@ -132,10 +136,12 @@ def read_image_header(img_file):
         hdu = 0
 
     # fitsio is a bit faster here.  11 sec/exp rather than 12, so not a huge difference, but still.
-    #with pyfits.open(img_file) as pyf:
-    with fitsio.FITS(img_file) as pyf:
-        #h = pyf[hdu].header
-        h = pyf[hdu].read_header()
+    with pyfits.open(img_file) as pyf:
+    #with fitsio.FITS(img_file) as pyf:
+        #print pyf
+        #print pyf[hdu]
+        h = pyf[hdu].header
+        #h = pyf[hdu].read_header()
         #print 'opened'
         # DATE-OBS looks like '2012-12-03T07:38:54.174780', so split on T.
         date = h['DATE-OBS']

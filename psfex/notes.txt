@@ -1,3 +1,4 @@
+make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
 go runs run_psfex.py, runs findstars and psfex
 relink runs run_psfex.py, skipping the findstars and psfex steps and just relinks files
@@ -24,3 +25,6 @@ psf5 subtracts off the sky estimated from a 2 pixel border around stamp
 Y1A1 testbed:
 v8 uses degree 2,2, FEW_STARS = 20, max_mag = 17, PSF_SAMP = 0.5, PSF_SIZE = 101,101
 
+Y1A1:
+v1 uses degree 2,2, FEW_STARS = 20, max_mag = 17, PSF_SAMP = 0.5, PSF_SIZE = 101,101
+It was agreed that going forward the tag should look like y1a1-v01.

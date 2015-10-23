@@ -9,9 +9,9 @@ import traceback
 
 # How many stars are too few or too many?
 FEW_STARS = 20
-MANY_STARS_FRAC = 50
-# How high is a high FWHM?  1.8 arcsec / 0.26 arcsec/pixel = 6.9 pixels
-HIGH_FWHM = 6.9
+MANY_STARS_FRAC = 0.5
+# How high is a high FWHM?  3.6 arcsec / 0.26 arcsec/pixel = 13.8 pixels
+HIGH_FWHM = 13.8
 
 # flag values
 NO_STARS_FLAG = 1
@@ -83,6 +83,8 @@ def parse_args():
     # Options
     parser.add_argument('--rm_files', default=1, type=int,
                         help='remove unpacked files after finished')
+    parser.add_argument('--blacklist', default=1, type=int,
+                        help='add failed CCDs to the blacklist')
     parser.add_argument('--run_psfex', default=1, type=int,
                         help='run psfex on files')
     parser.add_argument('--use_findstars', default=1, type=int,
@@ -375,7 +377,7 @@ def get_fwhm(cat_file):
     with pyfits.open(cat_file) as pyf:
         data = pyf[2].data
         flux_radius = data['FLUX_RADIUS']
-    return numpy.median(flux_radius)
+    return 2.numpy.median(flux_radius)
 
 
 def run_psfex(wdir, root, cat_file, psf_file, used_file, psfex_dir, psfex_config):
@@ -449,7 +451,7 @@ def main():
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)
-    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1tb'
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
     if args.tag:
         blacklist_file += '-' + args.tag
     blacklist_file += '.txt'
@@ -588,7 +590,7 @@ def main():
                     if star_fwhm > HIGH_FWHM:
                         print '     -- flag for too high fwhm'
                         flag |= TOO_HIGH_FWHM_FLAG
-                    if star_fwhm > 1.5 * fwhm:
+                    if star_fwhm > 3. * fwhm:
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     
@@ -619,7 +621,7 @@ def main():
                 print 'Log this in the blacklist and continue.'
                 flag |= ERROR_FLAG
 
-            if flag:
+            if flag and args.blacklist:
                 log_blacklist(blacklist_file,run,exp,ccdnum,flag)
 
             if args.single_ccd:

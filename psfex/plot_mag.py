@@ -3,6 +3,10 @@
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
+import matplotlib
+matplotlib.use('Agg') # Don't use X-server.  Must be before importing matplotlib.pyplot or pylab!
+import matplotlib.pyplot as plt
+plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
  
 def parse_args():
     import argparse
@@ -65,13 +69,13 @@ def get_data(runs, exps, work,
              airmass_list, sky_list, sigsky_list, fwhm_list,
              ra_list, dec_list, x_list, y_list, m_list,
              e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list,
-             psfex = 'psfex'):
+             tag, psfex = 'psfex'):
 
     import astropy.io.fits as pyfits
     import numpy
     import os
 
-    expinfo_file = 'exposure_info.fits'
+    expinfo_file = 'exposure_info_' + tag + '.fits'
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
@@ -144,13 +148,21 @@ def get_data(runs, exps, work,
     print '\nFinished processing all exposures'
 
 
-def bin_by_mag(m, ds, de1, de2, key):
+def bin_by_mag(m, dt, de1, de2, min_mused, key):
 
     import numpy
     import matplotlib.pyplot as plt
 
+    # Adjust for wrong zero point in final cut images.
+    # From Eli:
+    #   The typical r-band zeropoint for photometric data, top-of-the-atmosphere is 30.3. 
+    #   The raw zeropoint in the finalcut catalogs is 25.0. 
+    #   So just add 5.3 and you're in the ballpark.
+    m = m + 5.3
+    min_mused += 5.3
+
     # Bin by mag
-    mag_bins = numpy.linspace(10,17,71)
+    mag_bins = numpy.linspace(15.3,22,71)
     print 'mag_bins = ',mag_bins
 
     index = numpy.digitize(m, mag_bins)
@@ -159,72 +171,61 @@ def bin_by_mag(m, ds, de1, de2, key):
     print 'bin_de1 = ',bin_de1
     bin_de2 = [de2[index == i].mean() for i in range(1, len(mag_bins))]
     print 'bin_de2 = ',bin_de2
-    bin_ds = [ds[index == i].mean() for i in range(1, len(mag_bins))]
-    print 'bin_ds = ',bin_ds
+    bin_dt = [dt[index == i].mean() for i in range(1, len(mag_bins))]
+    print 'bin_dt = ',bin_dt
     bin_de1_err = [ numpy.sqrt(de1[index == i].var() / len(de1[index == i])) 
                     for i in range(1, len(mag_bins)) ]
     print 'bin_de1_err = ',bin_de1_err
     bin_de2_err = [ numpy.sqrt(de2[index == i].var() / len(de2[index == i])) 
                     for i in range(1, len(mag_bins)) ]
     print 'bin_de2_err = ',bin_de2_err
-    bin_ds_err = [ numpy.sqrt(ds[index == i].var() / len(ds[index == i])) 
+    bin_dt_err = [ numpy.sqrt(dt[index == i].var() / len(dt[index == i])) 
                     for i in range(1, len(mag_bins)) ]
-    print 'bin_ds_err = ',bin_ds_err
+    print 'bin_dt_err = ',bin_dt_err
 
     # Fix up nans
     for i in range(1,len(mag_bins)):
         if i not in index:
             bin_de1[i-1] = 0.
             bin_de2[i-1] = 0.
-            bin_ds[i-1] = 0.
+            bin_dt[i-1] = 0.
             bin_de1_err[i-1] = 0.
             bin_de2_err[i-1] = 0.
-            bin_ds_err[i-1] = 0.
+            bin_dt_err[i-1] = 0.
     print 'fixed nans'
 
     print 'index = ',index
     print 'bin_de1 = ',bin_de1
     print 'bin_de2 = ',bin_de2
-    print 'bin_ds = ',bin_ds
+    print 'bin_dt = ',bin_dt
 
-    plt.clf()
-    #plt.title('PSF Size residuals')
-    plt.xlim(10,16.5)
-    if 'orig' in key:
-        plt.ylim(0.3,0.7)
-        plt.ylabel(r'$size_{\rm psf}$ (arcsec)')
-    elif 'model' in key:
-        plt.ylim(0.3,0.7)
-        plt.ylabel(r'$size_{\rm model}$ (arcsec)')
-    else:
-        plt.ylim(-0.002,0.012)
-        plt.ylabel(r'$size_{\rm psf} - size_{\rm model}$ (arcsec)')
-    plt.plot([10,16.5], [0,0], color='black')
-    plt.plot([13,13],[-1,1], color='red')
-    plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
-    plt.errorbar(mag_bins[:-1], bin_ds, yerr=bin_ds_err, color='blue', fmt='o')
-    plt.xlabel('Uncorrected Magnitude')
-    #plt.ylabel(r'$size_{\rm psf} - \langle size_{\rm psf} \rangle$ (arcsec)')
-    plt.savefig('dsize_mag_' + key + '.png')
-    plt.savefig('dsize_mag_' + key + '.pdf')
-    plt.savefig('dsize_mag_' + key + '.eps')
+    fig, axes = plt.subplots(2,1, sharex=True)
 
-    plt.clf()
-    #plt.title('PSF Ellipticity residuals')
-    plt.xlim(10,16.5)
-    plt.ylim(-3.e-4,8.e-4)
-    plt.plot([10,16.5], [0,0], color='black')
-    plt.plot([13,13],[-1,1], color='red')
-    plt.fill( [10,10,13,13], [-1,1,1,-1], fill=False, hatch='/', color='red')
-    e1_line = plt.errorbar(mag_bins[:-1], bin_de1, yerr=bin_de1_err, color='blue', fmt='o')
-    e2_line = plt.errorbar(mag_bins[:-1], bin_de2, yerr=bin_de2_err, color='green', fmt='o')
-    plt.legend([e1_line, e2_line], [r'$e_1$', r'$e_2$'])
-    plt.xlabel('Uncorrected Magnitude')
-    #plt.ylabel(r'$e_{\rm psf} - \langle e_{\rm psf} \rangle$')
-    plt.ylabel(r'$e_{\rm psf} - e_{\rm model}$')
-    plt.savefig('de_mag_' + key + '.png')
-    plt.savefig('de_mag_' + key + '.pdf')
-    plt.savefig('de_mag_' + key + '.eps')
+    ax = axes[0]
+    ax.set_ylim(-0.002,0.012)
+    ax.plot([15.3,21.5], [0,0], color='black')
+    ax.plot([min_mused,min_mused],[-1,1], color='Grey')
+    ax.fill( [15.3,15.3,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
+    t_line = ax.errorbar(mag_bins[:-1], bin_dt, yerr=bin_dt_err, color='green', fmt='o')
+    ax.legend([t_line], [r'$\delta T$'])
+    ax.set_ylabel(r'$T_{\rm PSF} - T_{\rm model} ({\rm arcsec}^2)$')
+
+    ax = axes[1]
+    ax.set_ylim(-3.e-4,6.5e-4)
+    ax.plot([15.3,21.5], [0,0], color='black')
+    ax.plot([min_mused,min_mused],[-1,1], color='Grey')
+    ax.fill( [15.3,15.3,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
+    e1_line = ax.errorbar(mag_bins[:-1], bin_de1, yerr=bin_de1_err, color='red', fmt='o')
+    e2_line = ax.errorbar(mag_bins[:-1], bin_de2, yerr=bin_de2_err, color='blue', fmt='o')
+    ax.legend([e1_line, e2_line], [r'$\delta e_1$', r'$\delta e_2$'])
+    ax.set_ylabel(r'$e_{\rm PSF} - e_{\rm model}$')
+
+    ax.set_xlim(15.3,21.5)
+    ax.set_xlabel('Magnitude')
+
+    fig.set_size_inches(7.0,10.0)
+    plt.tight_layout()
+    plt.savefig('dpsf_mag_' + key + '.pdf')
 
 
 def bin_by_chip_pos(x, ds, de1, de2, key, xy):
@@ -484,7 +485,7 @@ def main():
              mask_list, used_list, ccd_list,
              airmass_list, sky_list, sigsky_list, fwhm_list,
              ra_list, dec_list, x_list, y_list, m_list,
-             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='psfex')
+             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, args.tag, psfex='psfex')
              #e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='erin')
 
     #for key in ra_list.keys():
@@ -512,27 +513,30 @@ def main():
         x = numpy.concatenate(x_list[key])
         y = numpy.concatenate(y_list[key])
         m = numpy.concatenate(m_list[key])
-        print 'full mag range = ',min(m),max(m)
-        print 'masked mag range = ',min(m[mask]),max(m[mask])
-        print 'used mag range = ',min(m[used]),max(m[used])
+        print 'full mag range = ',numpy.min(m),numpy.max(m)
+        print 'masked mag range = ',numpy.min(m[mask]),numpy.max(m[mask])
+        print 'used mag range = ',numpy.min(m[used]),numpy.max(m[used])
         print 'len(m) = ',len(m)
         print 'len(mask) = ',len(mask)
         print 'len(used) = ',len(used)
-        print 'sum(mask) = ',sum(mask)
-        print 'sum(used) = ',sum(used)
+        print 'sum(mask) = ',numpy.sum(mask)
+        print 'sum(used) = ',numpy.sum(used)
 
         e1 = numpy.concatenate(e1_list[key])
+        print 'mean e1 = ',numpy.mean(e1[mask])
         e2 = numpy.concatenate(e2_list[key])
+        print 'mean e2 = ',numpy.mean(e2[mask])
         s = numpy.concatenate(s_list[key])
+        print 'mean s = ',numpy.mean(s[mask])
         pe1 = numpy.concatenate(pe1_list[key])
+        print 'mean pe1 = ',numpy.mean(pe1[mask])
         pe2 = numpy.concatenate(pe2_list[key])
+        print 'mean pe2 = ',numpy.mean(pe2[mask])
         ps = numpy.concatenate(ps_list[key])
+        print 'mean ps = ',numpy.mean(ps[mask])
 
         print 'min mag = ',numpy.min(m)
         print 'max mag = ',numpy.max(m)
-        print 'mean s = ',numpy.mean(s[mask])
-        print 'mean e1 = ',numpy.mean(e1[mask])
-        print 'mean e2 = ',numpy.mean(e2[mask])
         print 'mean s (used) = ',numpy.mean(s[used])
         print 'mean e1 (used) = ',numpy.mean(e1[used])
         print 'mean e2 (used) = ',numpy.mean(e2[used])
@@ -542,12 +546,13 @@ def main():
         de1 = e1 - pe1
         de2 = e2 - pe2
         ds = s - ps
+        dt = s**2 - ps**2
         print 'mean ds (used) = ',numpy.mean(ds[used])
         print 'mean de1 (used) = ',numpy.mean(de1[used])
         print 'mean de2 (used) = ',numpy.mean(de2[used])
 
-        bin_by_mag(m[mask], ds[mask], de1[mask], de2[mask], key)
-        bin_by_mag(m[used], ds[used], de1[used], de2[used], key+'_used')
+        bin_by_mag(m[mask], dt[mask], de1[mask], de2[mask], numpy.min(m[used]), key)
+        #bin_by_mag(m[used], dt[used], de1[used], de2[used], key+'_used')
         #bin_by_mag(m[mask], s[mask], e1[mask], e2[mask], key+'_orig')
         #bin_by_mag(m[mask], ps[mask], pe1[mask], pe2[mask], key+'_model')
 
@@ -566,10 +571,10 @@ def main():
         #mask2 = mask & (airmass>med_airmass)
         #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highairmass')
 
-        mask2 = mask & (fwhm<med_fwhm)
-        bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowfwhm')
-        mask2 = mask & (fwhm>med_fwhm)
-        bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highfwhm')
+        #mask2 = mask & (fwhm<med_fwhm)
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowfwhm')
+        #mask2 = mask & (fwhm>med_fwhm)
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highfwhm')
 
         #bin_by_mag(m[mask], s[mask] - numpy.mean(s[mask]),
         #           e1[mask] - numpy.mean(e1[mask]), e2[mask] - numpy.mean(e2[mask]), key)
@@ -577,8 +582,8 @@ def main():
         #bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
         #bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')
 
-        bin_by_fov(ccd[used], x[used], y[used], ds[used], de1[used], de2[used], key)
-        bin_by_fov(ccd[used], x[used], y[used], s[used], e1[used], e2[used], key + 'raw')
+        #bin_by_fov(ccd[used], x[used], y[used], ds[used], de1[used], de2[used], key)
+        #bin_by_fov(ccd[used], x[used], y[used], s[used], e1[used], e2[used], key + 'raw')
 
 
 if __name__ == "__main__":

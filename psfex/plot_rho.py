@@ -82,7 +82,7 @@ def plot_rho(meanr, rhop, sigp, sqrtn, rhom=None, sigm=None):
     else:
         return [ lp ]
 
-def pretty_rho1(meanr, rho, sig, sqrtn):
+def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
     import matplotlib.patches as mp
     if False:
         # This is all handwavy arguments about what the requirements are.  
@@ -120,11 +120,28 @@ def pretty_rho1(meanr, rho, sig, sqrtn):
                            color = '#FFFF82')
     plt.plot(meanr, rho, color='blue')
     plt.plot(meanr, -rho, color='blue', ls=':')
-    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='')
-    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='')
-    rho1_line, = plt.plot(-meanr, rho, color='blue')
+    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='', marker='o')
+    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='', marker='o')
+    rho1_line = plt.errorbar(-meanr, rho, yerr=sig, color='blue', marker='o')
+    if rho3 is not None:
+        plt.plot(meanr*1.03, rho3, color='green')
+        plt.plot(meanr*1.03, -rho3, color='green', ls=':')
+        plt.errorbar(meanr[rho3>0]*1.03, rho3[rho3>0], yerr=sig[rho3>0]/sqrtn, color='green', ls='', marker='s')
+        plt.errorbar(meanr[rho3<0]*1.03, -rho3[rho3<0], yerr=sig[rho3<0]/sqrtn, color='green', ls='', marker='s')
+        rho3_line = plt.errorbar(-meanr, rho3, yerr=sig, color='green', marker='s')
+    if rho4 is not None:
+        plt.plot(meanr*1.06, rho4, color='red')
+        plt.plot(meanr*1.06, -rho4, color='red', ls=':')
+        plt.errorbar(meanr[rho4>0]*1.06, rho4[rho4>0], yerr=sig[rho4>0]/sqrtn, color='red', ls='', marker='^')
+        plt.errorbar(meanr[rho4<0]*1.06, -rho4[rho4<0], yerr=sig[rho4<0]/sqrtn, color='red', ls='', marker='^')
+        rho4_line = plt.errorbar(-meanr, rho4, yerr=sig, color='red', marker='^')
     sv_req = mp.Patch(color='#FFFF82')
-    if True: # For paper
+    if rho3 is not None and rho4 is not None:
+        plt.legend([rho1_line, rho3_line, rho4_line],
+                   [r'$\rho_1(\theta)$', r'$\rho_3(\theta)$', r'$\rho_4(\theta)$'],
+                   loc='upper right', fontsize=24)
+        plt.ylim( [1.e-9, 5.e-6] )
+    elif True:
         plt.legend([rho1_line, sv_req],
                    [r'$\rho_1(\theta)$', r'Requirement'],
                    loc='upper right')
@@ -137,12 +154,12 @@ def pretty_rho1(meanr, rho, sig, sqrtn):
         plt.ylim( [1.e-9, 3.e-6] )
     plt.xlim( [0.5,300.] )
     plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\rho_1$')
+    plt.ylabel(r'$\rho(\theta)$')
     plt.xscale('log')
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
 
-def pretty_rho2(meanr, rho, sig, sqrtn):
+def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
     import matplotlib.patches as mp
     # The requirements on rho2 are less stringent.  They are larger by a factor 1/alpha.
     # Let's use alpha = 0.03.
@@ -180,11 +197,22 @@ def pretty_rho2(meanr, rho, sig, sqrtn):
                            color = '#FFFF82')
     plt.plot(meanr, rho, color='blue')
     plt.plot(meanr, -rho, color='blue', ls=':')
-    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='')
-    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='')
-    rho2_line, = plt.plot(-meanr, rho, color='blue')
+    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='', marker='o')
+    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='', marker='o')
+    rho2_line = plt.errorbar(-meanr, rho, yerr=sig, color='blue', marker='o')
+    if rho5 is not None:
+        plt.plot(meanr*1.03, rho5, color='green')
+        plt.plot(meanr*1.03, -rho5, color='green', ls=':')
+        plt.errorbar(meanr[rho5>0]*1.03, rho5[rho5>0], yerr=sig[rho5>0]/sqrtn, color='green', ls='', marker='s')
+        plt.errorbar(meanr[rho5<0]*1.03, -rho5[rho5<0], yerr=sig[rho5<0]/sqrtn, color='green', ls='', marker='s')
+        rho5_line = plt.errorbar(-meanr, rho5, yerr=sig, color='green', marker='s')
     sv_req = mp.Patch(color='#FFFF82')
-    if True: # For paper
+    if rho5 is not None:
+        plt.legend([rho2_line, rho5_line],
+                   [r'$\rho_2(\theta)$', r'$\rho_5(\theta)$'],
+                   loc='upper right', fontsize=24)
+        plt.ylim( [1.e-7, 5.e-4] )
+    elif True: # For paper
         plt.legend([rho2_line, sv_req],
                    [r'$\rho_2(\theta)$', r'Requirement'],
                    loc='upper right')
@@ -197,7 +225,7 @@ def pretty_rho2(meanr, rho, sig, sqrtn):
         plt.ylim( [1.e-7, 3.e-4] )
     plt.xlim( [0.5,300.] )
     plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\rho_2$')
+    plt.ylabel(r'$\rho(\theta)$')
     plt.xscale('log')
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
@@ -255,7 +283,7 @@ def main():
 
     nexp = len(exps)
 
-    if True:
+    if False:
         ccd_meanlogr = numpy.empty( (nexp*62,37) )
         ccd_rho1p = numpy.empty( (nexp*62,37) )
         ccd_rho1m = numpy.empty( (nexp*62,37) )
@@ -451,10 +479,11 @@ def main():
         left = [ 10*i for i in range(200) ]
         plt.bar( left, histnstars, width=10 )
         plt.xlim( [0,700] )
-        plt.xlabel(r'$N_{stars per chip}$')
-        plt.ylabel(r'$N_{chips}$')
-        plt.title('Distribution of number of stars per chip')
+        plt.xlabel(r'stars per CCD')
+        plt.ylabel(r'$N_\mathrm{CCDs}$')
+        #plt.title('Distribution of number of stars per chip')
         #plt.savefig('nstarshist.png')
+        plt.tight_layout()
         plt.savefig('nstarshist.pdf')
 
         imax = numpy.argmax(histnstars)
@@ -786,7 +815,7 @@ def main():
         print 'N with |rho2| > 3e-5 = ',count03
         print 'N with |rho2| > 2e-5 = ',count02
   
-    if False:
+    if True:
 
         print 'Plot overall rho stats'
 
@@ -809,7 +838,10 @@ def main():
               rho2m,
               rho2m_im,
               var2,
-              rho3,
+              rho3p,
+              rho3p_im,
+              rho3m,
+              rho3m_im,
               var3,
               rho4p,
               rho4p_im,
@@ -825,13 +857,14 @@ def main():
 
             meanr = numpy.exp(meanlogr)
             rho1p = numpy.array(rho1p)
-            rho2p = numpy.array(rho2p)
             rho1m = numpy.array(rho1m)
+            rho2p = numpy.array(rho2p)
             rho2m = numpy.array(rho2m)
-            rho3 = numpy.array(rho3)
+            rho3p = numpy.array(rho3p)
+            rho3m = numpy.array(rho3m)
             rho4p = numpy.array(rho4p)
-            rho5p = numpy.array(rho5p)
             rho4m = numpy.array(rho4m)
+            rho5p = numpy.array(rho5p)
             rho5m = numpy.array(rho5m)
             sig_rho1 = numpy.sqrt(var1)
             sig_rho2 = numpy.sqrt(var2)
@@ -840,18 +873,18 @@ def main():
             sig_rho5 = numpy.sqrt(var5)
             sqrtn = 1
 
-            cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2, rho3, sig_rho3,
+            cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2,
                                 rho1m, sig_rho1, rho2m, sig_rho2)).T
             numpy.savetxt('rho.dat', cols, fmt='%.6e',
-                          header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho3  sig_rho3  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
+                          header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
  
             plt.clf()
-            pretty_rho1(meanr, rho1p, sig_rho1, sqrtn)
+            pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)
             #plt.savefig('rho1_' + key + '.png')
             plt.savefig('rho1_' + key + '.pdf')
 
             plt.clf()
-            pretty_rho2(meanr, rho2p, sig_rho2, sqrtn)
+            pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p)
             #plt.savefig('rho2_' + key + '.png')
             plt.savefig('rho2_' + key + '.pdf')
 
@@ -860,25 +893,33 @@ def main():
             #plt.savefig('rho3_' + key + '.png')
             #plt.savefig('rho3_' + key + '.pdf')
  
-            plt.clf()
-            plt.title(r'$\rho_4$ (i.e. $\langle (e dT/T) de \rangle$)')
-            lines = plot_rho(meanr, rho4p, sig_rho4, sqrtn, rho4m, sig_rho4)
-            plt.legend(lines, [r'$\rho_4(\theta)+$', r'$\rho_4(\theta)-$'] )
-            plt.xlim( [0.5,20] )
-            plt.ylabel(r'$\rho_4$')
-            plt.tight_layout()
-            plt.savefig('rho4.pdf')
+            if False:
+                plt.clf()
+                plt.title(r'$\rho_3$ (i.e. $\langle (e dT/T)* (e dT/T) \rangle$)')
+                lines = plot_rho(meanr, rho3p, sig_rho3, sqrtn, rho3m, sig_rho3)
+                plt.legend(lines, [r'$\rho_3(\theta)+$', r'$\rho_3(\theta)-$'] )
+                plt.xlim( [0.5,300] )
+                plt.ylabel(r'$\rho_3$')
+                plt.tight_layout()
+                plt.savefig('rho3.pdf')
 
-            plt.clf()
-            plt.title(r'$\rho_5$ (i.e. $\langle (e dT/T) (e dT/T) \rangle$)')
-            lines = plot_rho(meanr, rho5p, sig_rho5, sqrtn, rho5m, sig_rho5)
-            plt.legend(lines, [r'$\rho_5(\theta)+$', r'$\rho_5(\theta)-$'] )
-            plt.xlim( [0.5,20] )
-            plt.ylabel(r'$\rho_5$')
-            plt.tight_layout()
-            plt.savefig('rho5.pdf')
+                plt.clf()
+                plt.title(r'$\rho_4$ (i.e. $\langle de* (e dT/T) \rangle$)')
+                lines = plot_rho(meanr, rho4p, sig_rho4, sqrtn, rho4m, sig_rho4)
+                plt.legend(lines, [r'$\rho_4(\theta)+$', r'$\rho_4(\theta)-$'] )
+                plt.xlim( [0.5,300] )
+                plt.ylabel(r'$\rho_4$')
+                plt.tight_layout()
+                plt.savefig('rho4.pdf')
 
-
+                plt.clf()
+                plt.title(r'$\rho_5$ (i.e. $\langle e* (e dT/T) \rangle$)')
+                lines = plot_rho(meanr, rho5p, sig_rho5, sqrtn, rho5m, sig_rho5)
+                plt.legend(lines, [r'$\rho_5(\theta)+$', r'$\rho_5(\theta)-$'] )
+                plt.xlim( [0.5,300] )
+                plt.ylabel(r'$\rho_5$')
+                plt.tight_layout()
+                plt.savefig('rho5.pdf')
  
 if __name__ == "__main__":
     main()

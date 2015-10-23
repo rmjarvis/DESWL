@@ -72,25 +72,28 @@ def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
     dtcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
                              k=dt, g1=dt*e1, g2=dt*e2)
 
-    rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
+    min_sep = 0.3
+    bin_size = 0.2
+    bin_slop = 0.3
+    rho1 = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=bin_size, bin_slop=bin_slop, verbose=1)
     rho1.process(decat)
 
-    rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
+    rho2 = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=bin_size, bin_slop=bin_slop, verbose=1)
     rho2.process(ecat, decat)
 
-    rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
+    rho3 = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=bin_size, bin_slop=bin_slop, verbose=1)
     rho3.process(dtcat)
 
-    rho4 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho4.process(dtcat, decat)
+    rho4 = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=bin_size, bin_slop=bin_slop, verbose=1)
+    rho4.process(decat, dtcat)
 
-    rho5 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho5.process(dtcat)
+    rho5 = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                  bin_size=bin_size, bin_slop=bin_slop, verbose=1)
+    rho5.process(ecat, dtcat)
 
     return rho1,rho2,rho3,rho4,rho5
 
@@ -242,7 +245,10 @@ def main():
             rho2.xim.tolist(),
             rho2.xim_im.tolist(),
             rho2.varxi.tolist(),
-            rho3.xi.tolist(),
+            rho3.xip.tolist(),
+            rho3.xip_im.tolist(),
+            rho3.xim.tolist(),
+            rho3.xim_im.tolist(),
             rho3.varxi.tolist(),
             rho4.xip.tolist(),
             rho4.xip_im.tolist(),

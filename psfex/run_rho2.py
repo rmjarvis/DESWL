@@ -162,8 +162,13 @@ def main():
         print 'exp_dir = ',exp_dir
 
         cat_file = os.path.join(exp_dir, exp + "_psf.fits")
-        with pyfits.open(cat_file) as pyf:
-            data = pyf[1].data
+        print 'cat_file = ',cat_file
+        try:
+            with pyfits.open(cat_file) as pyf:
+                data = pyf[1].data
+        except:
+            print 'Unable to open cat_file %s.  Skipping this file.'%cat_file
+            continue
 
         ccdnums = numpy.unique(data['ccdnum'])
         #print 'ccdnums = ',ccdnums
@@ -221,6 +226,9 @@ def main():
 
     for key in ra_list.keys():
         print key
+        if len(ra_list[key]) == 0:
+            print 'No files to concatenate for key = %s.'%key
+            continue
         ra = numpy.concatenate(ra_list[key])
         dec = numpy.concatenate(dec_list[key])
         e1 = numpy.concatenate(e1_list[key])
@@ -229,6 +237,25 @@ def main():
         pe1 = numpy.concatenate(pe1_list[key])
         pe2 = numpy.concatenate(pe2_list[key])
         ps = numpy.concatenate(ps_list[key])
+
+        cols = pyfits.ColDefs([
+            pyfits.Column(name='ra', format='E', array=ra),
+            pyfits.Column(name='dec', format='E', array=dec),
+            pyfits.Column(name='e1', format='E', array=e1),
+            pyfits.Column(name='e2', format='E', array=e2),
+            pyfits.Column(name='size', format='E', array=s),
+            pyfits.Column(name='psfex_e1', format='E', array=pe1),
+            pyfits.Column(name='psfex_e2', format='E', array=pe2),
+            pyfits.Column(name='psfex_size', format='E', array=ps),
+            ])
+
+        # Depending on the version of pyfits, one of these should work:
+        try:
+            tbhdu = pyfits.BinTableHDU.from_columns(cols)
+        except:
+            tbhdu = pyfits.new_table(cols)
+        cat_file = "psf_" + key + ".fits"
+        tbhdu.writeto(cat_file, clobber=True)
 
         rho1, rho2, rho3, rho4, rho5 = measure_rho(ra,dec,e1,e2,s,pe1,pe2,ps, max_sep=300)
 
@@ -261,9 +288,11 @@ def main():
             rho5.xim_im.tolist(),
             rho5.varxi.tolist(),
         ])
-        #print 'stats = ',stats
+        print 'stats = ',stats
+        print 'stat_file = ',stat_file
         with open(stat_file,'w') as f:
             json.dump(stats, f)
+        print 'Done writing ',stat_file
 
     print '\nFinished writing json files'
 

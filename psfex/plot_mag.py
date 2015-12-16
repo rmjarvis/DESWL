@@ -98,8 +98,13 @@ def get_data(runs, exps, work,
         #print 'exp_dir = ',exp_dir
 
         cat_file = os.path.join(exp_dir, exp + "_psf.fits")
-        with pyfits.open(cat_file) as pyf:
-            data = pyf[1].data.copy()
+        try:
+            with pyfits.open(cat_file) as pyf:
+                data = pyf[1].data.copy()
+        except:
+            print 'Could not open cat_file %s.  Skipping this one.'%cat_file
+            continue
+            
 
         #print 'max flag = ',max(data['flag'])
         #print 'min flag = ',min(data['flag'])

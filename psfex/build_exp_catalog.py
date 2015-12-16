@@ -325,19 +325,25 @@ def main():
             # to put in the output file
             try:
                 root, ccdnum = parse_file_name(file_name)
-            except:
+            except Exception as e:
+                print '   Caught ',e
                 print '   Unable to parse file_name %s.  Skipping this file.'%file_name
                 continue
             print '   root, ccdnum = ',root,ccdnum
 
-            (date, time, filter, ccdnum2, detpos, telra, teldec, ha, 
-                airmass, sky, sigsky, fwhm, wcs) = read_image_header(file_name)
-            print '   date, time = ',date,time
-            print '   filter, ccdnum, detpos = ', filter,ccdnum,detpos
-            print '   telra, teldec, ha = ', telra, teldec, ha
-            print '   airmass, sky, sigsky, fwhm = ', airmass, sky, sigsky, fwhm
-            if ccdnum != ccdnum2:
-                raise ValueError("CCDNUM from FITS header doesn't match ccdnum from file name.")
+            try:
+                (date, time, filter, ccdnum2, detpos, telra, teldec, ha, 
+                    airmass, sky, sigsky, fwhm, wcs) = read_image_header(file_name)
+                print '   date, time = ',date,time
+                print '   filter, ccdnum, detpos = ', filter,ccdnum,detpos
+                print '   telra, teldec, ha = ', telra, teldec, ha
+                print '   airmass, sky, sigsky, fwhm = ', airmass, sky, sigsky, fwhm
+                if ccdnum != ccdnum2:
+                    raise ValueError("CCDNUM from FITS header doesn't match ccdnum from file name.")
+            except Exception as e:
+                print '   Caught ',e
+                print '   Error reading fits header.  Skipping this file:',file_name
+                continue
 
             year = convert_to_year(date, time)
             print '   year = ',year

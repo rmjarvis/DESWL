@@ -827,6 +827,8 @@ def main():
             with open(stat_file,'r') as f:
                 stats = json.load(f)
 
+            print' stats = ',stats
+
             ( meanlogr,
               rho1p,
               rho1p_im,
@@ -873,10 +875,13 @@ def main():
             sig_rho5 = numpy.sqrt(var5)
             sqrtn = 1
 
+            print 'meanr = ',meanr
+
             cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2,
                                 rho1m, sig_rho1, rho2m, sig_rho2)).T
             numpy.savetxt('rho.dat', cols, fmt='%.6e',
                           header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
+            print 'wrote rho.data'
  
             plt.clf()
             pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)

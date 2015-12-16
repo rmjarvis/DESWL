@@ -200,9 +200,15 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         bp_im = galsim.fits.read(hdu_list=f, hdu=2, compression='rice')
         wt_im = galsim.fits.read(hdu_list=f, hdu=3, compression='rice')
 
-    # Need this for HSM not to balk at negative weights, which are usually due to the funpack
-    # rounding problem for things that should be zero, so -1.e-12 kinds of values.
-    # Just set them to zero.
+    # The badpix image is offset by 32768 from the true value.  Subtract it off.
+    if numpy.any(bp_im.array > 32767):
+        bp_im -= 32768
+    # Also, convert to int16, since it isn't by default weirdly.  I think this is
+    # an error in astropy's RICE algorith, since fitsio converts it correctly to uint16.
+    bp_im = galsim.ImageS(bp_im)
+
+    # Also, it seems that the weight image has negative values where it should be 0.
+    # Make them 0.
     wt_im.array[wt_im.array < 0] = 0.
     print 'file_name = ',file_name
 
@@ -235,16 +241,22 @@ def measure_shapes(xlist, ylist, file_name, wcs):
             subim = im[b]
             subbp = bp_im[b]
             subwt = wt_im[b]
-            shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
-        except:
+            #print 'subim = ',subim.array
+            #print 'subwt = ',subwt.array
+            #print 'subbp = ',subbp.array
+            # badpix seems to be all 32768 !!?!?!
+            #shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
+            shape_data = subim.FindAdaptiveMom(weight=subwt, strict=False)
+        except Exception as e:
+            print 'Caught ',e
             print ' *** Bad measurement (caught exception).  Mask this one.'
             flag_list[i] = MEAS_BAD_MEASUREMENT
             continue
 
         #print 'shape_data = ',shape_data
         #print 'image_bounds = ',shape_data.image_bounds
-        #print 'shape = ',shape_data.observed_shape
-        #print 'sigma = ',shape_data.moments_sigma
+        print 'shape = ',shape_data.observed_shape
+        print 'sigma = ',shape_data.moments_sigma
         #print 'amp = ',shape_data.moments_amp
         #print 'centroid = ',shape_data.moments_centroid
         #print 'rho4 = ',shape_data.moments_rho4
@@ -523,7 +535,7 @@ def read_blacklists(tag):
     print 'after ghost, streak, len(d) = ',len(d)
 
     # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-sv'
+    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
     if tag:
         psfex_file += '-' + tag
     psfex_file += '.txt'
@@ -683,6 +695,7 @@ def main():
             fs_index = find_fs_index(used_data, fs_data)
             used_index = find_used_index(fs_data[mask], used_data)
             print '   fs_index = ',fs_index
+            print '   used_index = ',used_index
 
             # Check: This should be the same as the used bounds
             alt_used_xmin = fs_data['x'][fs_index].min()

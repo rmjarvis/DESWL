@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATE=20150313_rho
-FILE=gold_exp
-TAG=v4
+DATE=20151207_rho
+FILE=y1spte_r
+TAG=v1
 
 ./run_wq_exp.py --njobs=100 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

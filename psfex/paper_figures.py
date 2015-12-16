@@ -3,6 +3,13 @@ import astropy.io.fits as pyfits
 import numpy
 import os
 
+#expinfo_file = 'exposure_info_v4.fits'
+#file = 'spte_gold_exp'
+#work = '/astro/u/mjarvis/work/psfex_rerun/v4'
+expinfo_file = 'exposure_info_v1.fits'
+file = 'y1spte_r'
+work = '/astro/u/mjarvis/work/psfex_rerun/v1'
+
 def add_to_list(filter, vlist, value):
     if 'griz' not in vlist.keys():
         vlist['griz'] = []
@@ -18,8 +25,6 @@ def add_to_list(filter, vlist, value):
 def get_psf_data():
 
     exp_match='*_[0-9][0-9].fits*'
-    file = 'spte_gold_exp'
-    work = '/astro/u/mjarvis/work/psfex_rerun/v4'
 
     print 'Read file ',file
     with open(file) as fin:
@@ -46,7 +51,6 @@ def get_psf_data():
     pe2_list = {}
     ps_list = {}
 
-    expinfo_file = 'exposure_info_v4.fits'
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
@@ -69,8 +73,12 @@ def get_psf_data():
         #print 'exp_dir = ',exp_dir
 
         cat_file = os.path.join(exp_dir, exp + "_psf.fits")
-        with pyfits.open(cat_file) as pyf:
-            data = pyf[1].data.copy()
+        try:
+            with pyfits.open(cat_file) as pyf:
+                data = pyf[1].data.copy()
+        except:
+            print 'Could not open cat_file %s.  Skipping this one.'%cat_file
+            continue
 
         #print 'max flag = ',max(data['flag'])
         #print 'min flag = ',min(data['flag'])
@@ -532,10 +540,10 @@ def psfex_resid(m, de1, de2, ds, key=None):
     plt.clf()
     #plt.title('PSF Size residuals')
     plt.xlim(10,16.5)
-    if 'orig' in key:
+    if key and 'orig' in key:
         plt.ylim(0.3,0.7)
         plt.ylabel(r'$size_{\rm psf}$ (arcsec)')
-    elif 'model' in key:
+    elif key and 'model' in key:
         plt.ylim(0.3,0.7)
         plt.ylabel(r'$size_{\rm model}$ (arcsec)')
     else:
@@ -561,7 +569,7 @@ def psfex_resid(m, de1, de2, ds, key=None):
     plt.xlabel('Uncorrected Magnitude')
     #plt.ylabel(r'$e_{\rm psf} - \langle e_{\rm psf} \rangle$')
     plt.ylabel(r'$e_{\rm psf} - e_{\rm model}$')
-    fig.tight_layout()
+    #plt.tight_layout()
     plt.savefig('fig6.eps')
 
 
@@ -599,6 +607,7 @@ def bin_by_fov(ccd, x, y, e1, e2, s, w=None, nwhisk=5):
         bin_x = numpy.empty(nbins)
         bin_y = numpy.empty(nbins)
         bin_nz = numpy.empty(nbins, dtype=bool)
+        sumesq = 0.
 
         for i in range(1, len(x_bins)):
             for j in range(1, len(y_bins)):
@@ -613,7 +622,9 @@ def bin_by_fov(ccd, x, y, e1, e2, s, w=None, nwhisk=5):
                 bin_y[k] = (ww * y[mask][mask2]).sum() / ws
                 bin_nz[k] = len(mask2) > 0
                 print i,j,k,len(mask2), bin_e1[k], bin_e2[k]
+                sumesq += bin_e1[k]**2 + bin_e2[k]**2
 
+        print 'rms e = ',numpy.sqrt(sumesq / nbins)
         focal_x, focal_y = toFocal(ccdnum, bin_x, bin_y)
         print 'x,y = ',focal_x, focal_y
 
@@ -890,7 +901,7 @@ def main():
     if True:
         psf_data = get_psf_data()
         (mask, used, ccd, ra, dec, x, y, m, e1, e2, s, de1, de2, ds) = psf_data
-        #psfex_resid(m[mask], de1[mask], de2[mask], ds[mask])
+        psfex_resid(m[mask], de1[mask], de2[mask], ds[mask])
 
         psf_whiskers(ccd[used], x[used], y[used], e1[used], e2[used], s[used],
                     de1[used], de2[used], ds[used])

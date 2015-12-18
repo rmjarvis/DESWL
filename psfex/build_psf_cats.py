@@ -122,7 +122,7 @@ def read_findstars(exp_dir, root):
     # noise: The estimated noise.  But these are all 0, so I think this isn't being calculated.
     # size_flags: Error flags that occurred when estimating the size
     # mag: The magnitude from SExtractor
-    # sg: SExtractor's star/galaxy estimate.  Currently class_star.
+    # sg: SExtractor's star/galaxy estimate.  Currently SPREAD_MODEL
     # sigma0: The shapelet sigma that results in a b_11 = 0 shapelet parameter.
     # star_flag: 1 if findstars thought this was a star, 0 otherwise.
     return data

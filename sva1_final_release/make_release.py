@@ -2,6 +2,38 @@
 """
 Based on Matt's make_flatcats.py, but changed the names of some of the column
 names and added/subtracted a few columns.
+
+Matt's code for making v18 is here:
+
+http://www.slac.stanford.edu/~beckermr/des/des-wl/SVA1/wl_flags_flatcats/v18/
+
+Before running this script, the following needs to happen:
+
+1. Download raw catalogs from
+
+http://www.slac.stanford.edu/~beckermr/des/des-wl/SVA1/wl_flags_flatcats/data_v17/
+
+In particular, the following files should all be in ../data_v17:
+
+- sva1_gold_1.0.2_catalog_basic.fits
+- sva1_gold_1.0.2_catalog_auto.fits
+- sva1_gold_1.0.4_catalog_badflag.fits
+- ngmix011_all.fit
+- im3shape_v97.fits
+- ngmix011-psf-shape-avg.fits
+- ngmix011_round_sn_v6.fit
+- photoz/pzbinning_svng15_04.06.15_skynet2sweight-True_mean_final_v15.npy
+
+2. Run Matt's flag scripts:
+
+python make_gold_flags.py release.yaml
+python make_im3shape_flags.py release.yaml
+python make_ngmix_flags.py release.yaml
+
+3. Now you should be ready to run this script
+
+python make_release.py relese.yaml
+
 """
 
 import os

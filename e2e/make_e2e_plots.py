@@ -492,7 +492,7 @@ def do_sys_plots(truth, meas):
     wcs_g1 = truth['mean_wcs_g1'][mask]
     wcs_g2 = truth['mean_wcs_g2'][mask]
     wcs_scale = truth['mean_wcs_scale'][mask]
-    wcs_theta = truth['mean_wcs_theta'][mask]
+    #wcs_theta = truth['mean_wcs_theta'][mask]
 
     xid = meas.id[mask]
     xg1 = meas.g1[mask]
@@ -509,11 +509,16 @@ def do_sys_plots(truth, meas):
     plt_scatter(wcs_g1, xg1-tg1, 'mean wcs g1', 'dg1', bin=True)
     plt_scatter(wcs_g2, xg1-tg1, 'mean wcs g2', 'dg1', bin=True)
     plt_scatter(wcs_scale, xg1-tg1, 'mean wcs scale', 'dg1', bin=True)
-    plt_scatter(wcs_theta, xg1-tg1, 'mean wcs theta', 'dg1', bin=True)
+    #plt_scatter(wcs_theta, xg1-tg1, 'mean wcs theta', 'dg1', bin=True)
     plt_scatter(wcs_g2, xg2-tg2, 'mean wcs g2', 'dg2', bin=True)
     plt_scatter(wcs_g1, xg2-tg2, 'mean wcs g1', 'dg2', bin=True)
     plt_scatter(wcs_scale, xg2-tg2, 'mean wcs scale', 'dg2', bin=True)
-    plt_scatter(wcs_theta, xg2-tg2, 'mean wcs theta', 'dg2', bin=True)
+    #plt_scatter(wcs_theta, xg2-tg2, 'mean wcs theta', 'dg2', bin=True)
+
+    plt_scatter(thlr, xg1-tg1, 'True hlr', 'dg1', bin=True)
+    plt_scatter(thlr, xg2-tg2, 'True hlr', 'dg2', bin=True)
+    plt_scatter(xr, xg1-tg1, meas.name + ' radius', 'dg1', bin=True)
+    plt_scatter(xr, xg2-tg2, meas.name + ' radius', 'dg2', bin=True)
 
 
 # Start the main program
@@ -537,6 +542,7 @@ if do_nfit:
     do_sys_plots(truth, nfit)
     pp.close()
 
+if False:
     nfit = NFit(os.path.join(dir,nfit_file),'coadd_')
     simple_plots(truth, nfit)
     pp = PdfPages(os.path.join(dir,output_nfit_coadd_file))

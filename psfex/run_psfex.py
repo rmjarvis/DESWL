@@ -377,18 +377,19 @@ def get_fwhm(cat_file):
     with pyfits.open(cat_file) as pyf:
         data = pyf[2].data
         flux_radius = data['FLUX_RADIUS']
-    return 2.numpy.median(flux_radius)
+    return numpy.median(flux_radius)
 
 
-def run_psfex(wdir, root, cat_file, psf_file, used_file, psfex_dir, psfex_config):
+def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, psfex_dir, psfex_config):
     """Run PSFEx
 
     Returns True if successful, False if there was a catastrophic failure and no output 
     file was written.
     """
     print '   running psfex'
-    psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file}'.format(
-            psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file)
+    psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file}'.format(
+            psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file,
+            xml_file=xml_file)
     print psf_cmd
     os.system(psf_cmd)
 
@@ -597,9 +598,10 @@ def main():
                 star_file = os.path.join(wdir,root+'_findstars.fits')
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
+                xml_file = os.path.join(wdir,root+'_psfcat.xml')
                 json_file = os.path.join(wdir,root+'.json')
                 if args.run_psfex:
-                    success = run_psfex(wdir, root, cat_file, psf_file, used_file, 
+                    success = run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file,
                             args.psfex_dir, args.psfex_config)
                     if success:
                         move_files(wdir, odir, psf_file,
@@ -609,7 +611,8 @@ def main():
 
                 print 'rm_files = ',args.rm_files
                 if args.rm_files:
-                    remove_temp_files(wdir, root, star_file, psf_file, used_file, json_file)
+                    remove_temp_files(wdir, root, star_file, psf_file, used_file, xml_file,
+                                      json_file)
 
 
             except NoStarsException:

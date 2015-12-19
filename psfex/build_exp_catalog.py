@@ -3,8 +3,6 @@
 # This includes information from the image header, the blacklists, and the results
 # of the rho statistics.
 
-import astropy.io.fits as pyfits
- 
 def parse_args():
     import argparse
     
@@ -63,6 +61,8 @@ def read_blacklists(tag):
     Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
     """
     import numpy
+    from fitsio import pyfits
+
     d = {}  # The dict will be indexed by (expnum, ccdnum)
     print 'reading blacklists'
 
@@ -122,13 +122,13 @@ def read_blacklists(tag):
 def read_image_header(img_file):
     """Read some information from the image header.
 
-    Returns date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, sky, sigsky, fwhm, wcs
+    Returns (date, time, filter, ccdnum, detpos, telra, teldec, ha, 
+             airmass, sky, sigsky, fwhm, tiling, hex, wcs)
     """
     print 'Start read_image_header'
     print img_file
     import galsim
-    #import fitsio
-    import pyfits
+    from fitsio import pyfits
 
     if img_file.endswith('fz'):
         hdu = 1
@@ -137,7 +137,6 @@ def read_image_header(img_file):
 
     # fitsio is a bit faster here.  11 sec/exp rather than 12, so not a huge difference, but still.
     with pyfits.open(img_file) as pyf:
-    #with fitsio.FITS(img_file) as pyf:
         #print pyf
         #print pyf[hdu]
         h = pyf[hdu].header
@@ -175,11 +174,15 @@ def read_image_header(img_file):
         sigsky = float(h['SKYSIGMA'])
         fwhm = float(h['FWHM'])
 
+        tiling = int(h.get('TILING',0))  # These aren't there for SV, but should be for >= Y1.
+        hex = int(h.get('HEX',0))
+
         # Use Galsim to read WCS
         wcs = galsim.FitsWCS(header=h)
         #print 'wcs = ',wcs
 
-    return date, time, filter, ccdnum, detpos, telra, teldec, ha, airmass, sky, sigsky, fwhm, wcs
+    return (date, time, filter, ccdnum, detpos, telra, teldec, ha,
+            airmass, sky, sigsky, fwhm, tiling, hex, wcs)
  
 def convert_to_year(date, time):
     """Given string representations of the date and time, convert to a decimal year.
@@ -242,6 +245,7 @@ def main():
     import os
     import glob
     import galsim
+    import astropy.io.fits as pyfits
 
     args = parse_args()
 
@@ -281,6 +285,8 @@ def main():
     sky_col = []     # The median sky level
     sigsky_col = []  # The mean noise level from the sky
     fwhm_col = []    # An estimate of the seeing
+    tiling_col = []  # Which tiling is this
+    hex_col = []     # Which hex is this
     flag_col = []    # A bitmask flag for the ccd (or possibly the whole exposure)
     corner0_ra_col = []  # The ra,dec of the 4 corners of the chip (degrees)
     corner0_dec_col = []
@@ -333,11 +339,12 @@ def main():
 
             try:
                 (date, time, filter, ccdnum2, detpos, telra, teldec, ha, 
-                    airmass, sky, sigsky, fwhm, wcs) = read_image_header(file_name)
+                    airmass, sky, sigsky, fwhm, tiling, hex, wcs) = read_image_header(file_name)
                 print '   date, time = ',date,time
                 print '   filter, ccdnum, detpos = ', filter,ccdnum,detpos
                 print '   telra, teldec, ha = ', telra, teldec, ha
                 print '   airmass, sky, sigsky, fwhm = ', airmass, sky, sigsky, fwhm
+                print '   tiling, hex = ', tiling, hex
                 if ccdnum != ccdnum2:
                     raise ValueError("CCDNUM from FITS header doesn't match ccdnum from file name.")
             except Exception as e:
@@ -385,6 +392,8 @@ def main():
             sky_col.append(sky)
             sigsky_col.append(sigsky)
             fwhm_col.append(fwhm)
+            tiling_col.append(tiling)
+            hex_col.append(hex)
             flag_col.append(flag)
             corner0_ra_col.append(corners[0].ra / galsim.degrees)
             corner0_dec_col.append(corners[0].dec / galsim.degrees)
@@ -439,6 +448,8 @@ def main():
         pyfits.Column(name='sky', format='E', array=sky_col),
         pyfits.Column(name='sigsky', format='E', array=sigsky_col),
         pyfits.Column(name='fwhm', format='E', array=fwhm_col),
+        pyfits.Column(name='tiling', format='E', array=tiling_col),
+        pyfits.Column(name='hex', format='E', array=hex_col),
         pyfits.Column(name='flag', format='J', array=flag_col),
         pyfits.Column(name='corner0_ra', format='E', unit='deg', array=corner0_ra_col),
         pyfits.Column(name='corner0_dec', format='E', unit='deg', array=corner0_dec_col),

@@ -4,3 +4,6 @@ testing*
 *.pdf
 *.pyc
 *.eps
+*.dat
+*.fits
+*.out

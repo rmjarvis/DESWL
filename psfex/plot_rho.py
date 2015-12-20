@@ -819,8 +819,13 @@ def main():
 
         print 'Plot overall rho stats'
 
-        #for key in ['griz', 'riz', 'g', 'r', 'i', 'z']:
-        for key in ['riz']:
+        #keys = ['griz', 'riz', 'g', 'r', 'i', 'z']
+        keys = ['riz']
+
+        # Also do cross-correlation versions
+        keys += [ 'cross_' + k for k in keys ]
+
+        for key in keys:
             stat_file = os.path.join(work, "rho_" + key + ".json")
 
             # Read the json file 
@@ -879,9 +884,10 @@ def main():
 
             cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2,
                                 rho1m, sig_rho1, rho2m, sig_rho2)).T
-            numpy.savetxt('rho.dat', cols, fmt='%.6e',
+            outfile = 'rho_' + key + '.dat'
+            numpy.savetxt(outfile, cols, fmt='%.6e',
                           header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
-            print 'wrote rho.data'
+            print 'wrote',outfile
  
             plt.clf()
             pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)

@@ -1,9 +1,10 @@
 #!/bin/bash
 
-DATE=20151218_exp
-FILE=y1all
-#FILE=y1spte_r
+DATE=20151219_exp
+#FILE=y1all
+FILE=y1spte_r
 TAG=v1
-OUTPUT=exposure_info_y1a1-v01.fits
+#OUTPUT=exposure_info_y1a1-v01.fits
+OUTPUT=exposure_info_y1spte_r_v01.fits
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./build_exp_catalog.py --tag=$TAG --work=~/work/psfex_rerun/$TAG --output=$OUTPUT"

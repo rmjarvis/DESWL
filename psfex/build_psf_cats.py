@@ -842,6 +842,7 @@ def main():
         print 'exp_root = ',exp_root
         cat_file = os.path.join(exp_dir, exp_root + "_psf.fits")
         tbhdu.writeto(cat_file, clobber=True)
+        print 'wrote cat_file = ',cat_file
 
     print '\nFinished processing all exposures'
 

@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+# Program to send a bunch of simulation jobs to the queue at BNL.
+#
+# The njobs argument will bundle the exposures into batches to make a total
+# of njobs jobs to submit to wq.
+#
+# If nobjs == 0, then it will use 1 job per output file.
+# 
+# See https://github.com/esheldon/wq for information about using wq.
+
+import argparse,os,re,sys
+import time,datetime
+import numpy
+import yaml
+
+top_txt="""
+command: |
+    cd /astro/u/mjarvis/rmjarvis/DESWL/sims/
+    source /astro/u/mjarvis/.bashrc
+    {cmd}
+
+job_name: {name}
+
+# this is the type of node/host selection. bynode means select entire
+# nodes.  bycore1 means all N cores from the same node.
+mode: bycore1
+N: {cores_per_job}
+
+# Select from these groups
+group: [new, new2, new3]
+"""
+
+parser = argparse.ArgumentParser(description='Run simulations')
+parser.add_argument('--njobs', default=0, type=int,
+                    help='How many jobs to run.  0 means 1 job per file.')
+parser.add_argument('--cores_per_job', default=1, type=int,
+                    help='How many cores to use per job')
+parser.add_argument('--submit_dir',default=None,
+                    help='where to put submit files')
+parser.add_argument('--debug', default=False, action='store_const', const=True,
+                    help='Set priority to high for debugging run')
+parser.add_argument('config_file', type=str, nargs='*', help='the configuration file')
+
+args = parser.parse_args()
+
+if len(args.config_file) == 0:
+    parser.print_help()
+    sys.exit()
+config_file = args.config_file
+
+# Convert config_file to a string.  Currently it is a list of the file itself plus any
+# additional parameters that you want to specify on the command line.
+full_config_file = " ".join(config_file)
+
+# Use the root name of the config file as a tag
+root = os.path.splitext(os.path.basename(config_file[0]))[0]
+
+if args.submit_dir is None:
+    date = datetime.date.today()
+    submit_dir = '~/work/submit_%d%02d%02d_sims'%(date.year,date.month,date.day)
+else:
+    submit_dir = args.submit_dir
+
+submit_dir = os.path.expanduser(submit_dir)
+print 'submit_dir = ',submit_dir
+if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
+
+njobs = args.njobs
+if njobs == 0:
+    with open(config_file[0]) as f:
+        config = yaml.load(f)
+    njobs = config['output']['nfiles']
+
+submit_list = []
+
+for job in range(njobs):
+    cmd='time galsim -n %d -j %d %s'%(njobs, job+1, full_config_file)
+
+    job_name = 'sim_' + root + '_' + str(job)
+    job_submit = top_txt.format(name=job_name, cores_per_job=args.cores_per_job,
+                                cmd=cmd)
+    if args.debug:
+        job_submit += "priority: high\n"
+
+    submit_file='%s/submit_%s'%(submit_dir,job_name)
+
+    with open(submit_file,'w') as fout:
+        fout.write(job_submit)
+    submit_list.append(submit_file)
+
+time.sleep(0.1)
+s_sub = " ".join(submit_list)
+cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,submit_dir,root)
+print cmd
+print 'Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list)
+print '      between each job submission.'
+os.system(cmd)
+

@@ -253,7 +253,7 @@ output:
     # Note: This can be changed from the command line as `galsim meds.yaml output.nfiles=10` say.
     # Likewise for any other parameters in the configuration.  This is often more convenient than
     # changing the original YAML configuration file.  Especially for temporary modifications.
-    nfiles: 1
+    nfiles: 200
 
     # This means the code will parallelize across the different files, doing a full
     # output file in each core at a time.

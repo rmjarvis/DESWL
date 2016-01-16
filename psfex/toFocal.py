@@ -1,3 +1,5 @@
+import numpy
+
 # Centers of chips in focal plane coordinates
 N7=["N7",16.908,191.670]
 N6=["N6",16.908,127.780]
@@ -80,16 +82,13 @@ ccdid = [S29,S30,S31,S25,S26,S27,S28,S20,S21,S22,S23,S24,S14,S15,S16,S17,S18,S19
 xsize=2048*15e-6*1000
 ysize=4096*15e-6*1000
 
-# dictionary of lower lefthand corner of chips
-corners={}
+# xc, yc are the (x,y) position of the lower left corner of each chip
+xc = numpy.empty(len(ccdid)+1)
+yc = numpy.empty(len(ccdid)+1)
 for i,ext in enumerate(ccdid):
-    xy=[]
-    xy.append( (ext[1])-xsize/2)
-    xy.append( (ext[2])-ysize/2)
-    corners[i+1]=xy
+    xc[i+1] = ext[1]-xsize/2
+    yc[i+1] = ext[2]-ysize/2
 
 def toFocal(ccd,x,y):
-    xc=corners[ccd][0]
-    yc=corners[ccd][1]
-    return x*15e-6*1000+xc,y*15e-6*1000+yc
+    return x*15e-6*1000+xc[ccd],y*15e-6*1000+yc[ccd]
 

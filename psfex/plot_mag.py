@@ -75,7 +75,7 @@ def get_data(runs, exps, work,
     import numpy
     import os
 
-    expinfo_file = 'exposure_info_' + tag + '.fits'
+    expinfo_file = '/astro/u/mjarvis/work/exposure_info_' + tag + '.fits'
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 

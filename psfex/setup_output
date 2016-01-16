@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DATE=20150904_setup
 FILE=y1all
-TAG=v1
+TAG=y1a1-v02
 
-./run_wq_exp.py --njobs=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --work=~/work/psfex_rerun/$TAG --tag=$TAG --use_findstars=0 --use_tapebumps=0 --run_psfex=0 --clear_output"
+./run_wq_exp.py --njobs=1 --file=$FILE --tag=setup --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --work=~/work/psfex_rerun/$TAG --tag=$TAG --use_findstars=0 --use_tapebumps=0 --run_psfex=0 --clear_output"

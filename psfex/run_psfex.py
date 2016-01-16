@@ -380,16 +380,18 @@ def get_fwhm(cat_file):
     return numpy.median(flux_radius)
 
 
-def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, psfex_dir, psfex_config):
+def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
+              psfex_dir, psfex_config):
     """Run PSFEx
 
     Returns True if successful, False if there was a catastrophic failure and no output 
     file was written.
     """
     print '   running psfex'
-    psf_cmd = '{psfex_dir}/psfex {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file}'.format(
-            psfex_dir=psfex_dir, cat_file=cat_file, config=psfex_config, used_file=used_file,
-            xml_file=xml_file)
+    psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
+            psfex_exe=os.path.join(psfex_dir,'psfex'),
+            cat_file=cat_file, config=psfex_config, used_file=used_file, xml_file=xml_file,
+            resid_file=resid_file)
     print psf_cmd
     os.system(psf_cmd)
 
@@ -599,10 +601,17 @@ def main():
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
                 xml_file = os.path.join(wdir,root+'_psfcat.xml')
-                json_file = os.path.join(wdir,root+'.json')
+                # PSFEx does this weird thing where it takes the names of the resid file,
+                # strips off the .fits ending, and replaces it with _ + cat_file
+                resid_file1 = os.path.join(wdir,'resid.fits')
+                print 'resid_file1 = ',resid_file1
+                cat_fname = os.path.basename(cat_file)
+                print 'cat_fname = ',cat_fname
+                resid_file2 = os.path.join(wdir,'resid_'+cat_fname)
+                print 'resid_file2 = ',resid_file2
                 if args.run_psfex:
                     success = run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file,
-                            args.psfex_dir, args.psfex_config)
+                                        resid_file1, args.psfex_dir, args.psfex_config)
                     if success:
                         move_files(wdir, odir, psf_file,
                                    make_symlinks=args.make_symlinks)
@@ -611,8 +620,8 @@ def main():
 
                 print 'rm_files = ',args.rm_files
                 if args.rm_files:
-                    remove_temp_files(wdir, root, star_file, psf_file, used_file, xml_file,
-                                      json_file)
+                    remove_temp_files(wdir, root, star_file, psf_file, used_file,
+                                      xml_file, resid_file2)
 
 
             except NoStarsException:

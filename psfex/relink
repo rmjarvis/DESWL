@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DATE=20140920
 #FILE=spte_e
 FILE=other_gold_exp
 
-./run_wq_exp.py --debug --njobs=1 --file=$FILE --submit_dir=~/work/submit_rho_$DATE --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0"
+./run_wq_exp.py --debug --njobs=1 --file=$FILE --tag=relink --cmd="./run_psfex.py --exp_match=\"*_[0-9][0-9].fits*\" --output=~/work/psfex_rerun_$DATE --use_findstars=0 --use_tapebumps=0 --rm_files=0 --run_psfex=0"

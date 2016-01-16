@@ -4,7 +4,8 @@
  
 #-------------------------------- PSF model ----------------------------------
  
-BASIS_TYPE      PIXEL_AUTO      # NONE, PIXEL, GAUSS-LAGUERRE or FILE
+#BASIS_TYPE      PIXEL_AUTO      # NONE, PIXEL, GAUSS-LAGUERRE or FILE
+BASIS_TYPE      PIXEL           # NONE, PIXEL, GAUSS-LAGUERRE or FILE
 BASIS_NUMBER    20              # Basis number or parameter
 BASIS_NAME      basis.fits      # Basis filename (FITS data-cube)
 BASIS_SCALE     1.0             # Gauss-Laguerre beta parameter
@@ -62,11 +63,9 @@ CHECKPLOT_NAME
  
 #------------------------------ Check-Images ---------------------------------
  
-CHECKIMAGE_TYPE NONE
-                                # Check-image types
-CHECKIMAGE_NAME NONE
-                                # Check-image filenames
-CHECKIMAGE_CUBE N               # Save check-images as datacubes (Y/N) ?
+CHECKIMAGE_TYPE RESIDUALS       # Check-image types
+CHECKIMAGE_NAME resid.fits      # Check-image filenames
+CHECKIMAGE_CUBE Y               # Save check-images as datacubes (Y/N) ?
  
 #----------------------------- Miscellaneous ---------------------------------
  
@@ -78,7 +77,7 @@ WRITE_XML       Y               # Write XML file (Y/N)?
 XML_NAME        psfex.xml       # Filename for XML output
 XSL_URL         file:///usr/local/share/psfex/psfex.xsl
                                 # Filename for XSL style-sheet
-NTHREADS        1               # Number of simultaneous threads for
+NTHREADS        2               # Number of simultaneous threads for
                                 # the SMP version of PSFEx
                                 # 0 = automatic
  

@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DATE=20151219_cats
-FILE=y1all
+FILE=y1x
 TAG=v1
 
-./run_wq_exp.py --njobs=120 --cores_per_job=1 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./build_psf_cats.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"
+./run_wq_exp.py --njobs=120 --cores_per_job=1 --file=$FILE --tag=cats --cmd="./build_psf_cats.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

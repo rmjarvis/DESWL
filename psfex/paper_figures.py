@@ -3,10 +3,10 @@ import astropy.io.fits as pyfits
 import numpy
 import os
 
-#expinfo_file = 'exposure_info_v4.fits'
+#expinfo_file = '/astro/u/mjarvis/work/exposure_info_v4.fits'
 #file = 'spte_gold_exp'
 #work = '/astro/u/mjarvis/work/psfex_rerun/v4'
-expinfo_file = 'exposure_info_v1.fits'
+expinfo_file = '/astro/u/mjarvis/work/exposure_info_v1.fits'
 file = 'y1spte_r'
 work = '/astro/u/mjarvis/work/psfex_rerun/v1'
 

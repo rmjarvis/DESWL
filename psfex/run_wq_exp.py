@@ -21,6 +21,7 @@
 import argparse,os,re
 import time
 import numpy
+import datetime
 
 # Note: I originally had the wrong shell set.  I ran bash in my .login
 # rather than setting it correctly by mailing RT-RACF-UserAccounts@bnl.gov.
@@ -60,17 +61,29 @@ parser.add_argument('--cores_per_job', default=1, type=int,
                     help='How many cores to use per job')
 parser.add_argument('--file', default='',
                     help='list of run/exposures')
-parser.add_argument('--submit_dir',default='submit',
+parser.add_argument('--submit_dir',default=None,
                     help='where to put submit files')
 parser.add_argument('--cmd', default='./run_findstars.py --condor 0',
                     help='command to run on the exposures')
 parser.add_argument('--debug', default=False, action='store_const', const=True,
                     help='Set priority to high for debugging run')
+parser.add_argument('--tag', default=None,
+                    help='Some kind of tag for the auto-generated submit dir')
 
 
 args = parser.parse_args()
 
-submit_dir = os.path.expanduser(args.submit_dir)
+if args.submit_dir is None:
+    date = datetime.date.today()
+    if args.tag is None:
+        tag = args.file
+    else:
+        tag = args.tag
+    submit_dir = '~/work/submit_%d%02d%02d_%s'%(date.year,date.month,date.day,tag)
+else:
+    submit_dir = args.submit_dir
+
+submit_dir = os.path.expanduser(submit_dir)
 print 'submit_dir = ',submit_dir
 if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
 

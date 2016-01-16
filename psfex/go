@@ -1,8 +1,7 @@
 #!/bin/bash
 
-DATE=20151022_go
-FILE=y1all_g
-TAG=v1
+FILE=y1x
+TAG=y1a1-v02
 
-#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-y1-$TAG.txt
-./run_wq_exp.py --njobs=150 --cores_per_job=2 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --rm_files=1 --blacklist=1"
+/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-y1a1-$TAG.txt
+./run_wq_exp.py --njobs=150 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --rm_files=1 --blacklist=1"

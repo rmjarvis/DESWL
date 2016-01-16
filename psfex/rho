@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DATE=20151207_rho
-FILE=y1spte_r
-TAG=v1
+FILE=y1x
+TAG=y1a1-v02
 
-./run_wq_exp.py --njobs=100 --cores_per_job=4 --file=$FILE --submit_dir=~/work/submit_$DATE --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"
+./run_wq_exp.py --njobs=100 --cores_per_job=4 --file=$FILE --tag=rho --cmd="./run_rho.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

@@ -18,7 +18,7 @@ BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure b
 def parse_args():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Run PSFEx on a set of runs/exposures')
+    parser = argparse.ArgumentParser(description='Build PSF catalogs for a set of runs/exposures')
 
     # Drectory arguments
     parser.add_argument('--work', default='./',
@@ -109,23 +109,28 @@ def read_findstars(exp_dir, root):
     import copy
 
     file_name = os.path.join(exp_dir, root + '_findstars.fits')
+    print 'file_name = ',file_name
     if not os.path.isfile(file_name):
         return None
-    f = pyfits.open(file_name, memmap=False)
-    data = copy.copy(f[1].data)
-    f.close()
-    # This has the following columns:
-    # id: The original id from the SExtractor catalog
-    # x: The x position
-    # y: The y position
-    # sky: The local sky value
-    # noise: The estimated noise.  But these are all 0, so I think this isn't being calculated.
-    # size_flags: Error flags that occurred when estimating the size
-    # mag: The magnitude from SExtractor
-    # sg: SExtractor's star/galaxy estimate.  Currently SPREAD_MODEL
-    # sigma0: The shapelet sigma that results in a b_11 = 0 shapelet parameter.
-    # star_flag: 1 if findstars thought this was a star, 0 otherwise.
-    return data
+    try:
+        with pyfits.open(file_name, memmap=False) as fp:
+            data = copy.copy(fp[1].data)
+        # This has the following columns:
+        # id: The original id from the SExtractor catalog
+        # x: The x position
+        # y: The y position
+        # sky: The local sky value
+        # noise: The estimated noise.  But these are all 0, so I think this isn't being calculated.
+        # size_flags: Error flags that occurred when estimating the size
+        # mag: The magnitude from SExtractor
+        # sg: SExtractor's star/galaxy estimate.  Currently SPREAD_MODEL
+        # sigma0: The shapelet sigma that results in a b_11 = 0 shapelet parameter.
+        # star_flag: 1 if findstars thought this was a star, 0 otherwise.
+        return data
+    except Exception as e:
+        print 'Caught exception:'
+        print e
+        return None
  
 def find_index(x1, y1, x2, y2):
     """Find the index of the closest point in (x2,y2) to each (x1,y1)
@@ -244,7 +249,6 @@ def measure_shapes(xlist, ylist, file_name, wcs):
             #print 'subim = ',subim.array
             #print 'subwt = ',subwt.array
             #print 'subbp = ',subbp.array
-            # badpix seems to be all 32768 !!?!?!
             #shape_data = subim.FindAdaptiveMom(weight=subwt, badpix=subbp, strict=False)
             shape_data = subim.FindAdaptiveMom(weight=subwt, strict=False)
         except Exception as e:
@@ -502,20 +506,22 @@ def read_blacklists(tag):
     d = {}  # The dict will be indexed by (expnum, ccdnum)
     print 'reading blacklists'
 
-    # First read Eli's astrometry flags
-    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
-    eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
-    with pyfits.open(eli_file) as pyf:
-        data = pyf[1].data
-        for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
-            key = (int(expnum), int(ccdnum))
-            d[key] = int(flag)
-    print 'after astrom, len(d) = ',len(d)
+    if False:
+        # First read Eli's astrometry flags
+        # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
+        eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
+        with pyfits.open(eli_file) as pyf:
+            data = pyf[1].data
+            for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
+                key = (int(expnum), int(ccdnum))
+                d[key] = int(flag)
+        print 'after astrom, len(d) = ',len(d)
 
     # Then Alex and Steve's blacklists
     # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L588)
-    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-sv-uniq.txt'
-    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-sv-uniq.txt'
+    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-y1-uniq.txt'
+    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-y1-uniq.txt'
+    noise_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/noise-y1-uniq.txt'
     with open(ghost_file) as f:
         for line in f:
             expnum, ccdnum = line.split()
@@ -524,6 +530,14 @@ def read_blacklists(tag):
                 d[key] |= (1 << 10)
             else:
                 d[key] = (1 << 10)
+    with open(noise_file) as f:
+        for line in f:
+            expnum, ccdnum = line.split()
+            key = (int(expnum), int(ccdnum))
+            if key in d:
+                d[key] |= (1 << 11)
+            else:
+                d[key] = (1 << 11)
     with open(streak_file) as f:
         for line in f:
             expnum, ccdnum = line.split()
@@ -558,7 +572,6 @@ def main():
     import os
     import glob
     import galsim
-    import json
     import numpy
     import astropy.io.fits as pyfits
 
@@ -641,6 +654,8 @@ def main():
                 print '   blacklist flag = ',black_flag
                 if black_flag & (113 << 15):
                     print '   Catastrophic flag.  Skipping this file.'
+                    if args.single_ccd:
+                        break
                     continue
             else:
                 black_flag = 0
@@ -649,6 +664,8 @@ def main():
             fs_data = read_findstars(exp_dir, root)
             if fs_data is None:
                 print '   No _findstars.fits file found'
+                if args.single_ccd:
+                    break
                 continue
             n_tot = len(fs_data)
             n_fs = fs_data['star_flag'].sum()
@@ -716,27 +733,33 @@ def main():
             used_magmax = fs_data['mag'][fs_index].max()
             print '   magnitude range of used stars = ',used_magmin,used_magmax
 
-            # Get the wcs from the image file
-            wcs = get_wcs(file_name)
+            try:
+                # Get the wcs from the image file
+                wcs = get_wcs(file_name)
 
-            # Measure the shpes and sizes of the stars used by PSFEx.
-            x = fs_data['x'][mask]
-            y = fs_data['y'][mask]
-            mag = fs_data['mag'][mask]
-            e1, e2, size, meas_flag = measure_shapes(x, y, file_name, wcs)
+                # Measure the shpes and sizes of the stars used by PSFEx.
+                x = fs_data['x'][mask]
+                y = fs_data['y'][mask]
+                mag = fs_data['mag'][mask]
+                e1, e2, size, meas_flag = measure_shapes(x, y, file_name, wcs)
 
-            # Measure the model shapes, sizes.
-            psfex_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
-            psfex_e1, psfex_e2, psfex_size, psfex_flag = measure_psfex_shapes(
-                    x, y, psfex_file_name, file_name)
-            erin_e1, erin_e2, erin_size, erin_flag = measure_psfex_shapes_erin(
-                    x, y, psfex_file_name, file_name)
+                # Measure the model shapes, sizes.
+                psfex_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
+                psfex_e1, psfex_e2, psfex_size, psfex_flag = measure_psfex_shapes(
+                        x, y, psfex_file_name, file_name)
+                erin_e1, erin_e2, erin_size, erin_flag = measure_psfex_shapes_erin(
+                        x, y, psfex_file_name, file_name)
 
-            # Measure the desdm model shapes, sizes.
-            desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
-            desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psfex_shapes(
-                    x, y, desdm_file_name, file_name)
-            desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
+                # Measure the desdm model shapes, sizes.
+                desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
+                desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psfex_shapes(
+                        x, y, desdm_file_name, file_name)
+                desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
+            except Exception as e:
+                print 'Catastrophic error trying to measure the shapes:'
+                print e
+                print 'Skip this file'
+                continue
 
             # Put all the flags together:
             flag = [ m | p | e | d for m,p,e,d in zip(meas_flag,psfex_flag,erin_flag,desdm_flag) ]

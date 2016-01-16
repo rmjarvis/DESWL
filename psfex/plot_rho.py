@@ -230,47 +230,8 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
 
-def pretty_rho3(meanr, rho, sig, sqrtn):
-    import matplotlib.patches as mp
-    t1 = 0.5
-    t2 = 300.
-    y_sv = 1.1e-2**2
-    #y_y5 = 2.2e-3**2
-
-    sv_req = plt.fill( [t1, t1, t2, t2], [0., y_sv, y_sv, 0.],
-                        color = '#FFFF82')
-    #y5_req = plt.fill( [t1, t1, t2, t2], [0., y_y5, y_y5, 0.],
-                        #color = '#BAFFA4')
-    plt.plot(meanr, rho, color='blue')
-    plt.plot(meanr, -rho, color='blue', ls=':')
-    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='')
-    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='')
-    rho3_line, = plt.plot(-meanr, rho, color='blue')
-    sv_req = mp.Patch(color='#FFFF82')
-    #y5_req = mp.Patch(color='#BAFFA4')
-    plt.legend([rho3_line, sv_req],
-               [r'$\rho_3(\theta)$', 'SV Requirements'])
-    plt.xlim( [0.5,300.] )
-    plt.ylim( [3.e-6, 3.e-4] )
-    plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\rho_3$')
-    plt.xscale('log')
-    plt.yscale('log', nonposy='clip')
-    plt.tight_layout()
-
-
-
-def main():
-    import os
-    import glob
-    import galsim
-
-    args = parse_args()
-
-    datadir = '/astro/u/astrodat/data/DES'
-
-    work = os.path.expanduser(args.work)
-    print 'work dir = ',work
+def plot_single_rho(args,work):
+    # Plot rho stats for one ccd at at time
 
     if args.file != '':
         print 'Read file ',args.file
@@ -504,12 +465,10 @@ def main():
         rho1m = numpy.mean(ccd_rho1m[:nccd,:], axis=0)
         rho2p = numpy.mean(ccd_rho2p[:nccd,:], axis=0)
         rho2m = numpy.mean(ccd_rho2m[:nccd,:], axis=0)
-        rho3 = numpy.mean(ccd_rho3[:nccd,:], axis=0)
         sig_rho1p = numpy.std(ccd_rho1p[:nccd,:], axis=0)
         sig_rho1m = numpy.std(ccd_rho1m[:nccd,:], axis=0)
         sig_rho2p = numpy.std(ccd_rho2p[:nccd,:], axis=0)
         sig_rho2m = numpy.std(ccd_rho2m[:nccd,:], axis=0)
-        sig_rho3 = numpy.std(ccd_rho3[:nccd,:], axis=0)
         print 'meanr = ',meanr
         print 'rho1p = ',rho1p
         print 'sig_rho1p = ',sig_rho1p
@@ -533,15 +492,6 @@ def main():
         #plt.savefig('ccd_rho2.png')
         plt.savefig('ccd_rho2.pdf')
 
-        plt.clf()
-        plt.title(r'SPTE $\rho_3$ (i.e. $\langle ds ds \rangle$) for individual CCDs')
-        lines = plot_rho(meanr, rho3, sig_rho3, sqrtn)
-        plt.legend(lines, [r'$\rho_3(\theta)$'] )
-        plt.xlim( [0.5,20] )
-        plt.ylabel(r'$\rho_3$')
-        #plt.savefig('ccd_rho3.png')
-        plt.savefig('ccd_rho3.pdf')
-
     if False:
         # Plots for exposures:
         print 'nexp = ',nexp
@@ -551,12 +501,10 @@ def main():
         rho1m = numpy.mean(exp_rho1m[:nexp,:], axis=0)
         rho2p = numpy.mean(exp_rho2p[:nexp,:], axis=0)
         rho2m = numpy.mean(exp_rho2m[:nexp,:], axis=0)
-        rho3 = numpy.mean(exp_rho3[:nexp,:], axis=0)
         sig_rho1p = numpy.std(exp_rho1p[:nexp,:], axis=0)
         sig_rho1m = numpy.std(exp_rho1m[:nexp,:], axis=0)
         sig_rho2p = numpy.std(exp_rho2p[:nexp,:], axis=0)
         sig_rho2m = numpy.std(exp_rho2m[:nexp,:], axis=0)
-        sig_rho3 = numpy.std(exp_rho3[:nexp,:], axis=0)
         print 'meanr = ',meanr
         print 'rho1p = ',rho1p
         print 'sig_rho1p = ',sig_rho1p
@@ -580,15 +528,6 @@ def main():
         #plt.savefig('exp_rho2.png')
         plt.savefig('exp_rho2.pdf')
 
-        plt.clf()
-        plt.title(r'SPTE $\rho_3$ (i.e. $\langle ds ds \rangle$) for full exposures')
-        lines = plot_rho(meanr, rho3, sig_rho3, sqrtn)
-        plt.legend(lines, [r'$\rho_3(\theta)$'] )
-        plt.xlim( [0.5,100] )
-        plt.ylabel(r'$\rho_3$')
-        #plt.savefig('exp_rho3.png')
-        plt.savefig('exp_rho3.pdf')
-
         # Prettier plots for Erin's talk
         plt.clf()
         pretty_rho1(meanr, rho1p, sig_rho1p, sqrtn)
@@ -599,11 +538,6 @@ def main():
         pretty_rho2(meanr, rho2p, sig_rho2p, sqrtn)
         plt.savefig('rho2.pdf')
         #plt.savefig('rho2.png')
-
-        plt.clf()
-        pretty_rho3(meanr, rho3, sig_rho3, sqrtn)
-        plt.savefig('rho3.pdf')
-        #plt.savefig('rho3.png')
 
     k10arcmin = int(round(numpy.log(10 / 0.5)/0.1))
     if False:
@@ -621,12 +555,10 @@ def main():
         rho2p = exp_rho2p[i,:]
         print 'rho2p = ',rho2p
         rho2m = exp_rho2m[i,:]
-        rho3 = exp_rho3[i,:]
         sig_rho1p = numpy.sqrt(exp_var1[i,:])
         sig_rho1m = numpy.sqrt(exp_var1[i,:])
         sig_rho2p = numpy.sqrt(exp_var2[i,:])
         sig_rho2m = numpy.sqrt(exp_var2[i,:])
-        sig_rho3 = numpy.sqrt(exp_var3[i,:])
 
         plt.clf()
         plt.title(r'$\rho_1$ for exposure with worst $\rho_1$ at 10 arcmin')
@@ -646,15 +578,6 @@ def main():
         #plt.savefig('w1_rho2.png')
         plt.savefig('w1_rho2.pdf')
 
-        plt.clf()
-        plt.title(r'$\rho_3$ for exposure with worst $\rho_1$ at 10 arcmin')
-        lines = plot_rho(meanr, rho3, sig_rho3, 1)
-        plt.legend(lines, [r'$\rho_3(\theta)+$'] )
-        plt.xlim( [0.5,100] )
-        plt.ylabel(r'$\rho_3$')
-        #plt.savefig('w1_rho3.png')
-        plt.savefig('w1_rho3.pdf')
-
         # Plots for worst rho2 exposure:
         # Find worst exposure based on rho2 at theta = 10 arcmin
         i = numpy.argmax(numpy.abs(exp_rho2p[:nexp,k10arcmin]), axis=0)
@@ -669,12 +592,10 @@ def main():
         rho2p = exp_rho2p[i,:]
         print 'rho2p = ',rho2p
         rho2m = exp_rho2m[i,:]
-        rho3 = exp_rho3[i,:]
         sig_rho1p = numpy.sqrt(exp_var1[i,:])
         sig_rho1m = numpy.sqrt(exp_var1[i,:])
         sig_rho2p = numpy.sqrt(exp_var2[i,:])
         sig_rho2m = numpy.sqrt(exp_var2[i,:])
-        sig_rho3 = numpy.sqrt(exp_var3[i,:])
 
         plt.clf()
         plt.title(r'$\rho_1$ for exposure with worst $\rho_2$ at 10 arcmin')
@@ -694,15 +615,6 @@ def main():
         #plt.savefig('w2_rho2.png')
         plt.savefig('w2_rho2.pdf')
 
-        plt.clf()
-        plt.title(r'$\rho_3$ for exposure with worst $\rho_2$ at 10 arcmin')
-        lines = plot_rho(meanr, rho3, sig_rho3, 1)
-        plt.legend(lines, [r'$\rho_3(\theta)+$'] )
-        plt.xlim( [0.5,100] )
-        plt.ylabel(r'$\rho_3$')
-        #plt.savefig('w2_rho3.png')
-        plt.savefig('w2_rho3.pdf')
-
     if False:
         # Plots for desdm:
         print 'nexp = ',nexp
@@ -712,12 +624,10 @@ def main():
         rho1m = numpy.mean(desdm_rho1m[:nexp,:], axis=0)
         rho2p = numpy.mean(desdm_rho2p[:nexp,:], axis=0)
         rho2m = numpy.mean(desdm_rho2m[:nexp,:], axis=0)
-        rho3 = numpy.mean(desdm_rho3[:nexp,:], axis=0)
         sig_rho1p = numpy.std(desdm_rho1p[:nexp,:], axis=0)
         sig_rho1m = numpy.std(desdm_rho1m[:nexp,:], axis=0)
         sig_rho2p = numpy.std(desdm_rho2p[:nexp,:], axis=0)
         sig_rho2m = numpy.std(desdm_rho2m[:nexp,:], axis=0)
-        sig_rho3 = numpy.std(desdm_rho3[:nexp,:], axis=0)
         print 'meanr = ',meanr
         print 'rho1p = ',rho1p
         print 'sig_rho1p = ',sig_rho1p
@@ -742,15 +652,6 @@ def main():
         plt.savefig('desdm_rho2.pdf')
 
         plt.clf()
-        plt.title(r'SPTE $\rho_3$ (i.e. $\langle ds ds \rangle$) for DESDM PSFEx solution')
-        lines = plot_rho(meanr, rho3, sig_rho3, sqrtn)
-        plt.legend(lines, [r'$\rho_3(\theta)$'] )
-        plt.xlim( [0.5,100] )
-        plt.ylabel(r'$\rho_3$')
-        #plt.savefig('desdm_rho3.png')
-        plt.savefig('desdm_rho3.pdf')
-
-        plt.clf()
         pretty_rho1(meanr, rho1p, sig_rho1p, sqrtn)
         #plt.savefig('desdm_pretty_rho1.png')
         plt.savefig('desdm_pretty_rho1.pdf')
@@ -759,11 +660,6 @@ def main():
         pretty_rho2(meanr, rho2p, sig_rho2p, sqrtn)
         #plt.savefig('desdm_pretty_rho2.png')
         plt.savefig('desdm_pretty_rho2.pdf')
-
-        plt.clf()
-        pretty_rho3(meanr, rho3, sig_rho3, sqrtn)
-        #plt.savefig('desdm_pretty_rho3.png')
-        plt.savefig('desdm_pretty_rho3.pdf')
 
     if False:
         # Do some counts of how many exposures have high rho2
@@ -814,74 +710,84 @@ def main():
         print 'N with |rho2| > 5e-5 = ',count05
         print 'N with |rho2| > 3e-5 = ',count03
         print 'N with |rho2| > 2e-5 = ',count02
-  
-    if True:
+ 
+def plot_overall_rho(work):
 
-        print 'Plot overall rho stats'
+    print 'Plot overall rho stats'
 
-        #keys = ['griz', 'riz', 'g', 'r', 'i', 'z']
-        keys = ['riz']
+    base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
+    #base_keys = ['ri']
 
-        # Also do cross-correlation versions
-        keys += [ 'cross_' + k for k in keys ]
+    # Build full key from these for the three kinds
+    keys = [ 'all_' + k for k in base_keys ]
+    keys += [ 'cross_' + k for k in base_keys ]
+    keys += [ 'crossband_' + k for k in base_keys if len(k) > 1 ]
+    keys += [ 'oddeven_' + k for k in base_keys ]
+    keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
+    keys += [ 'alt_' + k for k in base_keys ]
+    keys += [ 'altoddeven_' + k for k in base_keys ]
 
-        for key in keys:
-            stat_file = os.path.join(work, "rho_" + key + ".json")
+    for key in keys:
+        stat_file = os.path.join(work, "rho_" + key + ".json")
+        if not os.path.isfile(stat_file):
+            print 'File not found: ',stat_file
+            continue
 
-            # Read the json file 
-            with open(stat_file,'r') as f:
-                stats = json.load(f)
+        # Read the json file 
+        with open(stat_file,'r') as f:
+            stats = json.load(f)
 
-            print' stats = ',stats
+        print' stats = ',stats
 
-            ( meanlogr,
-              rho1p,
-              rho1p_im,
-              rho1m,
-              rho1m_im,
-              var1,
-              rho2p,
-              rho2p_im,
-              rho2m,
-              rho2m_im,
-              var2,
-              rho3p,
-              rho3p_im,
-              rho3m,
-              rho3m_im,
-              var3,
-              rho4p,
-              rho4p_im,
-              rho4m,
-              rho4m_im,
-              var4,
-              rho5p,
-              rho5p_im,
-              rho5m,
-              rho5m_im,
-              var5,
-            ) = stats[-1]
+        ( meanlogr,
+          rho1p,
+          rho1p_im,
+          rho1m,
+          rho1m_im,
+          var1,
+          rho2p,
+          rho2p_im,
+          rho2m,
+          rho2m_im,
+          var2,
+          rho3p,
+          rho3p_im,
+          rho3m,
+          rho3m_im,
+          var3,
+          rho4p,
+          rho4p_im,
+          rho4m,
+          rho4m_im,
+          var4,
+          rho5p,
+          rho5p_im,
+          rho5m,
+          rho5m_im,
+          var5,
+        ) = stats[-1]
 
-            meanr = numpy.exp(meanlogr)
-            rho1p = numpy.array(rho1p)
-            rho1m = numpy.array(rho1m)
-            rho2p = numpy.array(rho2p)
-            rho2m = numpy.array(rho2m)
-            rho3p = numpy.array(rho3p)
-            rho3m = numpy.array(rho3m)
-            rho4p = numpy.array(rho4p)
-            rho4m = numpy.array(rho4m)
-            rho5p = numpy.array(rho5p)
-            rho5m = numpy.array(rho5m)
-            sig_rho1 = numpy.sqrt(var1)
-            sig_rho2 = numpy.sqrt(var2)
-            sig_rho3 = numpy.sqrt(var3)
-            sig_rho4 = numpy.sqrt(var4)
-            sig_rho5 = numpy.sqrt(var5)
-            sqrtn = 1
+        meanr = numpy.exp(meanlogr)
+        rho1p = numpy.array(rho1p)
+        rho1m = numpy.array(rho1m)
+        rho2p = numpy.array(rho2p)
+        rho2m = numpy.array(rho2m)
+        rho3p = numpy.array(rho3p)
+        rho3m = numpy.array(rho3m)
+        rho4p = numpy.array(rho4p)
+        rho4m = numpy.array(rho4m)
+        rho5p = numpy.array(rho5p)
+        rho5m = numpy.array(rho5m)
+        sig_rho1 = numpy.sqrt(var1)
+        sig_rho2 = numpy.sqrt(var2)
+        sig_rho3 = numpy.sqrt(var3)
+        sig_rho4 = numpy.sqrt(var4)
+        sig_rho5 = numpy.sqrt(var5)
+        sqrtn = 1
 
-            print 'meanr = ',meanr
+        print 'meanr = ',meanr
 
+        if False:
             cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2,
                                 rho1m, sig_rho1, rho2m, sig_rho2)).T
             outfile = 'rho_' + key + '.dat'
@@ -889,48 +795,31 @@ def main():
                           header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
             print 'wrote',outfile
  
-            plt.clf()
-            pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)
-            #plt.savefig('rho1_' + key + '.png')
-            plt.savefig('rho1_' + key + '.pdf')
+        plt.clf()
+        pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)
+        #plt.savefig('rho1_' + key + '.png')
+        plt.savefig('rho1_' + key + '.pdf')
 
-            plt.clf()
-            pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p)
-            #plt.savefig('rho2_' + key + '.png')
-            plt.savefig('rho2_' + key + '.pdf')
+        plt.clf()
+        pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p)
+        #plt.savefig('rho2_' + key + '.png')
+        plt.savefig('rho2_' + key + '.pdf')
 
-            #plt.clf()
-            #pretty_rho3(meanr, rho3, sig_rho3, sqrtn)
-            #plt.savefig('rho3_' + key + '.png')
-            #plt.savefig('rho3_' + key + '.pdf')
+
+def main():
+    import os
+    import glob
+    import galsim
+
+    args = parse_args()
+
+    work = os.path.expanduser(args.work)
+    print 'work dir = ',work
+
+    #plot_single_rho(args,work)
+
+    plot_overall_rho(work)
  
-            if False:
-                plt.clf()
-                plt.title(r'$\rho_3$ (i.e. $\langle (e dT/T)* (e dT/T) \rangle$)')
-                lines = plot_rho(meanr, rho3p, sig_rho3, sqrtn, rho3m, sig_rho3)
-                plt.legend(lines, [r'$\rho_3(\theta)+$', r'$\rho_3(\theta)-$'] )
-                plt.xlim( [0.5,300] )
-                plt.ylabel(r'$\rho_3$')
-                plt.tight_layout()
-                plt.savefig('rho3.pdf')
 
-                plt.clf()
-                plt.title(r'$\rho_4$ (i.e. $\langle de* (e dT/T) \rangle$)')
-                lines = plot_rho(meanr, rho4p, sig_rho4, sqrtn, rho4m, sig_rho4)
-                plt.legend(lines, [r'$\rho_4(\theta)+$', r'$\rho_4(\theta)-$'] )
-                plt.xlim( [0.5,300] )
-                plt.ylabel(r'$\rho_4$')
-                plt.tight_layout()
-                plt.savefig('rho4.pdf')
-
-                plt.clf()
-                plt.title(r'$\rho_5$ (i.e. $\langle e* (e dT/T) \rangle$)')
-                lines = plot_rho(meanr, rho5p, sig_rho5, sqrtn, rho5m, sig_rho5)
-                plt.legend(lines, [r'$\rho_5(\theta)+$', r'$\rho_5(\theta)-$'] )
-                plt.xlim( [0.5,300] )
-                plt.ylabel(r'$\rho_5$')
-                plt.tight_layout()
-                plt.savefig('rho5.pdf')
- 
 if __name__ == "__main__":
     main()

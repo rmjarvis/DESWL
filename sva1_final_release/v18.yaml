@@ -1,11 +1,11 @@
 # input files
-gold: "../data_v17/sva1_gold_1.0.2_catalog_basic.fits"
-auto: "../data_v17/sva1_gold_1.0.2_catalog_auto.fits"
-badflag: "../data_v17/sva1_gold_1.0.4_catalog_badflag.fits"
-ngmix: "../data_v17/ngmix011_all.fit"
-im3shape: "../data_v17/im3shape_v97.fits"
-ngmix_psfs: "../data_v17/ngmix011-psf-shape-avg.fits"
-ngmix_s2n: "../data_v17/ngmix011_round_sn_v6.fit"
+gold: "/Users/Mike/Astro/des/SV/data_v17/sva1_gold_1.0.2_catalog_basic.fits"
+auto: "/Users/Mike/Astro/des/SV/data_v17/sva1_gold_1.0.2_catalog_auto.fits"
+badflag: "/Users/Mike/Astro/des/SV/data_v17/sva1_gold_1.0.4_catalog_badflag.fits"
+ngmix: "/Users/Mike/Astro/des/SV/data_v17/ngmix011_all.fit"
+im3shape: "/Users/Mike/Astro/des/SV/data_v17/im3shape_v97.fits"
+ngmix_psfs: "/Users/Mike/Astro/des/SV/data_v17/ngmix011-psf-shape-avg.fits"
+ngmix_s2n: "/Users/Mike/Astro/des/SV/data_v17/ngmix011_round_sn_v6.fit"
 
 # outputs - flags
 gold_flags: "sva1_gold_wl_comb_flags_v18.fits"
@@ -19,4 +19,4 @@ flatcats_info: "des_sv_wl_info.fits"
 
 # photo-z stuff
 #photoz_binning_im3shape:
-photoz_binning_ngmix: "../data_v17/photoz/pzbinning_svng15_04.06.15_skynet2sweight-True_mean_final_v15.npy"
+photoz_binning_ngmix: "/Users/Mike/Astro/des/SV/data_v17/photoz/pzbinning_svng15_04.06.15_skynet2sweight-True_mean_final_v15.npy"

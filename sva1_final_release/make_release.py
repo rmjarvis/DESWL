@@ -40,7 +40,10 @@ import os
 import sys
 import numpy as np
 import fitsio
-import numpy_util
+try:
+    from esutil import numpy_util
+except ImportError:
+    import numpy_util # My own version with the function I need.
 import unblind
 
 def make_info(config):
@@ -303,7 +306,7 @@ def make_im3shape(config, info):
 
     # im3shape objects are sorted, but has some that are not in info catalog.
     im, dim = numpy_util.match(imcat['coadd_objects_id'], info['COADD_OBJECTS_ID'])
-    assert np.all(imcat['coadd_objects_id'] == sorted(imcat['coadd_objects_id']))
+    #assert np.all(imcat['coadd_objects_id'] == sorted(imcat['coadd_objects_id']))
 
     # Set reasonable defaults for float fields:
     data = np.zeros(len(info), dtype=dt)
@@ -321,11 +324,16 @@ def make_im3shape(config, info):
     data['error_flag'] = 2**30
     data['info_flag'] = 2**25
 
+    print 'unique error_flags in original catalog = ',np.unique(imcat['error_flag'])
+    print 'unique error_flags that match info = ',np.unique(imcat['error_flag'][im])
+
     # Copy in the columns from the source catalog that keep the same name:
     for col in ['nbc_m', 'nbc_c1', 'nbc_c2', 'w', 'error_flag', 'info_flag',
                 'radius', 'mean_rgpp_rp', 'mean_psf_fwhm', 'likelihood',
                 'stamp_size', 'n_exposure']:
         data[col][dim] = imcat[col][im]
+
+    print 'unique error_flags in final = ',np.unique(data['error_flag'][dim])
 
     # Some get a new name:
     data['e_1'][dim] = imcat['e1'][im]
@@ -339,9 +347,14 @@ def make_im3shape(config, info):
     data['chi2'][dim] = imcat['chi2_pixel'][im]
 
     # Do a calculation to get the flux from separate bulge/disc fluxes.
-    data['is_bulge'][dim] = imcat['bulge_flux'][im] > 0.
+    data['is_bulge'][dim] = imcat['bulge_flux'][im] != 0.
     # Only one is non-zero:
-    assert np.all((imcat['bulge_flux'] > 0) != (imcat['disc_flux'] > 0))
+    bulge = imcat['bulge_flux'][im] != 0.
+    disc = imcat['disc_flux'][im] != 0.
+    print 'sum isbulge = ',np.sum(data['is_bulge'][dim])
+    print 'sum bulge_flux > 0. = ',np.sum(imcat['bulge_flux'][im] != 0.)
+    print 'sum disc_flux > 0. = ',np.sum(imcat['disc_flux'][im] != 0.)
+    assert np.all((imcat['bulge_flux'][im] != 0) != (imcat['disc_flux'][im] != 0))
     data['flux_r'][dim] = imcat['mean_flux'][im] * (imcat['bulge_flux'][im]+imcat['disc_flux'][im])
 
     # clip the weights
@@ -362,7 +375,7 @@ def verify_info(config):
     print 'Verifying info catalog...'
     rel = fitsio.read(config['release_info'])
     print 'Full catalog has %d rows'%len(rel)
-    v18 = fitsio.read(os.path.join('../v18',config['flatcats_info']))
+    v18 = fitsio.read(os.path.join('/Users/Mike/Astro/des/SV/v18',config['flatcats_info']))
     print 'v18 catalog has %d rows'%len(v18)
     q = np.where(rel['SVA1_FLAG'] <= 3)[0]
     print 'mask has %d rows'%len(q)
@@ -394,7 +407,7 @@ def verify_ngmix(config, q, ng):
     print 'Verifying ngmix catalog...'
     rel = fitsio.read(config['release_ngmix'])
     print 'Full catalog has %d rows'%len(rel)
-    v18 = fitsio.read(os.path.join('../v18',config['flatcats_ngmix']))
+    v18 = fitsio.read(os.path.join('/Users/Mike/Astro/des/SV/v18',config['flatcats_ngmix']))
     print 'v18 catalog has %d rows'%len(v18)
     print 'mask has %d rows'%len(q)
     assert len(q) == len(v18)
@@ -444,7 +457,7 @@ def verify_im3shape(config, q, im):
     print 'Verifying im3shape catalog...'
     rel = fitsio.read(config['release_im3shape'])
     print 'Full catalog has %d rows'%len(rel)
-    v18 = fitsio.read(os.path.join('../v18',config['flatcats_im3shape']))
+    v18 = fitsio.read(os.path.join('/Users/Mike/Astro/des/SV/v18',config['flatcats_im3shape']))
     print 'v18 catalog has %d rows'%len(v18)
     print 'mask has %d rows'%len(q)
     assert len(q) == len(v18)
@@ -491,10 +504,12 @@ if __name__ == "__main__":
     import yaml
     with open(sys.argv[1],'r') as fp:
         config = yaml.load(fp)        
-    info = make_info(config)
-    make_ngmix(config, info)
+    #info = make_info(config)
+    #make_ngmix(config, info)
+    info = fitsio.read(config['release_info'])
     make_im3shape(config, info)
-    q = verify_info(config)
-    verify_ngmix(config, q, info['NGMIX_FLAG'][q]==0)
+    #q = verify_info(config)
+    q = np.where(info['SVA1_FLAG'] <= 3)[0]
+    #verify_ngmix(config, q, info['NGMIX_FLAG'][q]==0)
     verify_im3shape(config, q, info['IM3SHAPE_FLAG'][q]==0)
 

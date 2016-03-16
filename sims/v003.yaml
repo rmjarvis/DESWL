@@ -1,0 +1,116 @@
+
+# This simulation is designed to test WCS conventions.
+#
+# The galaxies are all round.
+#
+# For the psf, we use an ellitpical Kolmogorov with a random shape
+#
+# For the wcs, we use a TAN projection of a non-very-square Jacobian that varies significantly
+# across the field of view.
+#
+# The applied shear is uniform at g1 = 0.017, g2 = -0.023
+#
+# The output files are MEDS files using the new psf extension to store images of the 
+# PSF, so no interpolation is necessary.
+
+modules:
+    - galsim.des
+
+psf:
+    type: Kolmogorov
+
+    ellip:
+        type: EBeta
+        e:
+            type: Random
+            min: 0.00
+            max: 0.09
+        beta:
+            type: Random
+
+    fwhm: 0.9
+
+gal:
+    type: Exponential
+    half_light_radis: 
+        type : Random
+        min: 0.5
+        max: 2.0
+    flux:
+        type: Random
+        min: 1000
+        max: 5000
+
+    shear:
+        type: G1G2
+        g1: 0.017
+        g2: 0.023
+
+stamp:
+    # We're not drawing on a normal image, so we need to mock up an image_pos for the wcs to use.
+    image_pos:
+        type: XY
+        x: { type: Random, min: 0, max: 2048 }
+        y: { type: Random, min: 0, max: 2048 }
+
+image:
+    size: 48
+
+    wcs :
+        type : Tan
+        dudx : 0.03
+        dudy : 0.26
+        dvdx : -0.24
+        dvdy : -0.01
+
+        origin : { type: XY, x: 1024., y: 1024 }
+        ra : 19.3 hours
+        dec : -33.1 degrees
+
+    random_seed: 8675309
+
+    noise:
+        # Low noise.
+        type: Gaussian
+        sigma: 0.2
+
+    # Offset is just random within central pixel.
+    offset:
+        type: XY
+        x: { type: Random, min: -0.5, max: 0.5 }
+        y: { type: Random, min: -0.5, max: 0.5 }
+
+output:
+    type: MEDS
+    nobjects: 10000  # nobj per file
+    nstamps_per_object: 1  # For now, single epoch sim.
+
+    dir: 
+        type: FormattedStr
+        format: "/astro/u/mjarvis/work/sims/%s"
+        items:
+        - '@root'  # GalSim stores the root name of the yaml file as root. This is the version tag.
+
+    file_name:
+        type: FormattedStr
+        format: "sim-%s-%04d.fits"
+        items:
+        - '@root'
+        - { type: Sequence, nitems: '@output.nfiles' }
+
+    # Note: This can be changed from the command line as `galsim meds.yaml output.nfiles=10` say.
+    # Likewise for any other parameters in the configuration.  This is often more convenient than
+    # changing the original YAML configuration file.  Especially for temporary modifications.
+    nfiles: 200
+
+
+# HISTORY:
+# v001: 1/4/2016
+#       Initial run using GalSim dev branch #654.
+#       Erin found a few bugs.
+# v002: 1/5/2016
+#       Still using GalSim branch #654.
+#       Changed to 4 digits for output file format. 
+#       Added output of real index and id in COSMOS catalog.
+# v003: 3/16/2016
+#       New sim designed to test WCS and stamp orientation conventions.

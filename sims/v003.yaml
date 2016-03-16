@@ -32,7 +32,7 @@ psf:
 
 gal:
     type: Exponential
-    half_light_radis: 
+    half_light_radius:
         type : Random
         min: 0.5
         max: 2.0

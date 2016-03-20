@@ -33,68 +33,48 @@ def parse_args():
     return args
 
 
-def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep):
+def measure_rho(ra,dec,e1,e2,s,m_e1,m_e2,m_s,max_sep, tag=None):
     """Compute the rho statistics
     """
-    import numpy
     import treecorr
-    import galsim
 
-    #print 'e1 = ',e1
-    #print 'm_e1 = ',m_e1
-    #print 'de1 = ',e1-m_e1
-    #print 'mean e1 = ',numpy.mean(e1)
-    #print 'mean de1 = ',numpy.mean(e1-m_e1)
-    #print 'e2 = ',e2
-    #print 'm_e2 = ',m_e2
-    #print 'de2 = ',e2-m_e2
-    #print 'mean e2 = ',numpy.mean(e2)
-    #print 'mean de2 = ',numpy.mean(e2-m_e2)
-    #print 's = ',s
-    #print 'm_s = ',m_s
-    #print 'ds = ',s-m_s
-    #print 'mean s = ',numpy.mean(s)
-    #print 'mean ds = ',numpy.mean(s-m_s)
+    de1 = e1-m_e1
+    de2 = e2-m_e2
+    dt = (s**2-m_s**2)/s**2
 
-    # From Barney's paper: http://arxiv.org/pdf/0904.3056v2.pdf
-    # rho1 = < (e-em)* (e-em) >     Barney originally called this D1.
-    # rho2 = Re < e* (e-em) >       Barney's D2 is actually 2x this.
-    # rho3 = < (s^2-sm^2)/s^2 (s^2-sm^2)/s^2 >  Not in Barney's paper
+    ecat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=e1, g2=e2)
+    decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=de1, g2=de2)
+    dtcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
+                             k=dt, g1=dt*e1, g2=dt*e2)
 
-    #print 'ra = ',ra
-    #print 'dec = ',dec
-    ecat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                            g1=e1, g2=e2)
-    decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                             g1=(e1-m_e1), g2=(e2-m_e2))
-    dscat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', 
-                             k=(s**2-m_s**2)/s**2)
+    ecat.name = 'ecat'
+    decat.name = 'decat'
+    dtcat.name = 'dtcat'
+    if tag is not None:
+        for cat in [ ecat, decat, dtcat ]:
+            cat.name = tag + ":"  + cat.name
 
-    rho1 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho1.process(decat)
-    #print 'rho1 = ',rho1.xip
-    #print 'rho1.xip_im = ',rho1.xip_im
-    #print 'rho1.xim = ',rho1.xim
-    #print 'rho1.xim_im = ',rho1.xim_im
-    #print 'rho1.sigma = ',numpy.sqrt(rho1.varxi)
+    min_sep = 0.3
+    bin_size = 0.2
+    bin_slop = 0.3
 
-    rho2 = treecorr.GGCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho2.process(ecat, decat)
-    #print 'rho2 = ',rho2.xip
-    #print 'rho2.xip_im = ',rho2.xip_im
-    #print 'rho2.xim = ',rho2.xim
-    #print 'rho2.xim_im = ',rho2.xim_im
-    #print 'rho2.sigma = ',numpy.sqrt(rho2.varxi)
+    result = []
+    for (cat1, cat2) in [ (decat, decat),
+                          (ecat, decat),
+                          (dtcat, dtcat),
+                          (decat, dtcat),
+                          (ecat, dtcat) ]:
+        print 'Doing correlation of %s vs %s'%(cat1.name, cat2.name)
 
-    rho3 = treecorr.KKCorrelation(min_sep=0.5, max_sep=max_sep, sep_units='arcmin',
-                                  bin_size=0.1, verbose=1)
-    rho3.process(dscat)
-    #print 'rho3 = ',rho3.xi
-    #print 'rho3.sigma = ',numpy.sqrt(rho3.varxi)
+        rho = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                     bin_size=bin_size, bin_slop=bin_slop, verbose=2)
+        if cat1 is cat2:
+            rho.process(cat1)
+        else:
+            rho.process(cat1, cat2)
+        results.append(rho)
 
-    return rho1,rho2,rho3
+    return results
 
 
 def main():
@@ -128,6 +108,7 @@ def main():
     else:
         runs = args.runs
         exps = args.exps
+    exp_dir = os.path.join(work,'psf_cats')
 
     for run,exp in zip(runs,exps):
 
@@ -138,7 +119,7 @@ def main():
         exp_dir = os.path.join(work,exp)
         print 'exp_dir = ',exp_dir
 
-        cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
         with pyfits.open(cat_file) as pyf:
             data = pyf[1].data
 

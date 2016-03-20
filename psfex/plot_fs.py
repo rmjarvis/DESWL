@@ -108,6 +108,8 @@ def main():
         runs = args.runs
         exps = args.exps
 
+    cat_dir = os.path.join(work,'psf_cats')
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
@@ -119,7 +121,7 @@ def main():
 
         input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
 
-        psf_file = os.path.join(exp_dir, exp + "_psf.fits")
+        psf_file = os.path.join(cat_dir, exp + "_psf.fits")
         with pyfits.open(psf_file) as pyf:
             psf_data = pyf[1].data
 

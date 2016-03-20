@@ -31,3 +31,8 @@ v1 uses degree 2,2, FEW_STARS = 20, max_mag = 17, PSF_SAMP = 0.5, PSF_SIZE = 101
 y1a1-v02 is like v1 except:
          BASIS_TYPE=PIXEL (not PIXEL_AUTO) as suggested by Emmanuel.
          GAIN=4 (not 2) which is closer to the real values, which vary around 4.0
+y1a1-v03 is like v02 except:
+         degree 3,3
+
+Notes for Y2:
+GAIN -> 1.  Images are in e-, not ADU.

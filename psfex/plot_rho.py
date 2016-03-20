@@ -243,6 +243,7 @@ def plot_single_rho(args,work):
         exps = args.exps
 
     nexp = len(exps)
+    cat_dir = os.path.join(work,'psf_cats')
 
     if False:
         ccd_meanlogr = numpy.empty( (nexp*62,37) )
@@ -294,7 +295,7 @@ def plot_single_rho(args,work):
 
             exp_dir = os.path.join(work,exp)
 
-            cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+            cat_file = os.path.join(cat_dir, exp + "_psf.fits")
             with pyfits.open(cat_file) as pyf:
                 data = pyf[1].data
             ccdnums = numpy.unique(data['ccdnum'])
@@ -716,6 +717,7 @@ def plot_overall_rho(work):
     print 'Plot overall rho stats'
 
     base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
+    #base_keys = ['ri', 'r', 'i']
     #base_keys = ['ri']
 
     # Build full key from these for the three kinds
@@ -723,7 +725,8 @@ def plot_overall_rho(work):
     keys += [ 'cross_' + k for k in base_keys ]
     keys += [ 'crossband_' + k for k in base_keys if len(k) > 1 ]
     keys += [ 'oddeven_' + k for k in base_keys ]
-    keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
+    #keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
+    keys += [ 'fov_' + k for k in base_keys ]
     keys += [ 'alt_' + k for k in base_keys ]
     keys += [ 'altoddeven_' + k for k in base_keys ]
 

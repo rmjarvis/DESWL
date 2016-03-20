@@ -191,18 +191,26 @@ def unpack_file(file_name, wdir):
 
     # find the base filename
     if os.path.splitext(base_file)[1] == '.fz':
-
         img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
+        if os.path.exists(img_file):
+            print '   %s exists already.  Removing.'
+            os.remove(img_file)
         print '   unpacking fz file'
         cmd = 'funpack -O {outf} {inf}'.format(outf=img_file, inf=file_name)
         print cmd
         os.system(cmd)
-    
     else:
+        # Check that there isn't both a .fits and .fitsfz for the same image.
+        # Prefer the latter if there is both.
+        if os.path.exists(base_file + '.fz.'):
+            print '   Found both %s and %s.  Skipping the latter.'%(
+                    base_file+'.fz.',base_file)
+            return None
         # If the file is not fpacked, make a symlink into the work directory
         img_file = os.path.join(wdir,base_file)
         if os.path.exists(img_file):
-            os.remove(new_file)
+            print '   %s exists already.  Removing.'
+            os.remove(img_file)
         os.symlink(file_name,wdir)
 
     return img_file
@@ -218,7 +226,7 @@ def read_image_header(img_file):
 
     hdu = 0
 
-    with pyfits.open(img_file) as pyf:
+    with pyfits.open(img_file,memmap=False) as pyf:
         sat = -1
         fwhm = 4.
         try:
@@ -271,7 +279,7 @@ def run_findstars(wdir, root, cat_file, fs_dir, fs_config):
             return None, None, None
 
     # Make a mask based on which objects findstars decided are stars.
-    with pyfits.open(star_file) as pyf:
+    with pyfits.open(star_file,memmap=False) as pyf:
         mask = pyf[1].data['star_flag']==1
     nstars = numpy.count_nonzero(mask)
     ntot = len(mask)
@@ -281,7 +289,7 @@ def run_findstars(wdir, root, cat_file, fs_dir, fs_config):
         raise NoStarsException()
 
     # Read the information from the initial catalog file, including the bogus first two hdus.
-    with pyfits.open(cat_file) as pyf:
+    with pyfits.open(cat_file,memmap=False) as pyf:
         # Need to make copy of these to not fail
         hdu1 = copy.copy(pyf[0])
         hdu2 = copy.copy(pyf[1])
@@ -312,7 +320,7 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
 
     # get the brightest 10 stars that have flags=0 and take the median just in case some
     # strange magnitudes were selected
-    with pyfits.open(cat_file) as pyf:
+    with pyfits.open(cat_file,memmap=False) as pyf:
         data = copy.copy(pyf[2].data)
 
     # Start with a basic FLAGS==0 mask:
@@ -352,7 +360,7 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
         new_cat_file = new_cat_file.replace('psfcat','psfcat_tb')
 
     # create new catalog file with only these entries
-    with pyfits.open(cat_file) as pyf:
+    with pyfits.open(cat_file,memmap=False) as pyf:
         hdu1 = copy.copy(pyf[0])
         hdu2 = copy.copy(pyf[1])
         hdu3 = pyfits.BinTableHDU(data)
@@ -374,7 +382,7 @@ def get_fwhm(cat_file):
 
     # get the brightest 10 stars that have flags=0 and take the median just in case some
     # strange magnitudes were selected
-    with pyfits.open(cat_file) as pyf:
+    with pyfits.open(cat_file,memmap=False) as pyf:
         data = pyf[2].data
         flux_radius = data['FLUX_RADIUS']
     return numpy.median(flux_radius)
@@ -454,7 +462,7 @@ def main():
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)
-    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
     if args.tag:
         blacklist_file += '-' + args.tag
     blacklist_file += '.txt'
@@ -544,6 +552,9 @@ def main():
                 if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                     # Unpack the image file if necessary
                     img_file = unpack_file(file_name, wdir)
+                    if img_file is None:
+                        # This was our signal to skip this without blacklisting.  Just continue.
+                        continue
 
                     # extract the saturation level, this is how desdm runs sextractor
                     # we need the fwhm for class star
@@ -621,8 +632,7 @@ def main():
                 print 'rm_files = ',args.rm_files
                 if args.rm_files:
                     remove_temp_files(wdir, root, star_file, psf_file, used_file,
-                                      xml_file, resid_file2)
-
+                                      xml_file) #, resid_file2)
 
             except NoStarsException:
                 print 'No stars.  Log this in the blacklist and continue.'

@@ -101,7 +101,7 @@ def read_blacklists(tag):
     print 'after ghost, streak, len(d) = ',len(d)
 
     # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
+    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
     if tag:
         psfex_file += '-' + tag
     psfex_file += '.txt'
@@ -174,7 +174,7 @@ def read_image_header(img_file):
         sigsky = float(h['SKYSIGMA'])
         fwhm = float(h['FWHM'])
 
-        tiling = int(h.get('TILING',0))  # These aren't there for SV, but should be for >= Y1.
+        tiling = int(h.get('TILING',0))
         hex = int(h.get('HEX',0))
 
         # Use Galsim to read WCS

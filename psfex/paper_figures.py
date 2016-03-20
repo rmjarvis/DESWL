@@ -6,9 +6,9 @@ import os
 #expinfo_file = '/astro/u/mjarvis/work/exposure_info_v4.fits'
 #file = 'spte_gold_exp'
 #work = '/astro/u/mjarvis/work/psfex_rerun/v4'
-expinfo_file = '/astro/u/mjarvis/work/exposure_info_v1.fits'
-file = 'y1spte_r'
-work = '/astro/u/mjarvis/work/psfex_rerun/v1'
+expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v02.fits'
+file = 'y1all_r'
+work = '/astro/u/mjarvis/work/psfex_rerun/y1a1-v02'
 
 def add_to_list(filter, vlist, value):
     if 'griz' not in vlist.keys():
@@ -54,6 +54,8 @@ def get_psf_data():
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
+    cat_dir = os.path.join(work,'psf_cats')
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
@@ -61,18 +63,16 @@ def get_psf_data():
         #print 'expnum = ',expnum
 
         if expnum not in expinfo['expnum']:
-            print 'expnum is not in expinfo!'
+            print 'expnum %d is not in expinfo!'%expnum
             print 'expinfo[expnum] = ',expinfo['expnum']
-            raise RuntimeError("Could not find information about this expnum")
+            #raise RuntimeError("Could not find information about this expnum")
+            continue
         k = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
         #print 'k = ',k
         filter = expinfo['filter'][k]
         print 'filter = ',filter
 
-        exp_dir = os.path.join(work,exp)
-        #print 'exp_dir = ',exp_dir
-
-        cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
         try:
             with pyfits.open(cat_file) as pyf:
                 data = pyf[1].data.copy()

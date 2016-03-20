@@ -79,6 +79,8 @@ def get_data(runs, exps, work,
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
+    cat_dir = os.path.join(work,'psf_cats')
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
@@ -94,10 +96,7 @@ def get_data(runs, exps, work,
         filter = expinfo['filter'][k]
         print 'filter = ',filter
 
-        exp_dir = os.path.join(work,exp)
-        #print 'exp_dir = ',exp_dir
-
-        cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
         try:
             with pyfits.open(cat_file) as pyf:
                 data = pyf[1].data.copy()

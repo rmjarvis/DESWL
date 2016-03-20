@@ -549,7 +549,7 @@ def read_blacklists(tag):
     print 'after ghost, streak, len(d) = ',len(d)
 
     # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex-y1'
+    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
     if tag:
         psfex_file += '-' + tag
     psfex_file += '.txt'
@@ -600,6 +600,11 @@ def main():
     else:
         runs = args.runs
         exps = args.exps
+
+    # Directory to put output files.
+    cat_dir = os.path.join(work,'psf_cats')
+    if not os.path.exists(cat_dir):
+        os.makedirs(cat_dir)
 
     for run,exp in zip(runs,exps):
 
@@ -863,7 +868,7 @@ def main():
             tbhdu = pyfits.new_table(cols)
         exp_root = root.rsplit('_',1)[0]
         print 'exp_root = ',exp_root
-        cat_file = os.path.join(exp_dir, exp_root + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp_root + "_psf.fits")
         tbhdu.writeto(cat_file, clobber=True)
         print 'wrote cat_file = ',cat_file
 

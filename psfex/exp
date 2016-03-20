@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#FILE=y1all
-FILE=y1x
-TAG=y1a1-v02
-#OUTPUT=exposure_info_$TAG.fits
-OUTPUT=exposure_info_y1x-v02.fits
+TAG=y1a1-v03
+FILE=y1all
+OUTPUT=exposure_info_$TAG.fits
+#FILE=y1spte
+#OUTPUT=exposure_info_y1spte-v02.fits
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --tag=exp --cmd="./build_exp_catalog.py --tag=$TAG --work=~/work/psfex_rerun/$TAG --output=$OUTPUT"

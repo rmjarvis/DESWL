@@ -53,8 +53,9 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
         runs = args.runs
         exps = args.exps
 
-    #expinfo_file = '/astro/u/mjarvis/work/exposure_info_' + args.tag + '.fits'
-    expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v01.fits'
+    expinfo_file = '/astro/u/mjarvis/work/exposure_info_' + args.tag + '.fits'
+    #expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v01.fits'
+    #expinfo_file = 'exposure_info_y1spte-v02.fits'
     print 'reading exposure_info file: ',expinfo_file
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
@@ -76,6 +77,8 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
     all_tilings = []  # This keeps track of the tiling for each record
     filters = set()   # This is the set of all filters being used
     tilings = set()   # This is the set of all tilings being used
+
+    cat_dir = os.path.join(work,'psf_cats')
 
     for run,exp in zip(runs,exps):
 
@@ -99,14 +102,17 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
         tiling = int(expinfo['tiling'][k])
         print 'tiling[k] = ',tiling
 
+        if tiling == 0:
+            # This shouldn't happen, but it did for a few exposures.  Just skip them, since this
+            # might indicate some kind of problem.
+            print 'tiling == 0.  Skip this exposure.'
+            continue
+
         if tiling > args.max_tiling:
             print 'tiling is > %d.  Skip this exposure.'%args.max_tiling
             continue
 
-        exp_dir = os.path.join(work,exp)
-        print 'exp_dir = ',exp_dir
-
-        cat_file = os.path.join(exp_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
         print 'cat_file = ',cat_file
         try:
             with pyfits.open(cat_file) as pyf:
@@ -382,6 +388,7 @@ def filter_combinations(filters, single=True, combo=True):
 
 
 def do_canonical_stats(data, filters, tilings, work, prefix='', name='all'):
+    print 'Start CANONICAL: ',prefix,name
     # Measure the canonical rho stats using all pairs:
     use_filters = filter_combinations(filters)
     for filt in use_filters:
@@ -396,6 +403,7 @@ def do_canonical_stats(data, filters, tilings, work, prefix='', name='all'):
         write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
 
 def do_cross_tiling_stats(data, filters, tilings, work, prefix='', name='cross'):
+    print 'Start CROSS_TILING: ',prefix,name
     # Measure the rho stats using only cross-correlations between tiles.
     use_filters = filter_combinations(filters)
     for filt in use_filters:
@@ -415,14 +423,9 @@ def do_cross_tiling_stats(data, filters, tilings, work, prefix='', name='cross')
 
 
 def do_cross_band_stats(data, filters, tilings, work, prefix='', name='crossband'):
+    print 'Start CROSS_BAND: ',prefix,name
     # Measure the rho stats cross-correlating the different bands.
     use_filters = filter_combinations(filters, single=False)
-    if 'r' in filters and 'i' in filters:
-        use_filters.append(['r', 'i'])
-    if 'r' in filters and 'i' in filters and 'z' in filters:
-        use_filters.append(['r', 'i', 'z'])
-    if 'g' in filters and 'r' in filters and 'i' in filters and 'z' in filters:
-        use_filters.append(['g', 'r', 'i', 'z'])
 
     for filt in use_filters:
         print 'cross filters ',filt
@@ -432,11 +435,13 @@ def do_cross_band_stats(data, filters, tilings, work, prefix='', name='crossband
             filt_data.append(data[mask])
         rho1, rho2, rho3, rho4, rho5 = measure_cross_rho(filt_data, max_sep=300, tags=filt,
                                                          prefix=prefix)
+        tag = ''.join(filt)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
 
 
 def do_odd_even_stats(data, filters, tilings, work, prefix='', name='oddeven'):
+    print 'Start ODD_EVEN: ',prefix,name
     # Measure the rho stats using only cross-correlations between odd vs even tilings.
     use_filters = filter_combinations(filters)
 
@@ -454,6 +459,7 @@ def do_odd_even_stats(data, filters, tilings, work, prefix='', name='oddeven'):
 
 
 def do_fov_stats(data, filters, tilings, work, prefix='', name='fov'):
+    print 'Start FOV: ',prefix,name
     # Measure the rho stats using the field-of-view positions.
     use_filters = filter_combinations(filters)
     for filt in use_filters:
@@ -492,6 +498,11 @@ def set_args():
                       work='~/work/psfex_rerun/v1')
     return args
 
+def write_data(data, file_name):
+    import fitsio
+    print "Writing data to ",file_name
+    fitsio.write(file_name, data, clobber=True)
+
 def main():
 
     args = parse_args()
@@ -508,12 +519,16 @@ def main():
         print e
         pass
 
-    filters = ['r', 'i']
-    filters = ['r']
+    #filters = ['r', 'i']
+    #filters = ['r']
+    filters = None
     data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=True)
 
     print 'all filters = ',filters
     print 'all tilings = ',tilings
+
+    out_file_name = os.path.join(work, "psf_%s.fits"%args.tag)
+    write_data(data, out_file_name)
 
     for filt in filters:
         print 'n for filter %s = '%filt, numpy.sum(data['filter'] == filt)
@@ -538,17 +553,17 @@ def main():
 
     do_canonical_stats(data, filters, tilings, work)
 
-    #do_cross_tiling_stats(data, filters, tilings, work)
+    do_cross_tiling_stats(data, filters, tilings, work)
 
-    #do_cross_band_stats(data, filters, tilings, work)
+    do_cross_band_stats(data, filters, tilings, work)
 
-    #do_odd_even_stats(data, filters, tilings, work)
+    do_odd_even_stats(data, filters, tilings, work)
 
-    #do_fov_stats(data, filters, tilings, work)
+    do_fov_stats(data, filters, tilings, work)
 
-    #do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')
+    do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')
 
-    #do_odd_even_stats(data, filters, tilings, work, prefix='alt_', name='altoddeven')
+    do_odd_even_stats(data, filters, tilings, work, prefix='alt_', name='altoddeven')
 
 
 if __name__ == "__main__":

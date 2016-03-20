@@ -5,10 +5,10 @@
 #
 # For the psf, we use an ellitpical Kolmogorov with a random shape with non-zero mean
 #
-# For the wcs, we use a TAN projection of a non-very-square Jacobian that varies significantly
-# across the field of view.
+# For the wcs, we use a TAN projection of a non-very-square Jacobian that is different for 
+# each file.
 #
-# The applied shear is uniform at g1 = 0.017, g2 = -0.023
+# The applied shear is different for each file, also with non-zero mean.
 #
 # The output files are MEDS files using the new psf extension to store images of the 
 # PSF, so no interpolation is necessary.
@@ -24,12 +24,12 @@ psf:
         # Make it asymmetric so mean e1,e2 is not zero.
         e1:
             type: Random
-            min: -0.03
+            min: -0.13
             max: 0.09
         e2:
             type: Random
             min: -0.08
-            max: 0.05
+            max: 0.15
 
     fwhm: 0.9
 
@@ -45,9 +45,16 @@ gal:
         max: 5000
 
     shear:
+        index_key: file_num
         type: G1G2
-        g1: 0.017
-        g2: 0.023
+        g1:
+            type: Random
+            min: 0.0
+            max: 0.05
+        g2:
+            type: Random
+            min: -0.03
+            max: 0.02
 
 stamp:
     # We're not drawing on a normal image, so we need to mock up an image_pos for the wcs to use.
@@ -61,10 +68,22 @@ image:
 
     wcs :
         type : Tan
-        dudx : 0.03
-        dudy : 0.26
-        dvdx : -0.24
-        dvdy : -0.01
+        dudx :
+            type: Random
+            min: -0.03
+            max: 0.03
+        dudy :
+            type: Random
+            min: 0.24
+            max: 0.28
+        dvdx :
+            type: Random
+            min: -0.28
+            max: -0.24
+        dvdy :
+            type: Random
+            min: -0.03
+            max: 0.03
 
         origin : { type: XY, x: 1024., y: 1024 }
         ra : 19.3 hours
@@ -106,14 +125,54 @@ output:
     # changing the original YAML configuration file.  Especially for temporary modifications.
     nfiles: 200
 
+    nproc: 10
+
+    # Output truth catalogs with some of the generated values
+    truth:
+        file_name :
+            type: FormattedStr
+            format: "truth_catalog-%s-%04d.fits"
+            items:
+            - '@root'
+            - { type: Sequence, nitems: '@output.nfiles' }
+        columns:
+            num: obj_num
+            x: stamp.image_pos.x
+            y: stamp.image_pos.y
+
+            dx: image.offset.x
+            dy: image.offset.y
+
+            g1: gal.shear.g1
+            g2: gal.shear.g2
+            gal_hlr: gal.half_light_radius
+            gal_flux: gal.flux
+
+            psf_e1: psf.ellip.e1
+            psf_e2: psf.ellip.e2
+            psf_g1: '$(@psf.ellip).g1'
+            psf_g2: '$(@psf.ellip).g2'
+            psf_fwhm: psf.fwhm
+
+            dudx: image.wcs.dudx
+            dudy: image.wcs.dudy
+            dvdx: image.wcs.dvdx
+            dvdy: image.wcs.dvdy
+            wcs_dudx: '$wcs.local(image_pos).dudx'
+            wcs_dudy: '$wcs.local(image_pos).dudy'
+            wcs_dvdx: '$wcs.local(image_pos).dvdx'
+            wcs_dvdy: '$wcs.local(image_pos).dvdy'
+            wcs_g1: '$wcs.local(image_pos).getDecomposition()[1].g1'
+            wcs_g2: '$wcs.local(image_pos).getDecomposition()[1].g2'
+            wcs_theta_rad: '$wcs.local(image_pos).getDecomposition()[2].rad()'
+            wcs_scale: '$wcs.local(image_pos).getDecomposition()[0]'
+
+
 
 # HISTORY:
-# v001: 1/4/2016
-#       Initial run using GalSim dev branch #654.
-#       Erin found a few bugs.
-# v002: 1/5/2016
-#       Still using GalSim branch #654.
-#       Changed to 4 digits for output file format. 
-#       Added output of real index and id in COSMOS catalog.
 # v003: 3/16/2016
 #       New sim designed to test WCS and stamp orientation conventions.
+# v004: 3/19/2016
+#       Made shear and wcs vary for each file
+#       Added a truth catalog output
+#       Also includes a fix to GalSim that was writing wrong wcs info to meds files.

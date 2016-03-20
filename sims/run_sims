@@ -26,8 +26,8 @@ job_name: {name}
 mode: bycore1
 N: {cores_per_job}
 
-# Select from these groups (Avoid a10, a31, a32, since I've had trouble with them.)
-group: [gen4, gen6, a11, a23, a24, a25, a26, a27, a28, a29, a30]
+# Select from these groups (Avoid a28 - 32, since they seem to have issues.)
+group: [gen4, gen5, gen6, a23, a24, a25, a26, a27]
 """
 
 parser = argparse.ArgumentParser(description='Run simulations')

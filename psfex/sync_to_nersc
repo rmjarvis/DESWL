@@ -1,23 +1,23 @@
 #!/bin/bash
 
-version=v1
+TAG=y1a1-v02
 user=mjarvis@edison.nersc.gov
 nersc=/global/project/projectdirs/des/wl/desdata
 
 for run in $( ls "$DESDATA/EXTRA/red" ); do
     echo $run
     psfex_dir="EXTRA/red/$run/psfex-rerun"
-    if [ -e "$DESDATA/$psfex_dir/$version" ]
+    if [ -e "$DESDATA/$psfex_dir/$TAG" ]
     then
         cmd="ssh $user 'mkdir -p $nersc/$psfex_dir'"
         echo "  " $cmd
         eval "$cmd"
 
-        cmd="rsync -rz $DESDATA/$psfex_dir/$version $user:$nersc/$psfex_dir"
+        cmd="rsync -rz $DESDATA/$psfex_dir/$TAG $user:$nersc/$psfex_dir"
         echo "  " $cmd
         eval "$cmd"
     fi
 done
 
-echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-*-$version.txt $user:$nersc/EXTRA/blacklists"
-rsync -rz $DESDATA/EXTRA/blacklists/psfex-*-$version.txt $user:$nersc/EXTRA/blacklists
+echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists"
+rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists

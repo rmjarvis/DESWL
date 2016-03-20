@@ -1,0 +1,14 @@
+# Start this job with:
+#   wq sub -b sync_job
+
+command: |
+    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+    source /astro/u/mjarvis/.bashrc
+    ./sync_to_nersc
+
+job_name: sync
+
+mode: bycore
+N: 1
+
+group: [new, new2, new3]

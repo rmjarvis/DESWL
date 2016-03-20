@@ -1,0 +1,7 @@
+#!/bin/bash
+
+FILE=sva1/spte_gold_exp
+TAG=v4
+
+./plot_seeing.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
+

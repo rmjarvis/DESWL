@@ -168,11 +168,11 @@ def read_image_header(img_file):
         ha = h['HA']
         ha = galsim.HMS_Angle(ha) / galsim.degrees
 
-        # A few more items to grab from the header:
-        airmass = float(h['AIRMASS'])
-        sky = float(h['SKYBRITE'])
-        sigsky = float(h['SKYSIGMA'])
-        fwhm = float(h['FWHM'])
+        # A few more items to grab from the header, but allow default values for these:
+        airmass = float(h.get('AIRMASS',-999))
+        sky = float(h.get('SKYBRITE',-999))
+        sigsky = float(h.get('SKYSIGMA',-999))
+        fwhm = float(h.get('FWHM',-999))
 
         tiling = int(h.get('TILING',0))
         hex = int(h.get('HEX',0))

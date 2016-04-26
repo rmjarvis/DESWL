@@ -604,7 +604,14 @@ def main():
     # Directory to put output files.
     cat_dir = os.path.join(work,'psf_cats')
     if not os.path.exists(cat_dir):
-        os.makedirs(cat_dir)
+        try:
+            os.makedirs(cat_dir)
+        except OSError as e:
+            print 'Caught %s'%e
+            if "File exists" in str(e):
+                print 'ignore'
+            else:
+                raise
 
     for run,exp in zip(runs,exps):
 

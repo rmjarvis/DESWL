@@ -202,7 +202,7 @@ def unpack_file(file_name, wdir):
     else:
         # Check that there isn't both a .fits and .fits.fz for the same image.
         # Prefer the latter if there is both.
-        if os.path.exists(base_file + '.fz.'):
+        if os.path.exists(file_name + '.fz.'):
             print '   Found both %s and %s.  Skipping the latter.'%(
                     base_file+'.fz.',base_file)
             return None

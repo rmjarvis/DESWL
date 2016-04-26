@@ -62,6 +62,8 @@ def add_to_list(filter, vlist, value):
         vlist[filter] = []
     if 'g' not in filter:
         vlist['riz'].append(value)
+    if 'g' not in filter and 'z' not in filter:
+        vlist['ri'].append(value)
     vlist[filter].append(value)
 
 def get_data(runs, exps, work,
@@ -107,6 +109,9 @@ def get_data(runs, exps, work,
 
         #print 'max flag = ',max(data['flag'])
         #print 'min flag = ',min(data['flag'])
+        if len(data['flag']) == 0:
+            print 'No data'
+            continue
         if min(data['flag']) < 0:
             print '!!!Flag is negative!!!'
         mask = (data['flag'] == 0) | (data['flag'] == 1)
@@ -462,28 +467,28 @@ def main():
         runs = args.runs
         exps = args.exps
 
-    mask_list = { 'griz' : [], 'riz' : [] }
-    used_list = { 'griz' : [], 'riz' : [] }
-    ccd_list = { 'griz' : [], 'riz' : [] }
+    mask_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    used_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    ccd_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
-    airmass_list = { 'griz' : [], 'riz' : [] }
-    sky_list = { 'griz' : [], 'riz' : [] }
-    sigsky_list = { 'griz' : [], 'riz' : [] }
-    fwhm_list = { 'griz' : [], 'riz' : [] }
+    airmass_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    sky_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    sigsky_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    fwhm_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
-    ra_list = { 'griz' : [], 'riz' : [] }
-    dec_list = { 'griz' : [], 'riz' : [] }
-    x_list = { 'griz' : [], 'riz' : [] }
-    y_list = { 'griz' : [], 'riz' : [] }
-    m_list = { 'griz' : [], 'riz' : [] }
+    ra_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    dec_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    x_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    y_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    m_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
-    e1_list = { 'griz' : [], 'riz' : [] }
-    e2_list = { 'griz' : [], 'riz' : [] }
-    s_list = { 'griz' : [], 'riz' : [] }
+    e1_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    e2_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    s_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
-    pe1_list = { 'griz' : [], 'riz' : [] }
-    pe2_list = { 'griz' : [], 'riz' : [] }
-    ps_list = { 'griz' : [], 'riz' : [] }
+    pe1_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    pe2_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    ps_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
     get_data(runs, exps, work,
              mask_list, used_list, ccd_list,
@@ -493,7 +498,7 @@ def main():
              #e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='erin')
 
     #for key in ra_list.keys():
-    for key in ['riz']:
+    for key in ['r', 'ri', 'riz']:
         mask = numpy.concatenate(mask_list[key])
         used = numpy.concatenate(used_list[key])
         ccd = numpy.concatenate(ccd_list[key])
@@ -555,33 +560,34 @@ def main():
         print 'mean de1 (used) = ',numpy.mean(de1[used])
         print 'mean de2 (used) = ',numpy.mean(de2[used])
 
-        bin_by_mag(m[mask], dt[mask], de1[mask], de2[mask], numpy.min(m[used]), key)
-        #bin_by_mag(m[used], dt[used], de1[used], de2[used], key+'_used')
-        #bin_by_mag(m[mask], s[mask], e1[mask], e2[mask], key+'_orig')
-        #bin_by_mag(m[mask], ps[mask], pe1[mask], pe2[mask], key+'_model')
+        min_mused = numpy.min(m[used])
+        bin_by_mag(m[mask], dt[mask], de1[mask], de2[mask], min_mused, key)
+        bin_by_mag(m[used], dt[used], de1[used], de2[used], min_mused, key+'_used')
+        #bin_by_mag(m[mask], s[mask], e1[mask], e2[mask], min_mused, key+'_orig')
+        #bin_by_mag(m[mask], ps[mask], pe1[mask], pe2[mask], min_mused, key+'_model')
 
         #mask2 = mask & (sky<med_sky)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowsky')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_lowsky')
         #mask2 = mask & (sky>med_sky)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highsky')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_highsky')
 
         #mask2 = mask & (sigsky<med_sigsky)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowsigsky')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_lowsigsky')
         #mask2 = mask & (sigsky>med_sigsky)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highsigsky')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_highsigsky')
 
         #mask2 = mask & (airmass<med_airmass)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowairmass')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_lowairmass')
         #mask2 = mask & (airmass>med_airmass)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highairmass')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_highairmass')
 
         #mask2 = mask & (fwhm<med_fwhm)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_lowfwhm')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_lowfwhm')
         #mask2 = mask & (fwhm>med_fwhm)
-        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], key+'_highfwhm')
+        #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_highfwhm')
 
         #bin_by_mag(m[mask], s[mask] - numpy.mean(s[mask]),
-        #           e1[mask] - numpy.mean(e1[mask]), e2[mask] - numpy.mean(e2[mask]), key)
+        #           e1[mask] - numpy.mean(e1[mask]), e2[mask] - numpy.mean(e2[mask]), min_mused, key)
 
         #bin_by_chip_pos(x[used], ds[used], de1[used], de2[used], key, 'x')
         #bin_by_chip_pos(y[used], ds[used], de1[used], de2[used], key, 'y')

@@ -24,7 +24,7 @@ def add_to_list(filter, vlist, value):
 
 def get_psf_data():
 
-    exp_match='*_[0-9][0-9].fits*'
+    exp_match='*_[0-9][0-9].fits.fz'
 
     print 'Read file ',file
     with open(file) as fin:

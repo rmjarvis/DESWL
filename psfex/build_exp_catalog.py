@@ -17,7 +17,7 @@ def parse_args():
                         help='The name of the output fits file')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
+    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
                         help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')

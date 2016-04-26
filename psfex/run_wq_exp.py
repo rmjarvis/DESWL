@@ -13,7 +13,7 @@
 # 
 # I only have two scripts that do this currently run_psfex.py and run_findstars.py
 # To run them you can do something like
-#    ./run_wq_exp.py --njobs 10 --file test_exp --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits*\" --use_findstars 1 --mag_cut 3.0"
+#    ./run_wq_exp.py --njobs 10 --file test_exp --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits.fz\" --use_findstars 1 --mag_cut 3.0"
 
 # 
 # See https://github.com/esheldon/wq for information about using wq.

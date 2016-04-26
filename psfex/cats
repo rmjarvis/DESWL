@@ -2,6 +2,6 @@
 
 FILE=y1all
 #FILE=tb-y1a1
-TAG=y1a1-v03
+TAG=y1a1-v02
 
 ./run_wq_exp.py --njobs=500 --cores_per_job=1 --file=$FILE --tag=cats --cmd="./build_psf_cats.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

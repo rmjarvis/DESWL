@@ -19,7 +19,7 @@
 #
 # The applied shear is random in each output file, ranging in amplitude from 0.01 to 0.08.
 #
-# The output files are MEDS files using the new psf extension to store images of the 
+# The output files are MEDS files using the new psf extension to store images of the
 # PSF, so no interpolation is necessary.  In this sim, the PSF is actually a constant, but
 # when we start making the PSF variable, this will be useful.
 
@@ -51,7 +51,7 @@ psf:
     type: Convolve
 
     # This means the psf should change per output file, not per object as would be the default.
-    index_key : file_num
+    index_key: file_num
 
     items:
     # The atmospheric component
@@ -133,7 +133,7 @@ gal:
         ellip:
             # TODO? Have the ellipticity distribution be band-dependent?
             type: EtaBeta  # This way we don't have to worry about e > 1
-            eta: 
+            eta:
                 type: LogNormal
                 mean: 0.2
                 sigma: 0.1
@@ -161,7 +161,7 @@ gal:
             band: "@epoch_params.band"
         ellip:
             type: EtaBeta
-            eta: 
+            eta:
                 type: LogNormal
                 mean: 0.2  # XXX: Ditto.
                 sigma: 0.1
@@ -204,7 +204,7 @@ gal:
     shear:
         type: GBeta
         # Change the shear every file, not every object.
-        index_key : file_num
+        index_key: file_num
         g:
             type: RandomDistribution
             # Using p(g) = |g| means uniform in the annulus.
@@ -219,8 +219,8 @@ image:
     size: 48
 
     # Use a real wcs from some random location within a DES focal plane.
-    wcs :
-        type : DES_Local  # Defined in des_wcs.py in this directory.
+    wcs:
+        type: DES_Local  # Defined in des_wcs.py in this directory.
 
         # We could specify a chipnum here if we wanted.  The default is to pick a random chipnum
         # from 1-62
@@ -264,12 +264,12 @@ input:
         # It reads in a full field worth of WCS objects, which DES_Local will select from
         # and get a local WCS at some (in this case random) image position.
         # This choice is a random Y1 field in the SPTE region.
-        dir : "/astro/u/astrodat/data/DES/OPS/red/20140715085838_20131201/red/DECam_00259397"
-        root : "DECam_00259397"
+        dir: "/astro/u/astrodat/data/DES/OPS/red/20140715085838_20131201/red/DECam_00259397"
+        root: "DECam_00259397"
 
-epoch_params :
-    band : 
-        type : List
+epoch_params:
+    band:
+        type: List
         items: [ 'g', 'r', 'i', 'z' ]  # Could add u,Y if we want.
 
 output:
@@ -277,7 +277,7 @@ output:
     nobjects: 10000  # nobj per file
     nstamps_per_object: 1  # For now, single epoch sim.
 
-    dir: 
+    dir:
         type: FormattedStr
         format: "/astro/u/mjarvis/work/sims/%s"
         items:
@@ -308,13 +308,13 @@ output:
     # This is generally better than image.nproc, since it doesn't require as much interprocess
     # communication, which can be rather slow.
     # However, we'll just let the queue do the work of parallelizing in this case.  I will
-    # submit jobs that each do a single file.  
+    # submit jobs that each do a single file.
     # Note: once we start using RealGalaxies, it will probably be more efficient to use -1 here.
     #nproc: -1
 
     # Output truth catalogs with some of the generated values
     truth:
-        file_name :
+        file_name:
             type: FormattedStr
             format: "truth_catalog-%s-%04d-%s.fits"
             items:
@@ -323,27 +323,34 @@ output:
             - '@epoch_params.band'
         columns:
             num: obj_num
-            x: image.offset.x
-            y: image.offset.y
+            x: "$image_pos.x"
+            y: "$image_pos.x"
+            dx: image.offset.x
+            dy: image.offset.y
 
             psf_hlr: "$(@psf).calculateHLR()"
             # Use hsm to get PSF shape estimates
             psf_e1:
                 type: Eval
                 str: "psfe.e1"
-                gpsfe :
+                gpsfe:
                     index_key: file_num  # Only remeasure for each new file num.
                     type: HSM_Shape_Measure  # Defined in hsm_shape.py in this directory.
                     obj: 'psf'
             psf_e2: "$(@output.truth.columns.psf_e1.gpsfe).e2"
 
-            cosmos_index: "$(@gal.items.0).index"
+            disk_flux: gal.items.0.flux
+            disk_radius: gal.item.0.half_light_radius
+            disk_e1: "$(@gal.items.0.ellip).e1"
+            disk_e2: "$(@gal.items.0.ellip).e2"
 
-            # This isn't the same thing.  The above index is the one in the file.  This index
-            # is just an index into the list of galaxies that pass our cuts.
-            alt_cosmos_index: gal.items.0.index
+            bulge_flux: gal.items.1.flux
+            bulge_radius: gal.item.1.half_light_radius
+            bulge_e1: "$(@gal.items.1.ellip).e1"
+            bulge_e2: "$(@gal.items.1.ellip).e2"
 
-            theta: "$(@gal.rotate).rad()"
+            num_knots: gal.items.2.nobj
+
             g1: "$(@gal.shear).g1"
             g2: "$(@gal.shear).g2"
 
@@ -354,7 +361,7 @@ output:
 #       Erin found a few bugs.
 # v002: 1/5/2016
 #       Still using GalSim branch #654.
-#       Changed to 4 digits for output file format. 
+#       Changed to 4 digits for output file format.
 #       Added output of real index and id in COSMOS catalog.
 # (v003, v004 were unrelated to this)
 # v005: 5/14/2016

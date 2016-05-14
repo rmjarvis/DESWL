@@ -5,8 +5,11 @@
 # For the psf, we use a combination of Kolmogorov for the atmospheric component, and an
 # OpticalPSF for the optics, using parameters appropriate for DECam and the Blanco telescope.
 #
-# The galaxies are real galaxies from COSMOS, modified to be slightly smaller to simulate a
-# slightly fainter sample than the 23.5 limiting magnitude in the COSMOS catalog.
+# The galaxies are bulge + disk + knots with epoch-dependent morphological features.
+# We use g,r,i,z bands for the 4 epochs for each sky location.  The bulge and disk fluxes in
+# each band are calculated by custom modules that integrate appropriate SEDs over the DES
+# band passes.  TODO: We have LSST bandpass descriptions.  Not sure about DES.  Probably just
+# use LSST bandpasses for now.
 #
 # For the wcs, we use a random location within a full DES focal plane, which we take from 62
 # images files from SV data.  We don't include these files in the repo, since they total about
@@ -14,16 +17,11 @@
 #
 #    http://www.sas.upenn.edu/~mjarvis/des_data.html
 #
-# The applied shear is random in each output file, using a log-normal distribution in eta.
-# This is completely arbitrary, just to give a non-trivial range of applied shears.
+# The applied shear is random in each output file, ranging in amplitude from 0.01 to 0.08.
 #
 # The output files are MEDS files using the new psf extension to store images of the 
 # PSF, so no interpolation is necessary.  In this sim, the PSF is actually a constant, but
 # when we start making the PSF variable, this will be useful.
-#
-# Notably, this config file uses a number of custom types, the code for which is also in this
-# directory in the files hsm_shape.py, log_normal.py, and des_wcs.py.  So this serves as an
-# example for how to write custom extensions to the GalSim config apparatus.
 
 modules:
     # The GalSim config processor will import each of these at the start of processing this
@@ -40,6 +38,14 @@ modules:
 
     # Read the WCS from a (in this case random) location within a real DES focal place observation.
     - des_wcs
+
+    # Calculate appropriate disk and bulge fluxes given the band pass to use.
+    - band_flux
+
+    # A custom package that implements SumMultiple, a sum of several components that are
+    # identically defined.  In our case the number of components is a random variate, being
+    # the number of HII region knots in the galaxy.
+    - sum_multiple
 
 psf:
     type: Convolve
@@ -164,7 +170,7 @@ gal:
       -
         # Knots component
         type: SumMultiple
-        nobj:   # How many knots
+        nobj:   # How many knots?  Poisson random variate with mean number of knots = 1.
             type: Poisson
             mean: 1  # TODO: Make this redshift dependent?  More star forming at high z.
         obj:

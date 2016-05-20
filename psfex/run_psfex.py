@@ -398,6 +398,8 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
     Returns True if successful, False if there was a catastrophic failure and no output 
     file was written.
     """
+    if not os.path.exists(psfex_config) and '/' not in psfex_config:
+        psfex_config = os.path.join('/astro/u/mjarvis/rmjarvis/DESWL/psfex/',psfex_config)
     print '   running psfex'
     psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
             psfex_exe=os.path.join(psfex_dir,'psfex'),

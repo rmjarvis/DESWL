@@ -1,0 +1,6 @@
+#!/bin/bash
+
+FILE=y1all
+TAG=y1a1-v02
+
+./run_wq_exp.py --njobs=200 --cores_per_job=1 --file=$FILE --tag=fs --cmd="./plot_fs.py --tag=$TAG --work=~/work/psfex_rerun/$TAG --do_blacklist"

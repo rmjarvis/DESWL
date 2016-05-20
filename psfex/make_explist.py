@@ -8,7 +8,7 @@ dirs = [
         '/astro/u/mjarvis/DES/meds/y1a1-delta',
        ]
 
-outfile = 'y1all'
+outfile = 'des2305-0124_exp'
 bands = ['g','r','i','z']
 #dir = '/astro/u/mjarvis/DES/meds/tb-y1a1-v01'
 #outfile = 'tb-y1a1'
@@ -18,8 +18,11 @@ for b in bands:
     print out_b
     exps = set()
     for dir in dirs:
-        print os.path.join(dir,'*','*-'+b+'-meds-srclist*.dat')
-        for srclist in glob.glob(os.path.join(dir,'*','*-'+b+'-meds-srclist*.dat')):
+        pat = os.path.join(dir,'*','*-'+b+'-meds-srclist*.dat')
+        print pat
+        for srclist in glob.glob(pat):
+            if 'DES2305-0124' not in srclist:
+                continue
             print srclist
             with open(srclist,'r') as f:
                 for line in f:

@@ -11,13 +11,13 @@ for run in $( ls "$DESDATA/EXTRA/red" ); do
     then
         cmd="ssh $user 'mkdir -p $nersc/$psfex_dir'"
         echo "  " $cmd
-        eval "$cmd"
+        #eval "$cmd"
 
-        cmd="rsync -rvz $DESDATA/$psfex_dir/$TAG $user:$nersc/$psfex_dir"
+        cmd="rsync -rz $DESDATA/$psfex_dir/$TAG $user:$nersc/$psfex_dir"
         echo "  " $cmd
-        eval "$cmd"
+        #eval "$cmd"
     fi
 done
 
-echo "rsync -rvz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists"
-rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists
+echo "rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists"
+#rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists

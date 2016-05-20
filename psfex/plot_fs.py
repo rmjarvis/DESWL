@@ -11,6 +11,8 @@ plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle'
 # Overall zeropoint adjustment from Eli.
 zp = 5.3
 
+FINDSTARS_FAILURE = 16
+
 def parse_args():
     import argparse
     
@@ -33,11 +35,37 @@ def parse_args():
                         help='list of runs')
 
     # Options
+    parser.add_argument('--do_blacklist', default=False, action='store_const', const=True,
+                        help='Blacklist files that have bad findstars properties')
+    parser.add_argument('--do_plot', default=None, action='store_const', const=True,
+                        help='Do plot even if blacklisting')
+    parser.add_argument('--make_stats', default=False, action='store_const', const=True,
+                        help='Make stats.fits with statistics about the sizes')
     parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
                         help='Only do 1 ccd per exposure (used for debugging)')
 
     args = parser.parse_args()
+
+    # Default is to not plot when blacklisting.
+    if args.do_plot is None:
+        if args.do_blacklist:
+            args.do_plot = False
+        else:
+            args.do_plot = True
+
     return args
+
+def log_blacklist(blacklist_file, run, exp, ccdnum, flag):
+    try:
+        with open(blacklist_file,'a') as f:
+            f.write("%s %s %d %d\n"%(run,exp,ccdnum,flag))
+    except OSError as e:
+        print e
+        print 'Error opening blacklist.  Wait and try again.'
+        import time
+        time.sleep(1)
+        return log_blacklist(blacklist_file,run,exp,ccdnum,flag)
+
 
 def plot_fs(size, mag, flag, filename, modest=None):
     import numpy
@@ -47,7 +75,7 @@ def plot_fs(size, mag, flag, filename, modest=None):
     mag = mag + zp
 
     ax.set_xlim(10+zp, 24.)
-    ax.set_ylim(0., 0.8)
+    ax.set_ylim(0., 1.2)
     ax.set_xlabel('Magnitude')
     ax.set_ylabel(r'$T = 2\sigma^2$ (arcsec${}^2$)')
 
@@ -74,6 +102,7 @@ def plot_fs(size, mag, flag, filename, modest=None):
 
     plt.tight_layout()
     plt.savefig(filename)
+    plt.close(fig)
 
 
 def main():
@@ -85,6 +114,11 @@ def main():
     import astropy.io.fits as pyfits
 
     args = parse_args()
+
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
+    if args.tag:
+        blacklist_file += '-' + args.tag
+    blacklist_file += '.txt'
 
     # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)
@@ -110,6 +144,8 @@ def main():
 
     cat_dir = os.path.join(work,'psf_cats')
 
+    stats = []
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
@@ -127,8 +163,6 @@ def main():
 
         ccdnums = numpy.unique(psf_data['ccdnum'])
         #print 'ccdnums = ',ccdnums
-
-        stats = []
 
         for ccdnum in ccdnums:
             print '\nProcessing ', ccdnum
@@ -156,6 +190,7 @@ def main():
             flag = cat_data['star_flag']
             print 'ntot = ',len(cat_data)
             print 'nstar = ',numpy.sum(flag==1)
+            cand = numpy.where(flag == 1)[0]
             flag[cat_data['size_flags']>0] = 4
             print 'nbad = ',numpy.sum(flag==4)
 
@@ -188,11 +223,58 @@ def main():
             faint_psf_test = (sex_data[sex_m]['MAG_PSF'] > 30.-zp) & (sex_data[sex_m]['MAG_AUTO'] < 21.-zp)
             modest[cat_m] = (bright_test | locus_test) & ~faint_psf_test
 
-            plot_file = os.path.join(exp_dir, exp + "_%02d.pdf"%ccdnum)
-            plot_fs(size, mag, flag, plot_file, modest)
+            nused_modest = numpy.sum( (flag==2) & modest )
+            nused_not_modest = numpy.sum( (flag==2) & ~modest )
+
+            # These two get named, since we might use them to do the blacklist.
+            meanT = numpy.mean(size[cand])
+            stdT = numpy.std(size[cand])
+
+            if args.make_stats:
+                stats.append( (expnum, ccdnum,
+                               len(cand), len(used),
+                               nused_modest, nused_not_modest,
+                               numpy.min(size[cand]), numpy.max(size[cand]),
+                               meanT, stdT,
+                               numpy.median(size[cand]), 
+                               numpy.min(size[used]), numpy.max(size[used]),
+                               numpy.mean(size[used]), numpy.std(size[used]),
+                               numpy.median(size[used]), 
+                               ) )
+
+            if args.do_plot:
+                plot_file = os.path.join(exp_dir, exp + "_%02d.pdf"%ccdnum)
+                plot_fs(size, mag, flag, plot_file, modest)
+
+            if args.do_blacklist and stdT > 0.15 * meanT:
+                log_blacklist(blacklist_file,run,exp,ccdnum,flag=FINDSTARS_FAILURE)
 
             if args.single_ccd:
                 break
+
+    if args.make_stats:
+        dt = numpy.dtype([
+            ('expnum', 'i8'),
+            ('ccdnum', 'i8'),
+            ('ncand', 'i8'),
+            ('nused', 'i8'),
+            ('nused_modest', 'i8'),
+            ('nused_not_modest', 'i8'),
+            ('min_cand', 'f4'),
+            ('max_cand', 'f4'),
+            ('mean_cand', 'f4'),
+            ('std_cand', 'f4'),
+            ('median_cand', 'f4'),
+            ('min_used', 'f4'),
+            ('max_used', 'f4'),
+            ('mean_used', 'f4'),
+            ('std_used', 'f4'),
+            ('median_used', 'f4'),
+            ])
+
+        recstats = numpy.array(stats, dtype=dt)
+        import fitsio
+        fitsio.write('stats.fits', recstats, clobber=True)
 
     print '\nFinished processing all exposures'
 

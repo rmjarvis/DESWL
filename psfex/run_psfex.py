@@ -384,8 +384,11 @@ def get_fwhm(cat_file):
     # strange magnitudes were selected
     with pyfits.open(cat_file,memmap=False) as pyf:
         data = pyf[2].data
-        flux_radius = data['FLUX_RADIUS']
-    return numpy.median(flux_radius)
+        fwhm = 2. * data['FLUX_RADIUS']  # 2 * flux_radius is approx fwhm
+    stats = ( numpy.min(fwhm), numpy.max(fwhm),
+              numpy.mean(fwhm), numpy.median(fwhm) )
+    #print 'FLUX_RADIUS min, max, mean, median = ',stats
+    return stats
 
 
 def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
@@ -601,10 +604,11 @@ def main():
                     # Get the median fwhm of the given stars
                     star_fwhm = get_fwhm(cat_file)
                     print '   fwhm of stars = ',star_fwhm
-                    if star_fwhm > HIGH_FWHM:
+                    print '   cf. header fwhm = ',fwhm
+                    if star_fwhm[3] > HIGH_FWHM:
                         print '     -- flag for too high fwhm'
                         flag |= TOO_HIGH_FWHM_FLAG
-                    if star_fwhm > 3. * fwhm:
+                    if star_fwhm[3] > 1.5 * fwhm:
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     

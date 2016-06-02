@@ -92,7 +92,9 @@ def get_data(runs, exps, work,
         if expnum not in expinfo['expnum']:
             print 'expnum is not in expinfo!'
             print 'expinfo[expnum] = ',expinfo['expnum']
-            raise RuntimeError("Could not find information about this expnum")
+            #raise RuntimeError("Could not find information about this expnum")
+            print 'Skipping ',run,exp
+            continue
         k = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
         #print 'k = ',k
         filter = expinfo['filter'][k]

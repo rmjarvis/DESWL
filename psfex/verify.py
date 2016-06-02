@@ -180,7 +180,7 @@ def main():
 
     print '\nFinished verifying all exposures'
     if len(redo_exp) > 0:
-        print '%s exposures have missing PSFEx files'
+        print '%s exposures have missing PSFEx files'%len(redo_exp)
         with open('redo_exp', 'w') as fout:
             for run, exp in redo_exp:
                 fout.write('%s  %s\n'%(run, exp))

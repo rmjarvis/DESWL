@@ -192,7 +192,7 @@ def unpack_file(file_name, wdir):
     # find the base filename
     if os.path.splitext(base_file)[1] == '.fz':
         img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
-        if os.path.exists(img_file):
+        if os.path.lexists(img_file):
             print '   %s exists already.  Removing.'
             os.remove(img_file)
         print '   unpacking fz file'
@@ -202,13 +202,13 @@ def unpack_file(file_name, wdir):
     else:
         # Check that there isn't both a .fits and .fits.fz for the same image.
         # Prefer the latter if there is both.
-        if os.path.exists(file_name + '.fz.'):
+        if os.path.lexists(file_name + '.fz.'):
             print '   Found both %s and %s.  Skipping the latter.'%(
                     base_file+'.fz.',base_file)
             return None
         # If the file is not fpacked, make a symlink into the work directory
         img_file = os.path.join(wdir,base_file)
-        if os.path.exists(img_file):
+        if os.path.lexists(img_file):
             print '   %s exists already.  Removing.'
             os.remove(img_file)
         os.symlink(file_name,wdir)
@@ -400,6 +400,9 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
     """
     if not os.path.exists(psfex_config) and '/' not in psfex_config:
         psfex_config = os.path.join('/astro/u/mjarvis/rmjarvis/DESWL/psfex/',psfex_config)
+    if os.path.lexists(psf_file):
+        print '   deleting existing',psf_file
+        os.unlink(psf_file)
     print '   running psfex'
     psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
             psfex_exe=os.path.join(psfex_dir,'psfex'),
@@ -447,8 +450,8 @@ def move_files(wdir, odir, *args, **kwargs):
         if os.path.exists(file):
             new_file = os.path.join(odir,os.path.basename(file))
             try:
-                if os.path.exists(new_file):
-                    os.remove(new_file)
+                if os.path.lexists(new_file):
+                    os.unlink(new_file)
             except OSError as e:
                 print "Ignore OSError from remove(new_file):"
                 print e

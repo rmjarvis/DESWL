@@ -1,10 +1,10 @@
 #!/bin/bash
 
 FILE=des2305_exp
-TAG=y1a1-v07
+TAG=y1a1-v10
 
-#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
+/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
 #./run_wq_exp.py --njobs=500 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"
 #./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default.psfex --use_findstars=0 --use_tapebumps=0"
 #./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go6 --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default.psfex --mag_cut=3.0 --max_mag=17.0"
-./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go7 --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default2.psfex --mag_cut=3.0 --max_mag=17.0"
+./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go10 --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default4.psfex --mag_cut=3.0 --max_mag=17.0"

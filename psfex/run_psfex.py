@@ -621,15 +621,15 @@ def main():
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
                 xml_file = os.path.join(wdir,root+'_psfcat.xml')
-                # PSFEx does this weird thing where it takes the names of the resid file,
-                # strips off the .fits ending, and replaces it with _ + cat_file
-                resid_file1 = os.path.join(wdir,'resid.fits')
-                print 'resid_file1 = ',resid_file1
-                cat_fname = os.path.basename(cat_file)
-                print 'cat_fname = ',cat_fname
-                resid_file2 = os.path.join(wdir,'resid_'+cat_fname)
-                print 'resid_file2 = ',resid_file2
                 if args.run_psfex:
+                    # PSFEx does this weird thing where it takes the names of the resid file,
+                    # strips off the .fits ending, and replaces it with _ + cat_file
+                    resid_file1 = os.path.join(wdir,'resid.fits')
+                    print 'resid_file1 = ',resid_file1
+                    cat_fname = os.path.basename(cat_file)
+                    print 'cat_fname = ',cat_fname
+                    resid_file2 = os.path.join(wdir,'resid_'+cat_fname)
+                    print 'resid_file2 = ',resid_file2
                     success = run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file,
                                         resid_file1, args.psfex_dir, args.psfex_config)
                     if success:
@@ -641,7 +641,7 @@ def main():
                 print 'rm_files = ',args.rm_files
                 if args.rm_files:
                     remove_temp_files(wdir, root, star_file, psf_file, used_file,
-                                      xml_file) #, resid_file2)
+                                      xml_file)
 
             except NoStarsException:
                 print 'No stars.  Log this in the blacklist and continue.'

@@ -15,7 +15,7 @@ NEWBASIS_NUMBER 8               # Number of new basis vectors
 PSF_SAMPLING    0.5             # Sampling step in pixel units (0.0 = auto)
 PSF_PIXELSIZE   1.0             # Effective pixel size in pixel step units
 PSF_ACCURACY    0.01            # Accuracy to expect from PSF "pixel" values
-PSF_SIZE        101,101           # Image size of the PSF model
+PSF_SIZE        51,51           # Image size of the PSF model
 CENTER_KEYS     XWIN_IMAGE,YWIN_IMAGE # Catalogue parameters for source pre-centering
 PSF_RECENTER    Y               # Allow recentering of PSF-candidates Y/N ?
 PHOTFLUX_KEY    FLUX_APER(8)    # Catalogue parameter for photometric norm.

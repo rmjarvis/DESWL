@@ -48,9 +48,9 @@ y1a1-v08 is like v06 except:
 y1a1-v09 is like v06 except:
          PSF_SAMPLING    0.0  (auto)
          PSF_SIZE        51,51
-y1a1-v10 is like v06 except:
-         PSF_SAMPLING    0.5
+y1a1-v10 is like v02 except:
          PSF_SIZE        51,51
+         so far, run on y1s82 test bed
 
 Notes for Y2:
 GAIN -> 1.  Images are in e-, not ADU.

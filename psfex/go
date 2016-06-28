@@ -1,10 +1,7 @@
 #!/bin/bash
 
-FILE=y1all-002_extra
-TAG=y1a1-v02
+FILE=y1s82
+TAG=y1a1-v11
 
 /bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
-./run_wq_exp.py --njobs=500 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG"
-#./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default.psfex --use_findstars=0 --use_tapebumps=0"
-#./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go6 --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default.psfex --mag_cut=3.0 --max_mag=17.0"
-#./run_wq_exp.py --njobs=24 --cores_per_job=2 --file=$FILE --tag=go10 --cmd="./run_psfex.py --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_config=default4.psfex --mag_cut=3.0 --max_mag=17.0"
+./run_wq_exp.py --njobs=300 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex-alt"

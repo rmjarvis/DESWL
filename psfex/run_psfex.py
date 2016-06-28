@@ -34,7 +34,7 @@ def parse_args():
     # Directory arguments
     parser.add_argument('--sex_dir', default='/astro/u/rarmst/soft/bin/',
                         help='location of sextrator executable')
-    parser.add_argument('--psfex_dir', default='/astro/u/rarmst/soft/bin/',
+    parser.add_argument('--psfex_exe', default='/astro/u/rarmst/soft/bin/psfex',
                         help='location of psfex executable')
     parser.add_argument('--findstars_dir', default='/astro/u/mjarvis/bin',
                         help='location wl executables')
@@ -392,7 +392,7 @@ def get_fwhm(cat_file):
 
 
 def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
-              psfex_dir, psfex_config):
+              psfex_exe, psfex_config):
     """Run PSFEx
 
     Returns True if successful, False if there was a catastrophic failure and no output 
@@ -405,9 +405,8 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
         os.unlink(psf_file)
     print '   running psfex'
     psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
-            psfex_exe=os.path.join(psfex_dir,'psfex'),
-            cat_file=cat_file, config=psfex_config, used_file=used_file, xml_file=xml_file,
-            resid_file=resid_file)
+            psfex_exe, cat_file=cat_file, config=psfex_config,
+            used_file=used_file, xml_file=xml_file, resid_file=resid_file)
     print psf_cmd
     os.system(psf_cmd)
 
@@ -631,7 +630,7 @@ def main():
                     resid_file2 = os.path.join(wdir,'resid_'+cat_fname)
                     print 'resid_file2 = ',resid_file2
                     success = run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file,
-                                        resid_file1, args.psfex_dir, args.psfex_config)
+                                        resid_file1, args.psfex_exe, args.psfex_config)
                     if success:
                         move_files(wdir, odir, psf_file,
                                    make_symlinks=args.make_symlinks)

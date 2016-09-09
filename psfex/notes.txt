@@ -40,17 +40,37 @@ y1a1-v05 is only run on DES2305-0124
 y1a1-v06 is like v05 except:
          Does the same star selection (B/F, tape bumps) as usual
 y1a1-v07 is like v06 except:
-         PSF_SAMPLING    0.5
-         PSF_SIZE        101,101
+         PSF_SAMPLING   0.5
+         PSF_SIZE       101,101
 y1a1-v08 is like v06 except:
-         PSF_SAMPLING    1.0
-         PSF_SIZE        51,51
+         PSF_SAMPLING   1.0
+         PSF_SIZE       51,51
 y1a1-v09 is like v06 except:
-         PSF_SAMPLING    0.0  (auto)
-         PSF_SIZE        51,51
+         PSF_SAMPLING   0.0  (auto)
+         PSF_SIZE       51,51
 y1a1-v10 is like v02 except:
-         PSF_SIZE        51,51
+         PSF_SIZE       51,51
          so far, run on y1s82 test bed
+y1a1-v11 is like v02 except:
+         PSF_SIZE       51,51
+         INTERPW        8
+         INTERPFAC      4
+         (recompiled PSFEx to get the last two)
+         so far, run on y1s82 test bed
+y1a1-v12 is our first run with Piff.  Uses (essentially) the config file in branch #20 PR.
+         Separate 
+
+psfsims:
+v009-v01 BASIS_TYPE=PIXEL
+         PSF_SIZE=51,51
+         PSF_SAMPLING=0.5
+         PSFVAR_DEGREES=2
+         GAIN=4
+         INTERPW=8   (These two happen via psfex-alt)
+         INTERPFAC=4
+v009-v02 PSF_SAMPLING=0.7
+v009-v03 PSF_SIZE=101,101
+
 
 Notes for Y2:
 GAIN -> 1.  Images are in e-, not ADU.

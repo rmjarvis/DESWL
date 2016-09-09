@@ -1,0 +1,11 @@
+#!/bin/bash
+
+SIMVER=v009
+SIM=psfsim-stars-$SIMVER
+TAG=v04
+
+echo python run_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats
+python run_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats
+echo python plot_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats
+python plot_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats
+

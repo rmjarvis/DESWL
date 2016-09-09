@@ -4,4 +4,4 @@ FILE=y1s82
 TAG=y1a1-v11
 
 /bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
-./run_wq_exp.py --njobs=300 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex-alt"
+./run_wq_exp.py --njobs=300 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex-alt"

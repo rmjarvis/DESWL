@@ -1,0 +1,11 @@
+#!/bin/bash
+
+SIMVER=v009
+SIM=psfsim-stars-$SIMVER
+TAG=v04
+
+/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$SIM-$TAG.txt
+touch $DESDATA/EXTRA/blacklists/psfex-$SIM-$TAG.txt
+#./run_wq_alt.py --njobs=200 --cores_per_job=2 --exp_match="$SIM-%04d*.fits" --tag=sim --cmd="./run_psfex.py --work=/astro/u/mjarvis/work/sims/$SIM/ --runs='psfsim-stars' --exps=$TAG --tag=$SIM-$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex-alt --input_dir='/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/$SIMVER/output' --output_dir=/astro/u/mjarvis/work/sims/$SIM/$TAG --use_tapebumps=0 --use_findstars=0 --noweight --rm_files=0"
+./run_wq_alt.py --njobs=200 --cores_per_job=2 --exp_match="$SIM-%04d*.fits" --tag=sim --cmd="./run_psfex.py --work=/astro/u/mjarvis/work/sims/$SIM/ --runs='psfsim-stars' --exps=$TAG --tag=$SIM-$TAG --run_piff=1 --input_dir='/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/$SIMVER/output' --output_dir=/astro/u/mjarvis/work/sims/$SIM/$TAG --use_tapebumps=0 --use_findstars=0 --noweight --rm_files=0 --piff_config=psfsim-stars-piff.yaml"
+#./verify.py --exp_match='$SIM-*.fits' --runs='psfsim-stars' --exps=$TAG --tag=$TAG --input_dir='/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/$SIMVER/output' --output_dir=/astro/u/mjarvis/work/sims/$SIM/$TAG

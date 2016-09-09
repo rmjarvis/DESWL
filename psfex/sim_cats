@@ -1,0 +1,8 @@
+#!/bin/bash
+
+SIMVER=v009
+SIM=psfsim-stars-$SIMVER
+TAG=v04
+
+#./run_wq_alt.py --njobs=20 --cores_per_job=6 --exp_match="$SIM-%03d*.fits" --tag=cats --cmd="./build_psf_cats.py --tag=$SIM-$TAG --work=/astro/u/mjarvis/work/sims/$SIM/$TAG --runs='psfsim-stars' --exps=$TAG --input_dir='/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/$SIMVER/output' --output_dir='/astro/u/mjarvis/work/sims/$SIM/$TAG' --noweight"
+./run_wq_alt.py --njobs=200 --cores_per_job=1 --exp_match="$SIM-%04d*.fits" --tag=cats --cmd="./build_psf_cats.py --tag=$SIM-$TAG --work=/astro/u/mjarvis/work/sims/$SIM/$TAG --runs='psfsim-stars' --exps=$TAG --input_dir='/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/$SIMVER/output' --output_dir='/astro/u/mjarvis/work/sims/$SIM/$TAG' --noweight --use_piff"

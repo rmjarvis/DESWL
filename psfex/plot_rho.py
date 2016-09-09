@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 
-plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
+#plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
  
 def parse_args():
     import argparse
@@ -106,7 +106,8 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
                            color = '#FFFF82')
         y5_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.03, xi2 * 0.03, 0.], 
                            color = '#BAFFA4')
-    else:
+    #else:
+    elif False:
         # Use Alexandre's xi file as a requirement.
         theta = [0.5, 1.49530470404, 2.91321328166, 5.67019971545, 11.0321639144,
                  21.4548924111, 41.6931936543, 80.8508152859, 156.285886576,
@@ -135,12 +136,13 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
         plt.errorbar(meanr[rho4>0]*1.06, rho4[rho4>0], yerr=sig[rho4>0]/sqrtn, color='red', ls='', marker='^')
         plt.errorbar(meanr[rho4<0]*1.06, -rho4[rho4<0], yerr=sig[rho4<0]/sqrtn, color='red', ls='', marker='^')
         rho4_line = plt.errorbar(-meanr, rho4, yerr=sig, color='red', marker='^')
-    sv_req = mp.Patch(color='#FFFF82')
+    #sv_req = mp.Patch(color='#FFFF82')
     if rho3 is not None and rho4 is not None:
         plt.legend([rho1_line, rho3_line, rho4_line],
                    [r'$\rho_1(\theta)$', r'$\rho_3(\theta)$', r'$\rho_4(\theta)$'],
                    loc='upper right', fontsize=24)
-        plt.ylim( [1.e-9, 5.e-6] )
+        #plt.ylim( [1.e-9, 5.e-6] )
+        plt.ylim( [1.e-9, 2.e-5] )
     elif True:
         plt.legend([rho1_line, sv_req],
                    [r'$\rho_1(\theta)$', r'Requirement'],
@@ -183,7 +185,8 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
         y5_req = plt.fill( [t1, t1, t2, t2], [0., xi1 * 0.03 / alpha, xi2 * 0.03 / alpha, 0.], 
                            color = '#BAFFA4')
 
-    else:
+    #else:
+    elif False:
         # Use Alexandre's xi file as a requirement.
         theta = [0.5, 1.49530470404, 2.91321328166, 5.67019971545, 11.0321639144,
                  21.4548924111, 41.6931936543, 80.8508152859, 156.285886576,
@@ -206,12 +209,13 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
         plt.errorbar(meanr[rho5>0]*1.03, rho5[rho5>0], yerr=sig[rho5>0]/sqrtn, color='green', ls='', marker='s')
         plt.errorbar(meanr[rho5<0]*1.03, -rho5[rho5<0], yerr=sig[rho5<0]/sqrtn, color='green', ls='', marker='s')
         rho5_line = plt.errorbar(-meanr, rho5, yerr=sig, color='green', marker='s')
-    sv_req = mp.Patch(color='#FFFF82')
+    #sv_req = mp.Patch(color='#FFFF82')
     if rho5 is not None:
         plt.legend([rho2_line, rho5_line],
                    [r'$\rho_2(\theta)$', r'$\rho_5(\theta)$'],
                    loc='upper right', fontsize=24)
-        plt.ylim( [1.e-7, 5.e-4] )
+        #plt.ylim( [1.e-7, 5.e-4] )
+        plt.ylim( [1.e-7, 1.e-4] )
     elif True: # For paper
         plt.legend([rho2_line, sv_req],
                    [r'$\rho_2(\theta)$', r'Requirement'],
@@ -245,7 +249,7 @@ def plot_single_rho(args,work):
     nexp = len(exps)
     cat_dir = os.path.join(work,'psf_cats')
 
-    if False:
+    if True:
         ccd_meanlogr = numpy.empty( (nexp*62,37) )
         ccd_rho1p = numpy.empty( (nexp*62,37) )
         ccd_rho1m = numpy.empty( (nexp*62,37) )
@@ -493,7 +497,7 @@ def plot_single_rho(args,work):
         #plt.savefig('ccd_rho2.png')
         plt.savefig('ccd_rho2.pdf')
 
-    if False:
+    if True:
         # Plots for exposures:
         print 'nexp = ',nexp
         sqrtn = numpy.sqrt(nexp)
@@ -719,16 +723,17 @@ def plot_overall_rho(work):
     base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
     #base_keys = ['ri', 'r', 'i']
     #base_keys = ['ri']
+    #base_keys = ['r']
 
     # Build full key from these for the three kinds
     keys = [ 'all_' + k for k in base_keys ]
     keys += [ 'cross_' + k for k in base_keys ]
     keys += [ 'crossband_' + k for k in base_keys if len(k) > 1 ]
     keys += [ 'oddeven_' + k for k in base_keys ]
-    #keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
+    keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
     keys += [ 'fov_' + k for k in base_keys ]
-    keys += [ 'alt_' + k for k in base_keys ]
-    keys += [ 'altoddeven_' + k for k in base_keys ]
+    #keys += [ 'alt_' + k for k in base_keys ]
+    #keys += [ 'altoddeven_' + k for k in base_keys ]
 
     for key in keys:
         stat_file = os.path.join(work, "rho_" + key + ".json")

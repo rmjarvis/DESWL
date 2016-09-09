@@ -1,0 +1,47 @@
+input:
+
+    image_dir: '/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/v009/output'
+    images: 'psfsim-stars-v009-000000.fits'
+    image_hdu: 0
+    #badpix_hdu: 2
+    #weight_hdu: 3
+
+    cat_dir: '/astro/u/mjarvis/work/sims/psfsim-stars-v009/v01'
+    cats: 'psfsim-stars-v009-000000_psfcat.fits'
+    cat_hdu: 2
+
+    x_col: XWIN_IMAGE
+    y_col: YWIN_IMAGE
+    #sky_col: BACKGROUND
+    #ra: TELRA
+    #dec: TELDEC
+    gain: 4.0
+    noise: 469.  # Variance in ADU per pixel.
+    sky: 231.    # Sky level in ADU per pixel.
+
+    stamp_size: 31
+    #nstars: 50
+
+output:
+    dir: '/astro/u/mjarvis/work/sims/psfsim-stars-v009/v04'
+    file_name: 'psfsim-stars-v009-000000_piff.fits'
+
+psf:
+
+    model:
+        type: PixelGrid
+        scale: 0.2
+        size: 21
+        start_sigma: 0.4
+
+    interp:
+        type: BasisPolynomial
+        #type: Polynomial
+        order: 2
+
+    outliers:
+        type: Chisq
+        nsigma: 4
+        max_remove: 3
+
+verbose: 2

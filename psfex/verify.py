@@ -13,6 +13,10 @@ def parse_args():
     # Drectory arguments
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
+    parser.add_argument('--output_dir', default=None,
+                        help='location of output directory (default: $DATADIR/EXTRA/red/{run}/psfex-rerun/{exp}/)')
+    parser.add_argument('--input_dir', default=None,
+                        help='location of input directory (default: $DATADIR/OPS/red/{run}/red/{exp}/)')
 
     # Exposure inputs
     parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
@@ -138,16 +142,31 @@ def main():
     for run,exp in zip(runs,exps):
 
         print 'Verifying exposure ',exp
-        expnum = int(exp[6:])
+        try:
+            expnum = int(exp[6:])
+        except:
+            expnum = 0
 
         # The input directory from the main DESDM reduction location.
-        input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        if args.input_dir is None:
+            input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        else:
+            input_dir = args.input_dir
+        print 'input_dir = ',input_dir
 
         # This is where the PSFEx files should be.
-        extra_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s/%s/'%(run,args.tag,exp))
+        if args.output_dir is None:
+            if args.tag:
+                tag_str = args.tag + "/"
+            else:
+                tag_str = ""
+            extra_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s%s/'%(run,tag_str,exp))
+        else:
+            extra_dir = args.output_dir
 
         # Get the file names in that directory.
-        files = glob.glob('%s/%s'%(input_dir,args.exp_match))
+        print '%s/%s'%(input_dir,args.exp_match)
+        files = sorted(glob.glob('%s/%s'%(input_dir,args.exp_match)))
 
         for file_name in files:
             #print '\nChecking ', file_name
@@ -155,8 +174,13 @@ def main():
             try:
                 desdm_dir, root, ccdnum = parse_file_name(file_name)
             except:
-                print '   Unable to parse file_name %s.  Skipping this file.'%file_name
-                continue
+                #print '   Unable to parse file_name %s.  Skipping this file.'%file_name
+                #continue
+                base_file = os.path.split(file_name)[1]
+                if os.path.splitext(base_file)[1] == '.fz':
+                    base_file=os.path.splitext(base_file)[0]
+                root = os.path.splitext(base_file)[0]
+                ccdnum = 0
 
             key = (expnum, ccdnum)
             if key in flag_dict:

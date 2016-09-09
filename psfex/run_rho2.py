@@ -242,8 +242,8 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False):
         for cat in [ ecat, decat, dtcat ]:
             cat.name = tag + ":"  + cat.name
 
-    min_sep = 0.3
-    bin_size = 0.2
+    min_sep = 0.5
+    bin_size = 0.5
     bin_slop = 0.3
 
     results = []
@@ -522,7 +522,7 @@ def main():
     #filters = ['r', 'i']
     #filters = ['r']
     filters = None
-    data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=True)
+    data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=False)
 
     print 'all filters = ',filters
     print 'all tilings = ',tilings
@@ -561,9 +561,10 @@ def main():
 
     do_fov_stats(data, filters, tilings, work)
 
-    do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')
+    # Use subtract_mean=True to do these:
+    #do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')
 
-    do_odd_even_stats(data, filters, tilings, work, prefix='alt_', name='altoddeven')
+    #do_odd_even_stats(data, filters, tilings, work, prefix='alt_', name='altoddeven')
 
 
 if __name__ == "__main__":

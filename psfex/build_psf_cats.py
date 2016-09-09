@@ -1,7 +1,16 @@
 #! /usr/bin/env python
 # Calculate shapes of stars and the shapes of the PSFEx measurements of the stars.
+import os
+import numpy
+import astropy.io.fits as pyfits
+import galsim
+import fitsio
+import piff
+import galsim.des
 
 # Define the flag values:
+
+MAX_CENTROID_SHIFT = 1.0
 
 NOT_USED = 1
 MEAS_BAD_MEASUREMENT = 2
@@ -25,6 +34,11 @@ def parse_args():
                         help='location of work directory')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
+    parser.add_argument('--output_dir', default=None,
+                        help='location of output directory (default: $DATADIR/EXTRA/red/{run}/psfex-rerun/{exp}/)')
+    parser.add_argument('--input_dir', default=None,
+                        help='location of input directory (default: $DATADIR/OPS/red/{run}/red/{exp}/)')
+
 
     # Exposure inputs
     parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
@@ -35,10 +49,15 @@ def parse_args():
                         help='list of exposures to run')
     parser.add_argument('--runs', default='', nargs='+',
                         help='list of runs')
+    parser.add_argument('--noweight', default=False, action='store_const', const=True,
+                        help='do not try to use a weight image.')
+
 
     # Options
     parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
                         help='Only do 1 ccd per exposure (used for debugging)')
+    parser.add_argument('--use_piff', default=False, action='store_const', const=True,
+                        help='Use Piff, not PSFEx')
 
     args = parser.parse_args()
     return args
@@ -47,20 +66,17 @@ def parse_args():
 def get_wcs(img_file):
     """Read the wcs from the image header
     """
-    import pyfits
-    import galsim
 
     if img_file.endswith('fz'):
         hdu = 1
     else:
         hdu = 0
-    wcs = galsim.FitsWCS(img_file, hdu=hdu)
-    return wcs
- 
+    im = galsim.fits.read(img_file, hdu=hdu)
+    return im.wcs
+
 def parse_file_name(file_name):
     """Parse the PSFEx file name to get the root name and the chip number
     """
-    import os
 
     dir, base_file = os.path.split(file_name)
     if os.path.splitext(base_file)[1] == '.fz':
@@ -73,71 +89,100 @@ def parse_file_name(file_name):
     return dir, root, ccdnum
 
 
-def read_used(exp_dir, root):
+def read_used(exp_dir, root, use_piff=False):
     """Read in the .used.fits file that PSFEx generates with the list of stars that actually
     got used in making the PSFEx file.
     """
-    import os
-    import astropy.io.fits as pyfits
     import copy
 
-    file_name = os.path.join(exp_dir, root + '_psfcat.used.fits')
-    if not os.path.isfile(file_name):
-        return None
-    f = pyfits.open(file_name, memmap=False)
-    data = copy.copy(f[2].data)
-    f.close()
-    # This has the following columns:
-    # SOURCE_NUMBER: 1..n
-    # EXTENSION_NUMBER: Seems to be all 1's.
-    # CATALOG_NUMBER: Also all 1's.
-    # VECTOR_CONTEXT: nx2 array.  Seems to be the same as x,y
-    # X_IMAGE: x values  (0-2048)
-    # Y_IMAGE: y values (0-4096)
-    # DELTAX_IMAGE: All numbers with abs val < 1.  Probably centroid shifts.
-    # DELTAY_IMAGE: All numbers with abs val < 1.  Probably centroid shifts.
-    # NORM_PSF: Big numbers.  I'm guessing total flux?  Possibly weighted flux.
-    # CHI2_PSF: Mostly a little more than 1.  Reduced chi^2 presumably.
-    # RESI_PSF: Very small numbers. <1e-4 typically.  Presumably the rms residual.
+    if use_piff:
+        file_name = os.path.join(exp_dir, root + '_psfcat.psf')
+        if not os.path.isfile(file_name):
+            return None
+        data = fitsio.read(file_name, ext='psf_stars')
+        # Make this look like a PSFEx used file by renaming x,y -> X_IMAGE, Y_IMAGE
+        assert data.dtype.names[0] == 'x'
+        assert data.dtype.names[1] == 'y'
+        data.dtype.names = ('X_IMAGE', 'Y_IMAGE') + data.dtype.names[2:]
+    else:
+        file_name = os.path.join(exp_dir, root + '_psfcat.used.fits')
+        if not os.path.isfile(file_name):
+            return None
+        f = pyfits.open(file_name, memmap=False)
+        data = copy.copy(f[2].data)
+        f.close()
+        # This has the following columns:
+        # SOURCE_NUMBER: 1..n
+        # EXTENSION_NUMBER: Seems to be all 1's.
+        # CATALOG_NUMBER: Also all 1's.
+        # VECTOR_CONTEXT: nx2 array.  Seems to be the same as x,y
+        # X_IMAGE: x values  (0-2048)
+        # Y_IMAGE: y values (0-4096)
+        # DELTAX_IMAGE: All numbers with abs val < 1.  Probably centroid shifts.
+        # DELTAY_IMAGE: All numbers with abs val < 1.  Probably centroid shifts.
+        # NORM_PSF: Big numbers.  I'm guessing total flux?  Possibly weighted flux.
+        # CHI2_PSF: Mostly a little more than 1.  Reduced chi^2 presumably.
+        # RESI_PSF: Very small numbers. <1e-4 typically.  Presumably the rms residual.
     return data
 
 def read_findstars(exp_dir, root):
     """Read in the findstars output file.
     """
-    import os
-    import astropy.io.fits as pyfits
     import copy
 
     file_name = os.path.join(exp_dir, root + '_findstars.fits')
     print 'file_name = ',file_name
     if not os.path.isfile(file_name):
-        return None
-    try:
-        with pyfits.open(file_name, memmap=False) as fp:
-            data = copy.copy(fp[1].data)
-        # This has the following columns:
-        # id: The original id from the SExtractor catalog
-        # x: The x position
-        # y: The y position
-        # sky: The local sky value
-        # noise: The estimated noise.  But these are all 0, so I think this isn't being calculated.
-        # size_flags: Error flags that occurred when estimating the size
-        # mag: The magnitude from SExtractor
-        # sg: SExtractor's star/galaxy estimate.  Currently SPREAD_MODEL
-        # sigma0: The shapelet sigma that results in a b_11 = 0 shapelet parameter.
-        # star_flag: 1 if findstars thought this was a star, 0 otherwise.
-        return data
-    except Exception as e:
-        print 'Caught exception:'
-        print e
-        return None
+        print 'File does not exist.'
+        # Then use the original catalog instead.
+        file_name = os.path.join(exp_dir, root + '_psfcat.fits')
+        print 'Use file_name = ',file_name
+        try:
+            with pyfits.open(file_name, memmap=False) as fp:
+                data = copy.copy(fp[2].data)
+            # Convert to the column names from fs.
+            new_data = numpy.empty(len(data), 
+                                   dtype=[('id',int), ('x',float), ('y',float),
+                                          ('mag',float), ('star_flag',int)])
+            new_data['id'] = data['NUMBER']
+            new_data['x'] = data['X_IMAGE']
+            new_data['y'] = data['Y_IMAGE']
+            new_data['mag'] = data['MAG_AUTO']
+            new_data['star_flag'][:] = 1
+            print 'id = ',new_data['id']
+            print 'x = ',new_data['x']
+            print 'y = ',new_data['y']
+            return new_data
+        except Exception as e:
+            print 'Caught exception:'
+            print e
+            return None
+    else:
+        try:
+            with pyfits.open(file_name, memmap=False) as fp:
+                data = copy.copy(fp[1].data)
+            # This has the following columns:
+            # id: The original id from the SExtractor catalog
+            # x: The x position
+            # y: The y position
+            # sky: The local sky value
+            # noise: The estimated noise.  But these are all 0, so I think this isn't being calculated.
+            # size_flags: Error flags that occurred when estimating the size
+            # mag: The magnitude from SExtractor
+            # sg: SExtractor's star/galaxy estimate.  Currently SPREAD_MODEL
+            # sigma0: The shapelet sigma that results in a b_11 = 0 shapelet parameter.
+            # star_flag: 1 if findstars thought this was a star, 0 otherwise.
+            return data
+        except Exception as e:
+            print 'Caught exception:'
+            print e
+            return None
  
 def find_index(x1, y1, x2, y2):
     """Find the index of the closest point in (x2,y2) to each (x1,y1)
 
     Any points that do not have a corresponding point within 1 arcsec gets index = -1.
     """
-    import numpy
     index = numpy.zeros(len(x1),dtype=int)
     for i in range(len(x1)):
         close = numpy.where( (x2 > x1[i]-1.) &
@@ -177,54 +222,81 @@ def find_used_index(fs_data, used_data):
     return find_index(fs_x, fs_y, used_x, used_y)
 
 
-def measure_shapes(xlist, ylist, file_name, wcs):
+def measure_shapes(xlist, ylist, file_name, wcs, noweight):
     """Given x,y positions, an image file, and the wcs, measure shapes and sizes.
 
     We use the HSM module from GalSim to do this.
 
     Returns e1, e2, size, flag.
     """
-    import galsim
-    import numpy
-    import astropy.io.fits as pyfits
 
     #im = galsim.fits.read(file_name)
     #bp_im = galsim.fits.read(file_name, hdu=2)
     #wt_im = galsim.fits.read(file_name, hdu=3)
-    with pyfits.open(file_name) as f:
-        # Some DES images have bad cards.  Fix them with verify('fix') before sending to GalSim.
-        f[1].verify('fix')
-        f[2].verify('fix')
-        f[3].verify('fix')
-        print 'after verify, f = ',f
-        print 'f[1] = ',f[1]
-        print 'f[2] = ',f[2]
-        print 'f[3] = ',f[3]
-        im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
-        print 'im = ',im
-        bp_im = galsim.fits.read(hdu_list=f, hdu=2, compression='rice')
-        wt_im = galsim.fits.read(hdu_list=f, hdu=3, compression='rice')
-
-    # The badpix image is offset by 32768 from the true value.  Subtract it off.
-    if numpy.any(bp_im.array > 32767):
-        bp_im -= 32768
-    # Also, convert to int16, since it isn't by default weirdly.  I think this is
-    # an error in astropy's RICE algorith, since fitsio converts it correctly to uint16.
-    bp_im = galsim.ImageS(bp_im)
-
-    # Also, it seems that the weight image has negative values where it should be 0.
-    # Make them 0.
-    wt_im.array[wt_im.array < 0] = 0.
     print 'file_name = ',file_name
+    with pyfits.open(file_name) as f:
+        print 'f = ',f
+        print 'len(f) = ',len(f)
+        # Some DES images have bad cards.  Fix them with verify('fix') before sending to GalSim.
+        for i in range(1,len(f)):
+            f[i].verify('fix')
+            print 'f[i] = ',f[i]
+        print 'after verify, f = ',f
+        if file_name.endswith('fz'):
+            im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
+            if noweight:
+                bp_im = wt_im = None
+            else:
+                bp_im = galsim.fits.read(hdu_list=f, hdu=2, compression='rice')
+                wt_im = galsim.fits.read(hdu_list=f, hdu=3, compression='rice')
+        else:
+            im = galsim.fits.read(hdu_list=f, hdu=0)
+            if noweight:
+                bp_im = wt_im = None
+            else:
+                bp_im = galsim.fits.read(hdu_list=f, hdu=1)
+                wt_im = galsim.fits.read(hdu_list=f, hdu=2)
+        print 'im = ',im
+
+    if not noweight:
+        # The badpix image is offset by 32768 from the true value.  Subtract it off.
+        if numpy.any(bp_im.array > 32767):
+            bp_im -= 32768
+        # Also, convert to int16, since it isn't by default weirdly.  I think this is
+        # an error in astropy's RICE algorith, since fitsio converts it correctly to uint16.
+        bp_im = galsim.ImageS(bp_im)
+
+        # Also, it seems that the weight image has negative values where it should be 0.
+        # Make them 0.
+        wt_im.array[wt_im.array < 0] = 0.
 
     # Read the background image as well.
-    bkg_file_name = file_name[:-8] + '_bkg.fits.fz'
+    base_file = file_name
+    if os.path.splitext(base_file)[1] == '.fz':
+        base_file=os.path.splitext(base_file)[0]
+    if os.path.splitext(base_file)[1] == '.fits':
+        base_file=os.path.splitext(base_file)[0]
+    bkg_file_name = base_file + '_bkg.fits.fz'
     print 'bkg_file_name = ',bkg_file_name
-    #bkg_im = galsim.fits.read(bkg_file_name)
-    with pyfits.open(bkg_file_name) as f:
-        f[1].verify('fix')
-        bkg_im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
-    im -= bkg_im # Subtract off the sky background.
+    if os.path.exists(bkg_file_name):
+        #bkg_im = galsim.fits.read(bkg_file_name)
+        with pyfits.open(bkg_file_name) as f:
+            f[1].verify('fix')
+            bkg_im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
+        im -= bkg_im # Subtract off the sky background.
+    else:
+        cat_file_name = base_file + '_psfcat.fits'
+        print cat_file_name
+        if os.path.exists(cat_file_name):
+            print 'use BACKGROUND from ',cat_file_name
+            with pyfits.open(cat_file_name) as f:
+                bkg = f[2].data['BACKGROUND']
+            print 'bkg = ',bkg
+            bkg = numpy.median(bkg)
+            print 'median = ',bkg
+            im -= bkg
+        else:
+            print 'No easy way to estimate background.  Assuming image is zero subtracted...'
 
     stamp_size = 48
 
@@ -241,11 +313,15 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         print 'Measure shape for star at ',x,y
         b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
+        b = b & im.bounds
 
         try:
             subim = im[b]
-            subbp = bp_im[b]
-            subwt = wt_im[b]
+            if noweight:
+                subbp = subwt = None
+            else:
+                subbp = bp_im[b]
+                subwt = wt_im[b]
             #print 'subim = ',subim.array
             #print 'subwt = ',subwt.array
             #print 'subbp = ',subbp.array
@@ -275,7 +351,7 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         dx = shape_data.moments_centroid.x - x
         dy = shape_data.moments_centroid.y - y
         #print 'dcentroid = ',dx,dy
-        if dx**2 + dy**2 > 0.1**2:
+        if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = MEAS_CENTROID_SHIFT
             continue
@@ -288,7 +364,9 @@ def measure_shapes(xlist, ylist, file_name, wcs):
         # So, not all that different, especially for stars with e ~= 0.
 
         # Account for the WCS:
+        print 'wcs = ',wcs
         jac = wcs.jacobian(galsim.PositionD(x,y))
+        print 'jac = ',jac
         # ( Iuu  Iuv ) = ( dudx  dudy ) ( Ixx  Ixy ) ( dudx  dvdx )
         # ( Iuv  Ivv )   ( dvdx  dvdy ) ( Ixy  Iyy ) ( dudy  dvdy )
         M = numpy.matrix( [[ 1+e1, e2 ], [ e2, 1-e1 ]] )
@@ -310,18 +388,16 @@ def measure_shapes(xlist, ylist, file_name, wcs):
 
     return e1_list,e2_list,s_list,flag_list
 
-def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
-    """Given x,y positions, a psfex solution file, and the wcs, measure shapes and sizes
+
+def measure_psf_shapes(xlist, ylist, psf_file_name, file_name, use_piff=False):
+    """Given x,y positions, a psf solution file, and the wcs, measure shapes and sizes
     of the PSF model.
 
     We use the HSM module from GalSim to do this.
 
     Returns e1, e2, size, flag.
     """
-    import galsim
-    import galsim.des
-    import numpy
-    print 'Read in PSFEx file: ',psfex_file_name
+    print 'Read in PSFEx file: ',psf_file_name
 
     n_psf = len(xlist)
     e1_list = [ 999. ] * n_psf
@@ -330,11 +406,26 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
     flag_list = [ 0 ] * n_psf
 
     try:
-        psfex = galsim.des.DES_PSFEx(psfex_file_name, file_name)
+        if use_piff:
+            psf = piff.read(psf_file_name)
+        else:
+            psf = galsim.des.DES_PSFEx(psf_file_name, file_name)
     except Exception as e:
-        print 'Caught ',e
-        flag_list = [ PSFEX_FAILURE ] * n_psf
-        return e1_list,e2_list,s_list,flag_list
+        if 'CTYPE' in str(e):
+            try:
+                # Workaround for a bug in DES_PSFEx.  It tries to read the image file using
+                # GSFitsWCS, which doesn't work if it's not a normal FITS WCS. 
+                # galsim.fits.read should work correctly in those cases.
+                psf = galsim.des.DES_PSFEx(psf_file_name)
+                im = galsim.fits.read(file_name)
+                psf.wcs = im.wcs
+                e = None
+            except Exception as e:
+                pass
+        if e is not None:
+            print 'Caught ',e
+            flag_list = [ PSFEX_FAILURE ] * n_psf
+            return e1_list,e2_list,s_list,flag_list
 
     stamp_size = 64
     pixel_scale = 0.2
@@ -346,8 +437,11 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
         y = ylist[i]
         print 'Measure PSFEx model shape at ',x,y
         image_pos = galsim.PositionD(x,y)
-        psf = psfex.getPSF(image_pos)
-        im = psf.drawImage(image=im, method='no_pixel')
+        if use_piff:
+            im = psf.draw(x=x, y=y, image=im)
+        else:
+            psf_i = psf.getPSF(image_pos)
+            im = psf_i.drawImage(image=im, method='no_pixel')
         #print 'im = ',im.array
 
         try:
@@ -365,10 +459,10 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
 
         dx = shape_data.moments_centroid.x - im.trueCenter().x
         dy = shape_data.moments_centroid.y - im.trueCenter().y
-        #print 'centroid = ',shape_data.moments_centroid
-        #print 'trueCenter = ',im.trueCenter()
-        #print 'dcentroid = ',dx,dy
-        if dx**2 + dy**2 > 0.1**2:
+        print 'centroid = ',shape_data.moments_centroid
+        print 'trueCenter = ',im.trueCenter()
+        print 'dcentroid = ',dx,dy
+        if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
             continue
@@ -387,7 +481,6 @@ def measure_psfex_shapes(xlist, ylist, psfex_file_name, file_name):
 
 
 def apply_wcs(wcs, g1, g2, s):
-    import numpy
 
     scale = 2./(1.+g1*g1+g2*g2)
     e1 = g1 * scale
@@ -408,8 +501,8 @@ def apply_wcs(wcs, g1, g2, s):
 
     return g1, g2, s
 
-def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
-    """Given x,y positions, a psfex solution file, and the wcs, measure shapes and sizes
+def measure_psf_shapes_erin(xlist, ylist, psf_file_name, file_name):
+    """Given x,y positions, a psf solution file, and the wcs, measure shapes and sizes
     of the PSF model.
 
     We use the HSM module from GalSim to do this.
@@ -418,10 +511,8 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
 
     Returns e1, e2, size, flag.
     """
-    import galsim
-    import numpy
     import psfex
-    print 'Read in PSFEx file: ',psfex_file_name
+    print 'Read in PSFEx file: ',psf_file_name
 
     n_psf = len(xlist)
     e1_list = [ 999. ] * n_psf
@@ -430,7 +521,7 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
     flag_list = [ 0 ] * n_psf
 
     try:
-        psf = psfex.PSFEx(psfex_file_name)
+        psf = psfex.PSFEx(psf_file_name)
     except Exception as e:
         print 'Caught ',e
         flag_list = [ PSFEX_FAILURE ] * n_psf
@@ -443,7 +534,7 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
         flag_list = [ PSFEX_FAILURE ] * n_psf
         return e1_list,e2_list,s_list,flag_list
 
-    wcs = galsim.FitsWCS(file_name)
+    wcs = galsim.fits.read(file_name).wcs
 
     for i in range(n_psf):
         x = xlist[i]
@@ -480,7 +571,9 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
         #print 'centroid = ',shape_data.moments_centroid
         #print 'trueCenter = ',true_center
         #print 'dcentroid = ',dx,dy
-        if dx**2 + dy**2 > 0.5**2:
+        # Use at least 0.5 here.
+        max_centroid_shift = max(MAX_CENTROID_SHIFT, 0.5)
+        if dx**2 + dy**2 > max_centroid_shift**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
             continue
@@ -497,12 +590,10 @@ def measure_psfex_shapes_erin(xlist, ylist, psfex_file_name, file_name):
     return e1_list,e2_list,s_list,flag_list
 
 def read_blacklists(tag):
-    """Read the psfex blacklist file and the other blacklists.
+    """Read the psf blacklist file and the other blacklists.
 
     Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
     """
-    import astropy.io.fits as pyfits
-    import numpy
     d = {}  # The dict will be indexed by (expnum, ccdnum)
     print 'reading blacklists'
 
@@ -549,31 +640,31 @@ def read_blacklists(tag):
     print 'after ghost, streak, len(d) = ',len(d)
 
     # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
+    psf_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
     if tag:
-        psfex_file += '-' + tag
-    psfex_file += '.txt'
-    with open(psfex_file) as f:
+        psf_file += '-' + tag
+    psf_file += '.txt'
+    with open(psf_file) as f:
         for line in f:
             run, exp, ccdnum, flag = line.split()
-            expnum = exp[6:]
-            key = (int(expnum), int(ccdnum))
-            flag = int(flag)
-            if key in d:
-                d[key] |= (flag << 15)
-            else:
-                d[key] = (flag << 15)
-    print 'after psfex, len(d) = ',len(d)
+            try:
+                expnum = exp[6:]
+                key = (int(expnum), int(ccdnum))
+                flag = int(flag)
+                if key in d:
+                    d[key] |= (flag << 15)
+                else:
+                    d[key] = (flag << 15)
+            except: 
+                # Don't balk at bad lines in the blacklist.
+                pass
+    print 'after psf, len(d) = ',len(d)
 
     return d
 
 
 def main():
-    import os
     import glob
-    import galsim
-    import numpy
-    import astropy.io.fits as pyfits
 
     args = parse_args()
 
@@ -616,17 +707,26 @@ def main():
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
-        expnum = int(exp[6:])
+        try:
+            expnum = int(exp[6:])
+        except:
+            expnum = 0
         print 'expnum = ',expnum
 
-        exp_dir = os.path.join(work,exp)
+        if args.output_dir is None:
+            exp_dir = os.path.join(work,exp)
+        else:
+            exp_dir = args.output_dir
         print 'exp_dir = ',exp_dir
 
-        # The input directory from the main DESDM reduction location.
-        input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        if args.input_dir is None:
+            input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        else:
+            input_dir = args.input_dir
+        print 'input_dir = ',input_dir
 
         # Get the file names in that directory.
-        files = glob.glob('%s/%s'%(input_dir,args.exp_match))
+        files = sorted(glob.glob('%s/%s'%(exp_dir,args.exp_match)))
 
         # Setup the columns for the output catalog:
         ccdnum_col = []
@@ -639,9 +739,9 @@ def main():
         e1_col = []
         e2_col = []
         size_col = []
-        psfex_e1_col = []
-        psfex_e2_col = []
-        psfex_size_col = []
+        psf_e1_col = []
+        psf_e2_col = []
+        psf_size_col = []
         erin_e1_col = []
         erin_e2_col = []
         erin_size_col = []
@@ -655,8 +755,14 @@ def main():
             try:
                 desdm_dir, root, ccdnum = parse_file_name(file_name)
             except:
-                print '   Unable to parse file_name %s.  Skipping this file.'%file_name
-                continue
+                #print '   Unable to parse file_name %s.  Skipping this file.'%file_name
+                #continue
+                base_file = os.path.split(file_name)[1]
+                if os.path.splitext(base_file)[1] == '.fz':
+                    base_file=os.path.splitext(base_file)[0]
+                root = os.path.splitext(base_file)[0]
+                ccdnum = 0
+                desdm_dir = None
             print '   root, ccdnum = ',root,ccdnum
             print '   desdm_dir = ',desdm_dir
 
@@ -673,19 +779,22 @@ def main():
                 black_flag = 0
 
             # Read the star data.  From both findstars and the PSFEx used file.
-            fs_data = read_findstars(exp_dir, root)
+            try:
+                fs_data = read_findstars(exp_dir, root)
+            except:
+                fs_data = None
             if fs_data is None:
                 print '   No _findstars.fits file found'
                 if args.single_ccd:
                     break
                 continue
-            n_tot = len(fs_data)
+            n_tot = len(fs_data['id'])
             n_fs = fs_data['star_flag'].sum()
             print '   n_tot = ',n_tot
             print '   n_fs = ',n_fs
             mask = fs_data['star_flag'] == 1
 
-            used_data = read_used(exp_dir, root)
+            used_data = read_used(exp_dir, root, use_piff=args.use_piff)
             if used_data is None:
                 print '   No .used.fits file found'
                 continue
@@ -753,30 +862,37 @@ def main():
                 x = fs_data['x'][mask]
                 y = fs_data['y'][mask]
                 mag = fs_data['mag'][mask]
-                e1, e2, size, meas_flag = measure_shapes(x, y, file_name, wcs)
+                e1, e2, size, meas_flag = measure_shapes(x, y, file_name, wcs, args.noweight)
 
                 # Measure the model shapes, sizes.
-                psfex_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
-                psfex_e1, psfex_e2, psfex_size, psfex_flag = measure_psfex_shapes(
-                        x, y, psfex_file_name, file_name)
-                erin_e1, erin_e2, erin_size, erin_flag = measure_psfex_shapes_erin(
-                        x, y, psfex_file_name, file_name)
+                psf_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
+                psf_e1, psf_e2, psf_size, psf_flag = measure_psf_shapes(
+                        x, y, psf_file_name, file_name, use_piff=args.use_piff)
+                if not args.use_piff:
+                    erin_e1, erin_e2, erin_size, erin_flag = measure_psf_shapes_erin(
+                            x, y, psf_file_name, file_name)
+                else:
+                    erin_e1 = erin_e2 = erin_size = erin_flag = numpy.zeros_like(x, dtype=int)
 
                 # Measure the desdm model shapes, sizes.
-                desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
-                desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psfex_shapes(
-                        x, y, desdm_file_name, file_name)
-                desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
+                if desdm_dir is not None:
+                    desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
+                    desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psf_shapes(
+                            x, y, desdm_file_name, file_name)
+                    desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
+                else:
+                    desdm_e1 = desdm_e2 = desdm_size = desdm_flag = numpy.zeros_like(x, dtype=int)
             except Exception as e:
                 print 'Catastrophic error trying to measure the shapes:'
                 print e
                 print 'Skip this file'
+                raise
                 continue
 
             # Put all the flags together:
-            flag = [ m | p | e | d for m,p,e,d in zip(meas_flag,psfex_flag,erin_flag,desdm_flag) ]
+            flag = [ m | p | e | d for m,p,e,d in zip(meas_flag,psf_flag,erin_flag,desdm_flag) ]
             print 'meas_flag = ',meas_flag
-            print 'psfex_flag = ',psfex_flag
+            print 'psf_flag = ',psf_flag
             print 'erin_flag = ',erin_flag
             print 'desdm_flag = ',desdm_flag
             print 'flag = ',flag
@@ -801,8 +917,13 @@ def main():
 
             # Compute ra,dec from the wcs:
             coord = [ wcs.toWorld(galsim.PositionD(xx,yy)) for xx,yy in zip(x,y) ]
-            ra = [ c.ra / galsim.degrees for c in coord ]
-            dec = [ c.dec / galsim.degrees for c in coord ]
+            try:
+                ra = [ c.ra / galsim.degrees for c in coord ]
+                dec = [ c.dec / galsim.degrees for c in coord ]
+            except:
+                # Sims may be using simple WCS with no ra, dec.  Just take coord.x,y instead
+                ra = [ c.x * galsim.arcsec / galsim.degrees for c in coord]
+                dec = [ c.y * galsim.arcsec / galsim.degrees for c in coord]
 
             # Extend the column arrays with this chip's data.
             ccdnum_col.extend([ccdnum] * n_fs)
@@ -815,9 +936,9 @@ def main():
             e1_col.extend(e1)
             e2_col.extend(e2)
             size_col.extend(size)
-            psfex_e1_col.extend(psfex_e1)
-            psfex_e2_col.extend(psfex_e2)
-            psfex_size_col.extend(psfex_size)
+            psf_e1_col.extend(psf_e1)
+            psf_e2_col.extend(psf_e2)
+            psf_size_col.extend(psf_size)
             erin_e1_col.extend(erin_e1)
             erin_e2_col.extend(erin_e2)
             erin_size_col.extend(erin_size)
@@ -833,9 +954,9 @@ def main():
             assert len(ccdnum_col) == len(e1_col)
             assert len(ccdnum_col) == len(e2_col)
             assert len(ccdnum_col) == len(size_col)
-            assert len(ccdnum_col) == len(psfex_e1_col)
-            assert len(ccdnum_col) == len(psfex_e2_col)
-            assert len(ccdnum_col) == len(psfex_size_col)
+            assert len(ccdnum_col) == len(psf_e1_col)
+            assert len(ccdnum_col) == len(psf_e2_col)
+            assert len(ccdnum_col) == len(psf_size_col)
             assert len(ccdnum_col) == len(erin_e1_col)
             assert len(ccdnum_col) == len(erin_e2_col)
             assert len(ccdnum_col) == len(erin_size_col)
@@ -843,8 +964,40 @@ def main():
             assert len(ccdnum_col) == len(desdm_e2_col)
             assert len(ccdnum_col) == len(desdm_size_col)
 
+            cols = pyfits.ColDefs([
+                pyfits.Column(name='ccdnum', format='I', array=[ccdnum] * n_fs),
+                pyfits.Column(name='x', format='E', array=x),
+                pyfits.Column(name='y', format='E', array=y),
+                pyfits.Column(name='ra', format='E', array=ra),
+                pyfits.Column(name='dec', format='E', array=dec),
+                pyfits.Column(name='mag', format='E', array=mag),
+                pyfits.Column(name='flag', format='J', array=flag),
+                pyfits.Column(name='e1', format='E', array=e1),
+                pyfits.Column(name='e2', format='E', array=e2),
+                pyfits.Column(name='size', format='E', array=size),
+                pyfits.Column(name='psf_e1', format='E', array=psf_e1),
+                pyfits.Column(name='psf_e2', format='E', array=psf_e2),
+                pyfits.Column(name='psf_size', format='E', array=psf_size),
+                pyfits.Column(name='erin_e1', format='E', array=erin_e1),
+                pyfits.Column(name='erin_e2', format='E', array=erin_e2),
+                pyfits.Column(name='erin_size', format='E', array=erin_size),
+                pyfits.Column(name='desdm_e1', format='E', array=desdm_e1),
+                pyfits.Column(name='desdm_e2', format='E', array=desdm_e2),
+                pyfits.Column(name='desdm_size', format='E', array=desdm_size),
+                ])
+
+            # Depending on the version of pyfits, one of these should work:
+            try:
+                tbhdu = pyfits.BinTableHDU.from_columns(cols)
+            except:
+                tbhdu = pyfits.new_table(cols)
+            cat_file = os.path.join(cat_dir, root + "_psf.fits")
+            tbhdu.writeto(cat_file, clobber=True)
+            print 'wrote cat_file = ',cat_file
+
             if args.single_ccd:
                 break
+
 
         cols = pyfits.ColDefs([
             pyfits.Column(name='ccdnum', format='I', array=ccdnum_col),
@@ -857,9 +1010,9 @@ def main():
             pyfits.Column(name='e1', format='E', array=e1_col),
             pyfits.Column(name='e2', format='E', array=e2_col),
             pyfits.Column(name='size', format='E', array=size_col),
-            pyfits.Column(name='psfex_e1', format='E', array=psfex_e1_col),
-            pyfits.Column(name='psfex_e2', format='E', array=psfex_e2_col),
-            pyfits.Column(name='psfex_size', format='E', array=psfex_size_col),
+            pyfits.Column(name='psf_e1', format='E', array=psf_e1_col),
+            pyfits.Column(name='psf_e2', format='E', array=psf_e2_col),
+            pyfits.Column(name='psf_size', format='E', array=psf_size_col),
             pyfits.Column(name='erin_e1', format='E', array=erin_e1_col),
             pyfits.Column(name='erin_e2', format='E', array=erin_e2_col),
             pyfits.Column(name='erin_size', format='E', array=erin_size_col),
@@ -873,9 +1026,12 @@ def main():
             tbhdu = pyfits.BinTableHDU.from_columns(cols)
         except:
             tbhdu = pyfits.new_table(cols)
-        exp_root = root.rsplit('_',1)[0]
+        if '_' in root:
+            exp_root = root.rsplit('_',1)[0]
+        else:
+            exp_root = root
         print 'exp_root = ',exp_root
-        cat_file = os.path.join(cat_dir, exp_root + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp_root + "_exppsf.fits")
         tbhdu.writeto(cat_file, clobber=True)
         print 'wrote cat_file = ',cat_file
 

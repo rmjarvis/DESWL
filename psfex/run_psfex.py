@@ -36,6 +36,8 @@ def parse_args():
                         help='location of sextrator executable')
     parser.add_argument('--psfex_exe', default='/astro/u/rarmst/soft/bin/psfex',
                         help='location of psfex executable')
+    parser.add_argument('--piff_exe', default='/astro/u/mjarvis/bin/piffify',
+                        help='location of piffify executable')
     parser.add_argument('--findstars_dir', default='/astro/u/mjarvis/bin',
                         help='location wl executables')
     parser.add_argument('--work', default='./',
@@ -44,6 +46,10 @@ def parse_args():
                         help='A version tag to add to the directory name')
     parser.add_argument('--clear_output', default=False, action='store_const', const=True,
                         help='should the output directory be cleared before writing new files?')
+    parser.add_argument('--output_dir', default=None,
+                        help='location of output directory (default: $DATADIR/EXTRA/red/{run}/psfex-rerun/{exp}/)')
+    parser.add_argument('--input_dir', default=None,
+                        help='location of input directory (default: $DATADIR/OPS/red/{run}/red/{exp}/)')
 
     # Exposure inputs
     parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
@@ -62,6 +68,9 @@ def parse_args():
     parser.add_argument('--psfex_config',
                         default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/new.psfex',
                         help='psfex config file')
+    parser.add_argument('--piff_config',
+                        default='/astro/u/mjarvis/rmjarvis/DESWL/psfex/piff.yaml',
+                        help='piff config file')
     parser.add_argument('--findstars_config',
                         default='wl.config +wl_firstcut.config',
                         help='wl config file')
@@ -79,6 +88,9 @@ def parse_args():
                         help='name of tape bump file')
     parser.add_argument('--make_symlinks', default=0, type=int,
                         help='make symlinks in output dir, rather than move files')
+    parser.add_argument('--noweight', default=False, action='store_const', const=True,
+                        help='do not try to use a weight image.')
+
 
     # Options
     parser.add_argument('--rm_files', default=1, type=int,
@@ -87,6 +99,8 @@ def parse_args():
                         help='add failed CCDs to the blacklist')
     parser.add_argument('--run_psfex', default=1, type=int,
                         help='run psfex on files')
+    parser.add_argument('--run_piff', default=0, type=int,
+                        help='run piff on files')
     parser.add_argument('--use_findstars', default=1, type=int,
                         help='use findstars results in psfex')
     parser.add_argument('--mag_cut', default=-1, type=float,
@@ -104,6 +118,9 @@ def parse_args():
 
 
     args = parser.parse_args()
+
+    if args.run_piff:
+        args.run_psfex = False
     return args
 
 
@@ -185,13 +202,16 @@ def unpack_file(file_name, wdir):
     If the unpacked file already exists, then a link is made.
     Otherwise funpack is run, outputting the result into the work directory.
     """
+    print 'unpack ',file_name,' wdir = ',wdir
     import os
     # find out if the file is fpacked by the extension
     base_file = os.path.split(file_name)[1]
+    print 'base_file = ',base_file
 
     # find the base filename
     if os.path.splitext(base_file)[1] == '.fz':
         img_file = os.path.join(wdir,os.path.splitext(base_file)[0])
+        print 'img_file = ',img_file
         if os.path.lexists(img_file):
             print '   %s exists already.  Removing.'
             os.remove(img_file)
@@ -208,10 +228,13 @@ def unpack_file(file_name, wdir):
             return None
         # If the file is not fpacked, make a symlink into the work directory
         img_file = os.path.join(wdir,base_file)
+        print 'img_file = ',img_file
         if os.path.lexists(img_file):
             print '   %s exists already.  Removing.'
             os.remove(img_file)
-        os.symlink(file_name,wdir)
+        print 'file_name = ',file_name
+        print 'wdir = ',wdir
+        os.symlink(file_name,img_file)
 
     return img_file
 
@@ -233,21 +256,28 @@ def read_image_header(img_file):
             sat = pyf[hdu].header['SATURATE']
             fwhm = pyf[hdu].header['FWHM']
         except:
-            raise RuntimeError("Cannot read header information from " + img_file)
+            print("Cannot read header information from " + img_file)
+            #raise RuntimeError("Cannot read header information from " + img_file)
     return sat, fwhm
  
 
-def run_sextractor(wdir, root, img_file, sat, fwhm, 
+def run_sextractor(wdir, root, img_file, sat, fwhm, noweight,
                    sex_dir, sex_config, sex_params, sex_filter, sex_nnw):
     """Run sextractor, but only if the output file does not exist yet.
     """
     cat_file = os.path.join(wdir,root+'_psfcat.fits')
 
     print '   running sextractor'
-    cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2] -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3 -SEEING_FWHM {fwhm} -SATUR_LEVEL {sat}".format(
+    cat_cmd = "{sex_dir}/sex {img_file}[0] -c {config} -CATALOG_NAME {cat_file} -CATALOG_TYPE FITS_LDAC -PARAMETERS_NAME {params} -FILTER_NAME {filter}  -STARNNW_NAME {nnw} -DETECT_MINAREA 3".format(
         sex_dir=sex_dir, img_file=img_file, config=sex_config,
         cat_file=cat_file, params=sex_params, filter=sex_filter,
         nnw=sex_nnw, fwhm=fwhm, sat=sat)
+    if not noweight:
+        cat_cmd += " -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {img_file}[2]".format(img_file=img_file)
+    if fwhm != 0:
+        cat_cmd += " -SEEING_FWHM {fwhm}".format(fwhm=fwhm)
+    if sat != -1:
+        cat_cmd += " -SATUR_LEVEL {sat}".format(sat=sat)
     print cat_cmd
     os.system(cat_cmd)
     return cat_file
@@ -405,7 +435,7 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
         os.unlink(psf_file)
     print '   running psfex'
     psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
-            psfex_exe, cat_file=cat_file, config=psfex_config,
+            psfex_exe=psfex_exe, cat_file=cat_file, config=psfex_config,
             used_file=used_file, xml_file=xml_file, resid_file=resid_file)
     print psf_cmd
     os.system(psf_cmd)
@@ -422,11 +452,36 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
         os.rename(actual_psf_file, psf_file)
     return True
 
+
+def run_piff(wdir, root, img_file, cat_file, psf_file, piff_exe, piff_config):
+    """Run Piffify
+
+    Returns True if successful, False if there was a catastrophic failure and no output 
+    file was written.
+    """
+    if not os.path.exists(piff_config) and '/' not in piff_config:
+        piff_config = os.path.join('/astro/u/mjarvis/rmjarvis/DESWL/psfex/',piff_config)
+    if os.path.lexists(psf_file):
+        print '   deleting existing',psf_file
+        os.unlink(psf_file)
+    print '   running piff'
+    psf_cmd = '{piff_exe} {config} input.images={images} input.cats={cat_file} output.dir={wdir} output.file_name={psf_file}'.format(
+            piff_exe=piff_exe, config=piff_config, images=img_file, cat_file=cat_file,
+            wdir=wdir, psf_file=psf_file)
+    print psf_cmd
+    os.system(psf_cmd)
+
+    if not os.path.exists(psf_file):
+        print '   Error running Piff.  No ouput file was written.'
+        return False
+
+    return True
+
 def remove_temp_files(wdir, root, *args):
     """Remove wdir/root* except for any files listed in the args
     """
     import glob
-    files = glob.glob('%s/%s*'%(wdir,root))
+    files = sorted(glob.glob('%s/%s*'%(wdir,root)))
     for save in args:
         if save in files:
             files.remove(save)
@@ -443,11 +498,16 @@ def remove_temp_files(wdir, root, *args):
 def move_files(wdir, odir, *args, **kwargs):
     """Either move files from wdir to odir or make symlinks.
     """
+    import glob
     make_symlinks = kwargs.pop('make_symlinks',False)
     for file in args:
+        print 'file = ',file
         # The file might not exist if psfex had an error.
         if os.path.exists(file):
             new_file = os.path.join(odir,os.path.basename(file))
+            print 'new_file = ',new_file
+            if file == new_file:
+                continue
             try:
                 if os.path.lexists(new_file):
                     os.unlink(new_file)
@@ -458,7 +518,7 @@ def move_files(wdir, odir, *args, **kwargs):
             if make_symlinks:
                 print '   make link: ',new_file,' to ',file
                 os.symlink(file,new_file)
-            else:
+            elif file != new_file:
                 print '   move ',file,' to ',new_file
                 os.rename(file,new_file)
                 # Also make a symlink in the work directory to the new file location.
@@ -496,16 +556,22 @@ def main():
         runs = args.runs
         exps = args.exps
 
+    print 'runs = ',runs
+    print 'exps = ',exps
+
     for run,exp in zip(runs,exps):
 
         print 'Start work on run, exp = ',run,exp
 
         # Make the output directory for this exposure and clear it if necessary.
-        if args.tag:
-            tag_str = args.tag + "/"
+        if args.output_dir is None:
+            if args.tag:
+                tag_str = args.tag + "/"
+            else:
+                tag_str = ""
+            odir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s%s/'%(run,tag_str,exp))
         else:
-            tag_str = ""
-        odir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s%s/'%(run,tag_str,exp))
+            odir = args.output_dir
         if args.clear_output:
             if os.path.exists(odir):
                 for f in os.listdir(odir):
@@ -519,6 +585,7 @@ def main():
             os.makedirs(odir)
         except:
             if not os.path.exists(odir): raise
+        print 'odir = ',odir
 
         # Make the work directory for this exposure and clear it if necessary.
         wdir = os.path.join(work,exp)
@@ -536,12 +603,18 @@ def main():
             os.makedirs(wdir)
         except:
             if not os.path.exists(wdir): raise
+        print 'wdir = ',wdir
 
         # The input directory from the main DESDM reduction location.
-        input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        if args.input_dir is None:
+            input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+        else:
+            input_dir = args.input_dir
+        print 'input_dir = ',input_dir
 
         # Get the file names in that directory.
-        files = glob.glob('%s/%s'%(input_dir,args.exp_match))
+        print '%s/%s'%(input_dir,args.exp_match)
+        files = sorted(glob.glob('%s/%s'%(input_dir,args.exp_match)))
 
         for file_name in files:
             print '\nProcessing ', file_name
@@ -550,13 +623,20 @@ def main():
             try:
                 root, ccdnum = parse_file_name(file_name)
             except:
-                print '   Unable to parse file_name %s.  Skipping this file.'%file_name
-                continue
+                if args.use_tapebumps:
+                    print '   Unable to parse file_name %s.  Skipping this file.'%file_name
+                    continue
+                else:
+                    base_file = os.path.split(file_name)[1]
+                    if os.path.splitext(base_file)[1] == '.fz':
+                        base_file=os.path.splitext(base_file)[0]
+                    root = os.path.splitext(base_file)[0]
+                    ccdnum = 0
             print '   root, ccdnum = ',root,ccdnum
 
             try:
 
-                if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
+                if args.run_psfex or args.run_piff or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                     # Unpack the image file if necessary
                     img_file = unpack_file(file_name, wdir)
                     if img_file is None:
@@ -569,7 +649,7 @@ def main():
                     sat, fwhm = read_image_header(img_file)
                     print '   fwhm = ',fwhm
 
-                    cat_file = run_sextractor(wdir, root, img_file, sat, fwhm, 
+                    cat_file = run_sextractor(wdir, root, img_file, sat, fwhm, args.noweight,
                                               args.sex_dir, args.sex_config, args.sex_params, 
                                               args.sex_filter, args.sex_nnw)
 
@@ -604,7 +684,7 @@ def main():
                     if nstars <= 1:
                         raise NoStarsException()
 
-                if args.run_psfex or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
+                if args.run_psfex or args.run_piff or args.use_findstars or args.mag_cut>0 or args.use_tapebumps:
                     # Get the median fwhm of the given stars
                     star_fwhm = get_fwhm(cat_file)
                     print '   fwhm of stars = ',star_fwhm
@@ -616,10 +696,14 @@ def main():
                         print '     -- flag for too high fwhm compared to fwhm from fits header'
                         flag |= TOO_HIGH_FWHM_FLAG
     
-                star_file = os.path.join(wdir,root+'_findstars.fits')
+                if args.use_findstars:
+                    star_file = os.path.join(wdir,root+'_findstars.fits')
+                else:
+                    star_file = cat_file
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
                 xml_file = os.path.join(wdir,root+'_psfcat.xml')
+
                 if args.run_psfex:
                     # PSFEx does this weird thing where it takes the names of the resid file,
                     # strips off the .fits ending, and replaces it with _ + cat_file
@@ -631,6 +715,19 @@ def main():
                     print 'resid_file2 = ',resid_file2
                     success = run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file,
                                         resid_file1, args.psfex_exe, args.psfex_config)
+                    if success:
+                        move_files(wdir, odir, psf_file,
+                                   make_symlinks=args.make_symlinks)
+                    else:
+                        flag |= PSFEX_FAILURE
+
+                if args.run_piff:
+                    cat_fname = os.path.basename(cat_file)
+                    print 'cat_fname = ',cat_fname
+                    resid_file2 = os.path.join(wdir,'resid_'+cat_fname)
+                    print 'resid_file2 = ',resid_file2
+                    success = run_piff(wdir, root, img_file, cat_file, psf_file,
+                                       args.piff_exe, args.piff_config)
                     if success:
                         move_files(wdir, odir, psf_file,
                                    make_symlinks=args.make_symlinks)

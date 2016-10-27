@@ -4,7 +4,12 @@
 
 import os
 import traceback
- 
+import astropy.io.fits as pyfits
+import numpy
+import copy
+import glob
+import time
+
 # Define the parameters for the blacklist
 
 # How many stars are too few or too many?
@@ -127,7 +132,6 @@ def parse_args():
 def read_tapebump_file(file_name):
     """Read and parse the tapebump file if we are going to need it.
     """
-    import numpy
     raw_tbdata = numpy.genfromtxt(file_name, delimiter=',')
     # repackage this as  dict (key = ccdnum) of lists of tuples (ymin, xmin, ymax, xmax)
     tbdata = {}
@@ -147,7 +151,6 @@ def exclude_tapebumps(tbd, data, extra):
     data = the input data for the stars
     extra = how much extra distance around the tape bumps to exclude stars in pixels
     """
-    import numpy
     # I'm sure it doesn't matter, but add an extra 0.5 pixel to the slop because the tape bump
     # values are in terms of which pixels to include as part of the tape bump.  So the edges
     # are an extra 0.5 pixel outside of that.
@@ -203,7 +206,6 @@ def unpack_file(file_name, wdir):
     Otherwise funpack is run, outputting the result into the work directory.
     """
     print 'unpack ',file_name,' wdir = ',wdir
-    import os
     # find out if the file is fpacked by the extension
     base_file = os.path.split(file_name)[1]
     print 'base_file = ',base_file
@@ -218,7 +220,11 @@ def unpack_file(file_name, wdir):
         print '   unpacking fz file'
         cmd = 'funpack -O {outf} {inf}'.format(outf=img_file, inf=file_name)
         print cmd
-        os.system(cmd)
+        for itry in range(5):
+            os.system(cmd)
+            if os.path.lexists(img_file): break
+            print '%s was not properly made.  Retrying.'%img_file
+            time.sleep(10)
     else:
         # Check that there isn't both a .fits and .fits.fz for the same image.
         # Prefer the latter if there is both.
@@ -236,6 +242,10 @@ def unpack_file(file_name, wdir):
         print 'wdir = ',wdir
         os.symlink(file_name,img_file)
 
+    if not os.path.lexists(img_file):
+        print 'Unable to create %s.  Skip this file.'%img_file
+        return None
+
     return img_file
 
 def read_image_header(img_file):
@@ -245,8 +255,6 @@ def read_image_header(img_file):
 
     Returns sat, fwhm
     """
-    import pyfits
-
     hdu = 0
 
     with pyfits.open(img_file,memmap=False) as pyf:
@@ -285,9 +293,6 @@ def run_sextractor(wdir, root, img_file, sat, fwhm, noweight,
 def run_findstars(wdir, root, cat_file, fs_dir, fs_config):
     """Run findstars, and return a new updated catalog file to use.
     """
-    import pyfits
-    import numpy
-    import copy
     star_file = wdir+'/'+root+'_findstars.fits'    
 
     # run find stars
@@ -344,9 +349,6 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
       effect.
     - Star falls in or near the tape bumps.
     """
-    import pyfits
-    import numpy
-    import copy
 
     # get the brightest 10 stars that have flags=0 and take the median just in case some
     # strange magnitudes were selected
@@ -407,8 +409,6 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
 def get_fwhm(cat_file):
     """Get the fwhm from the SExtractor FLUX_RADIUS estimates.
     """
-    import pyfits
-    import numpy
 
     # get the brightest 10 stars that have flags=0 and take the median just in case some
     # strange magnitudes were selected
@@ -480,7 +480,6 @@ def run_piff(wdir, root, img_file, cat_file, psf_file, piff_exe, piff_config):
 def remove_temp_files(wdir, root, *args):
     """Remove wdir/root* except for any files listed in the args
     """
-    import glob
     files = sorted(glob.glob('%s/%s*'%(wdir,root)))
     for save in args:
         if save in files:
@@ -498,7 +497,6 @@ def remove_temp_files(wdir, root, *args):
 def move_files(wdir, odir, *args, **kwargs):
     """Either move files from wdir to odir or make symlinks.
     """
-    import glob
     make_symlinks = kwargs.pop('make_symlinks',False)
     for file in args:
         print 'file = ',file
@@ -525,7 +523,6 @@ def move_files(wdir, odir, *args, **kwargs):
                 os.symlink(new_file,file)
 
 def main():
-    import glob
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)

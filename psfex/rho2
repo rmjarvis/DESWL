@@ -1,6 +1,8 @@
 #!/bin/bash
 
-FILE=y1s82
-TAG=y1a1-v11
+FILE=y1all_r
+TAG=y1a1-v12
+#FILE=y1s82
+#TAG=y1a1-v11
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/psfex_rerun/$TAG"

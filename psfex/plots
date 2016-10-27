@@ -1,7 +1,9 @@
 #!/bin/bash
 
-FILE=y1all
-TAG=y1a1-v02
+FILE=y1all_r
+TAG=y1a1-v12
+#FILE=y1all
+#TAG=y1a1-v02
 
 ./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
 

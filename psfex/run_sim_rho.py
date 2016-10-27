@@ -37,7 +37,7 @@ def main():
     print 'psfcats dir = ',cat_dir
 
     print os.path.join(cat_dir, '*_psf.fits')
-    cat_files = sorted(glob.glob(os.path.join(cat_dir, '*-000001_psf.fits')))
+    cat_files = sorted(glob.glob(os.path.join(cat_dir, '*_psf.fits')))
 
     min_sep = 0.5
     max_sep = 20

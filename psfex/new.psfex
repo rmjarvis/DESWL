@@ -63,9 +63,9 @@ CHECKPLOT_NAME
  
 #------------------------------ Check-Images ---------------------------------
  
-CHECKIMAGE_TYPE RESIDUALS       # Check-image types
-CHECKIMAGE_NAME resid.fits      # Check-image filenames
-CHECKIMAGE_CUBE Y               # Save check-images as datacubes (Y/N) ?
+#CHECKIMAGE_TYPE RESIDUALS       # Check-image types
+#CHECKIMAGE_NAME resid.fits      # Check-image filenames
+#CHECKIMAGE_CUBE Y               # Save check-images as datacubes (Y/N) ?
  
 #----------------------------- Miscellaneous ---------------------------------
  

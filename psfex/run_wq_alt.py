@@ -47,10 +47,8 @@ mode: bycore1
 N: {cores_per_job}
 
 # Select from this group(s)
-# I've had trouble with OS operations from neww2, so avoid that one.
-# astro0001 in particular, so possibly could try the other ones in new2.
-# I didn't try them individually.
-group: [new, new2, new3]
+# I've had trouble with OS operations from a31, a32, so avoid them.
+group: [new, new2, a22, a23, a24, a25, a26, a27, a28, a29, a30]
 """
 
 

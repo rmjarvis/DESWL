@@ -60,9 +60,14 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
-    keys = [ 'ra', 'dec', 'x', 'y', 'e1', 'e2', 'size', 'psfex_e1', 'psfex_e2', 'psfex_size' ]
+    keys = [ 'ra', 'dec', 'x', 'y', 'e1', 'e2', 'size', 'psf_e1', 'psf_e2', 'psf_size']
     all_data = { key : [] for key in keys }
     all_keys = keys
+
+    all_data['exp'] = []
+    all_data['ccd'] = []
+    all_keys = all_keys + ['exp', 'ccd' ]
+
     if subtract_mean:
         all_data['alt_e1'] = []
         all_data['alt_e2'] = []
@@ -112,7 +117,9 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
             print 'tiling is > %d.  Skip this exposure.'%args.max_tiling
             continue
 
-        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_exppsf.fits")
+        if not os.path.exists(cat_file):
+            cat_file = os.path.join(cat_dir, exp + "_psf.fits")
         print 'cat_file = ',cat_file
         try:
             with pyfits.open(cat_file) as pyf:
@@ -135,13 +142,16 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
         for key in keys:
             all_data[key].append(data[key][mask])
 
+        all_data['exp'].append([expnum] * ngood)
+        all_data['ccd'].append(data['ccdnum'][mask])
+
         if subtract_mean:
             e1 = data['e1'][mask]
             e2 = data['e2'][mask]
             s = data['size'][mask]
-            p_e1 = data['psfex_e1'][mask]
-            p_e2 = data['psfex_e2'][mask]
-            p_s = data['psfex_size'][mask]
+            p_e1 = data['psf_e1'][mask]
+            p_e2 = data['psf_e2'][mask]
+            p_s = data['psf_size'][mask]
             de1 = numpy.mean(e1-p_e1)
             de2 = numpy.mean(e2-p_e2)
             # Really want <(s^2 - p_s^2)/s^2> => 0  after subtracting ds
@@ -205,9 +215,9 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False):
     e1 = data[prefix+'e1']
     e2 = data[prefix+'e2']
     s = data[prefix+'size']
-    p_e1 = data['psfex_e1']
-    p_e2 = data['psfex_e2']
-    p_s = data['psfex_size']
+    p_e1 = data['psf_e1']
+    p_e2 = data['psf_e2']
+    p_s = data['psf_size']
 
     de1 = e1-p_e1
     de2 = e2-p_e2
@@ -274,9 +284,9 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
     ntilings = len(tile_data)
     print 'len(tile_data) = ',ntilings
 
-    de1 = [ d[prefix+'e1']-d['psfex_e1'] for d in tile_data ]
-    de2 = [ d[prefix+'e2']-d['psfex_e2'] for d in tile_data ]
-    dt = [ (d[prefix+'size']**2-d['psfex_size']**2)/d['size']**2 for d in tile_data ]
+    de1 = [ d[prefix+'e1']-d['psf_e1'] for d in tile_data ]
+    de2 = [ d[prefix+'e2']-d['psf_e2'] for d in tile_data ]
+    dt = [ (d[prefix+'size']**2-d['psf_size']**2)/d['size']**2 for d in tile_data ]
     for k in range(len(tile_data)):
         print 'k = ',k
         print 'mean de = ',numpy.mean(de1[k]),numpy.mean(de2[k])
@@ -520,8 +530,8 @@ def main():
         pass
 
     #filters = ['r', 'i']
-    #filters = ['r']
-    filters = None
+    filters = ['r']
+    #filters = None
     data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=False)
 
     print 'all filters = ',filters
@@ -553,11 +563,11 @@ def main():
 
     do_canonical_stats(data, filters, tilings, work)
 
-    do_cross_tiling_stats(data, filters, tilings, work)
+    #do_cross_tiling_stats(data, filters, tilings, work)
 
-    do_cross_band_stats(data, filters, tilings, work)
+    #do_cross_band_stats(data, filters, tilings, work)
 
-    do_odd_even_stats(data, filters, tilings, work)
+    #do_odd_even_stats(data, filters, tilings, work)
 
     do_fov_stats(data, filters, tilings, work)
 

@@ -2,7 +2,7 @@
 
 SIMVER=v009
 SIM=psfsim-stars-$SIMVER
-TAG=v04
+TAG=v09
 
 echo python run_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats
 python run_sim_rho.py --psf_cats=~/work/sims/$SIM/$TAG/psf_cats

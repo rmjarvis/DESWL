@@ -2,7 +2,7 @@
 
 SIMVER=v009
 SIM=psfsim-stars-$SIMVER
-TAG=v04
+TAG=v09
 
 /bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$SIM-$TAG.txt
 touch $DESDATA/EXTRA/blacklists/psfex-$SIM-$TAG.txt

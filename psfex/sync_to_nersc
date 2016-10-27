@@ -1,10 +1,12 @@
 #!/bin/bash
 
-TAG=y1a1-v02
-user=mjarvis@cori.nersc.gov
+#TAG=y1a1-v02
+TAG=v1
+user=mjarvis@edison.nersc.gov
 nersc=/global/project/projectdirs/des/wl/desdata
 
-for run in $( ls "$DESDATA/EXTRA/red" ); do
+#for run in $( ls "$DESDATA/EXTRA/red" ); do
+for run in $( awk '{print $1}' y1test ); do
     echo $run
     psfex_dir="EXTRA/red/$run/psfex-rerun"
     if [ -e "$DESDATA/$psfex_dir/$TAG" ]
@@ -19,5 +21,5 @@ for run in $( ls "$DESDATA/EXTRA/red" ); do
     fi
 done
 
-echo "rsync -rvz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists"
-rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists
+#echo "rsync -rvz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists"
+#rsync -rz $DESDATA/EXTRA/blacklists/psfex-$TAG.txt $user:$nersc/EXTRA/blacklists

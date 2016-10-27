@@ -41,7 +41,7 @@ def parse_args():
 
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
+    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
                         help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')
@@ -726,7 +726,8 @@ def main():
         print 'input_dir = ',input_dir
 
         # Get the file names in that directory.
-        files = sorted(glob.glob('%s/%s'%(exp_dir,args.exp_match)))
+        print '%s/%s'%(input_dir,args.exp_match)
+        files = sorted(glob.glob('%s/%s'%(input_dir,args.exp_match)))
 
         # Setup the columns for the output catalog:
         ccdnum_col = []
@@ -875,7 +876,7 @@ def main():
                     erin_e1 = erin_e2 = erin_size = erin_flag = numpy.zeros_like(x, dtype=int)
 
                 # Measure the desdm model shapes, sizes.
-                if desdm_dir is not None:
+                if not args.use_piff and desdm_dir is not None:
                     desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
                     desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psf_shapes(
                             x, y, desdm_file_name, file_name)

@@ -1,6 +1,7 @@
 make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
 go runs run_psfex.py, runs findstars and psfex
+- Use verify.py to verify that all files were either made or blacklisted.
 relink runs run_psfex.py, skipping the findstars and psfex steps and just relinks files
 sync_to_nersc copies the psfex files and blacklist over to nersc
 exp runs build_exp_catalog.py, builds the catalog of information about exposures
@@ -57,8 +58,13 @@ y1a1-v11 is like v02 except:
          INTERPFAC      4
          (recompiled PSFEx to get the last two)
          so far, run on y1s82 test bed
-y1a1-v12 is our first run with Piff.  Uses (essentially) the config file in branch #20 PR.
-         Separate 
+y1a1-v12 is our first run with Piff. 
+         stamp_size = 25
+         scale = 0.2
+         size = 17
+         start_sigma = 0.8
+         order = 3
+         nsigma = 4
 
 psfsims:
 v009-v01 BASIS_TYPE=PIXEL
@@ -70,6 +76,18 @@ v009-v01 BASIS_TYPE=PIXEL
          INTERPFAC=4
 v009-v02 PSF_SAMPLING=0.7
 v009-v03 PSF_SIZE=101,101
+v009-v04 Piff run with
+         stamp_size = 31
+         scale = 0.2
+         size = 21
+         start_sigma = 0.4
+         order = 2
+         nsigma = 4
+v009-v05 scale = 0.25, size = 21  # Worse
+v009-v06 scale = 0.20, size = 31  # Very slow, not better
+v009-v07 scale = 0.20, size = 21, order=3  # Better, new benchmark
+v009-v08 scale = 0.20, size = 21, order=4  # Very slow, not really any better
+v009-v09 scale = 0.20, size = 17, order=3  # Equivalent, faster, new benchmark
 
 
 Notes for Y2:

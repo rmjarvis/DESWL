@@ -61,7 +61,7 @@ def read_blacklists(tag):
     Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
     """
     import numpy
-    from fitsio import pyfits
+    import astropy.io.fits as pyfits
 
     d = {}  # The dict will be indexed by (expnum, ccdnum)
     print 'reading blacklists'
@@ -128,7 +128,7 @@ def read_image_header(img_file):
     print 'Start read_image_header'
     print img_file
     import galsim
-    from fitsio import pyfits
+    import astropy.io.fits as pyfits
 
     if img_file.endswith('fz'):
         hdu = 1

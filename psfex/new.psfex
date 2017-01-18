@@ -59,12 +59,12 @@ CHECKPLOT_DEV       NULL         # NULL, XWIN, TK, PS, PSC, XFIG, PNG,
 CHECKPLOT_RES       0           # Check-plot resolution (0 = default)
 CHECKPLOT_ANTIALIAS Y           # Anti-aliasing using convert (Y/N) ?
 CHECKPLOT_TYPE      NONE        #FWHM,ELLIPTICITY,COUNTS, COUNT_FRACTION,NONE
-CHECKPLOT_NAME      
+CHECKPLOT_NAME      NONE
  
 #------------------------------ Check-Images ---------------------------------
  
-#CHECKIMAGE_TYPE RESIDUALS       # Check-image types
-#CHECKIMAGE_NAME resid.fits      # Check-image filenames
+CHECKIMAGE_TYPE NONE            # Check-image types
+CHECKIMAGE_NAME NONE            # Check-image filenames
 #CHECKIMAGE_CUBE Y               # Save check-images as datacubes (Y/N) ?
  
 #----------------------------- Miscellaneous ---------------------------------
@@ -77,7 +77,7 @@ WRITE_XML       Y               # Write XML file (Y/N)?
 XML_NAME        psfex.xml       # Filename for XML output
 XSL_URL         file:///usr/local/share/psfex/psfex.xsl
                                 # Filename for XSL style-sheet
-NTHREADS        2               # Number of simultaneous threads for
+NTHREADS        1               # Number of simultaneous threads for
                                 # the SMP version of PSFEx
                                 # 0 = automatic
  

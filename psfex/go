@@ -1,10 +1,11 @@
 #!/bin/bash
 
 #FILE=y1s82
-#FILE=y1all_r
-FILE=redo_exp
-TAG=y1a1-v12
+FILE=y1all_r
+#FILE=y1test1
+#FILE=redo_exp
+TAG=y1a1-v13
 
-#/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
-#./run_wq_exp.py --njobs=300 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex-alt"
-./run_wq_exp.py --njobs=250 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --run_piff=1 --rm_files=1 --piff_config=piff.yaml"
+/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
+./run_wq_exp.py --njobs=250 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex --reserve=0.2"
+#./run_wq_exp.py --njobs=250 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --run_piff=1 --rm_files=1 --piff_config=piff.yaml"

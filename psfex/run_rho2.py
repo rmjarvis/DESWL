@@ -30,19 +30,25 @@ def parse_args():
                         help='list of runs')
     parser.add_argument('--max_tiling', default=10,
                         help='maximum tiling to use')
+    parser.add_argument('--use_reserved', default=False, action='store_const', const=True,
+                        help='just use the objects with the RESERVED flag')
 
     # Options
     parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
                         help='Only do 1 ccd per exposure (used for debugging)')
+    parser.add_argument('--oldkeys', default=False, action='store_const', const=True,
+                        help='Use old psfex_* keys in the cats files')
 
     args = parser.parse_args()
     return args
 
 
-def read_data(args, work, limit_filters=None, subtract_mean=True):
+def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False):
     import astropy.io.fits as pyfits
 
     datadir = '/astro/u/astrodat/data/DES'
+
+    RESERVED = 64
 
     if args.file != '':
         print 'Read file ',args.file
@@ -60,7 +66,7 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
     with pyfits.open(expinfo_file) as pyf:
         expinfo = pyf[1].data
 
-    keys = [ 'ra', 'dec', 'x', 'y', 'e1', 'e2', 'size', 'psf_e1', 'psf_e2', 'psf_size']
+    keys = ['ra', 'dec', 'x', 'y', 'e1', 'e2', 'size', 'psf_e1', 'psf_e2', 'psf_size']
     all_data = { key : [] for key in keys }
     all_keys = keys
 
@@ -78,10 +84,20 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
         all_data['fov_y'] = []
         all_keys = all_keys + ['fov_x', 'fov_y']
 
+    if args.oldkeys:
+        inkeys =  [ k.replace('psf_','psfex_') for k in keys ]
+    else:
+        inkeys = keys
+
     all_filters = []  # This keeps track of the filter for each record
     all_tilings = []  # This keeps track of the tiling for each record
     filters = set()   # This is the set of all filters being used
     tilings = set()   # This is the set of all tilings being used
+
+    ntot = 0
+    nused = 0
+    nreserved = 0
+    ngood = 0
 
     cat_dir = os.path.join(work,'psf_cats')
 
@@ -131,7 +147,20 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
         #ccdnums = numpy.unique(data['ccdnum'])
         #print 'ccdnums = ',ccdnums
 
-        mask = (data['flag'] == 0)
+        print 'n = ',len(data)
+        print 'nused = ',numpy.sum((data['flag'] & 1) != 0)
+        print 'nreserved = ',numpy.sum((data['flag'] & 64) != 0)
+        print 'ngood = ',numpy.sum(data['flag'] == 0)
+        ntot += len(data)
+        nused += numpy.sum((data['flag'] & 1) != 0)
+        nreserved += numpy.sum((data['flag'] & 64) != 0)
+        ngood += numpy.sum(data['flag'] == 0)
+
+        if args.use_reserved:
+            mask = (data['flag'] == RESERVED)
+        else:
+            mask = (data['flag'] == 0)
+
         ngood = numpy.sum(mask)
         assert ngood == len(data[mask])
         if ngood == 0:
@@ -139,8 +168,8 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
             print 'Probably due to astrometry flags. Skip this exposure.'
             continue
 
-        for key in keys:
-            all_data[key].append(data[key][mask])
+        for key, inkey in zip(keys, inkeys):
+            all_data[key].append(data[inkey][mask])
 
         all_data['exp'].append([expnum] * ngood)
         all_data['ccd'].append(data['ccdnum'][mask])
@@ -203,6 +232,11 @@ def read_data(args, work, limit_filters=None, subtract_mean=True):
     data['filter'] = all_filters
     data['tiling'] = all_tilings
     print 'made recarray'
+
+    print 'ntot = ',ntot
+    print 'nused = ',nused
+    print 'nreserved = ',nreserved
+    print 'ngood = ',ngood
 
     return data, filters, tilings
 
@@ -484,7 +518,7 @@ def do_fov_stats(data, filters, tilings, work, prefix='', name='fov'):
         write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
 
 
-def set_args():
+def set_args(**kwargs):
     # Used when running from a shell python to setup args.
     class Namespace: 
         def __init__(self, **kwargs):
@@ -504,8 +538,11 @@ def set_args():
                       max_tiling=10,
                       runs='',
                       single_ccd=False,
+                      oldkeys=False,
                       tag='v1',
                       work='~/work/psfex_rerun/v1')
+    for key in kwargs:
+        setattr(args, key, kwargs[key])
     return args
 
 def write_data(data, file_name):

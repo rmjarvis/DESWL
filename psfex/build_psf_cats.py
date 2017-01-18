@@ -18,11 +18,13 @@ MEAS_CENTROID_SHIFT = 4
 PSFEX_BAD_MEASUREMENT = 8
 PSFEX_CENTROID_SHIFT = 16
 PSFEX_FAILURE = 32
-DESDM_BAD_MEASUREMENT = 64
-DESDM_CENTROID_SHIFT = 128
-DESDM_FAILURE = 256
-DESDM_FLAG_FACTOR = DESDM_BAD_MEASUREMENT / PSFEX_BAD_MEASUREMENT
+RESERVED = 64
+#DESDM_BAD_MEASUREMENT = 64  # Prior to y1a1-v13, this was the meaning of 64-256
+#DESDM_CENTROID_SHIFT = 128
+#DESDM_FAILURE = 256
+#DESDM_FLAG_FACTOR = DESDM_BAD_MEASUREMENT / PSFEX_BAD_MEASUREMENT
 BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure blacklist flag
+                        # blacklist flags go up to 64, so this uses up to 1<<15
  
 def parse_args():
     import argparse
@@ -38,7 +40,8 @@ def parse_args():
                         help='location of output directory (default: $DATADIR/EXTRA/red/{run}/psfex-rerun/{exp}/)')
     parser.add_argument('--input_dir', default=None,
                         help='location of input directory (default: $DATADIR/OPS/red/{run}/red/{exp}/)')
-
+    parser.add_argument('--reference_tag', default=None,
+                        help='A reference tag from which to take the PSFEx outliers used when main tag uses reserved stars')
 
     # Exposure inputs
     parser.add_argument('--exp_match', default='*_[0-9][0-9].fits*',
@@ -99,6 +102,7 @@ def read_used(exp_dir, root, use_piff=False):
         file_name = os.path.join(exp_dir, root + '_psfcat.psf')
         if not os.path.isfile(file_name):
             return None
+        print 'Reading used file: ',file_name
         data = fitsio.read(file_name, ext='psf_stars')
         # Make this look like a PSFEx used file by renaming x,y -> X_IMAGE, Y_IMAGE
         assert data.dtype.names[0] == 'x'
@@ -107,7 +111,9 @@ def read_used(exp_dir, root, use_piff=False):
     else:
         file_name = os.path.join(exp_dir, root + '_psfcat.used.fits')
         if not os.path.isfile(file_name):
+            print 'Used file: ',file_name,' does not exist.'
             return None
+        print 'Reading used file: ',file_name
         f = pyfits.open(file_name, memmap=False)
         data = copy.copy(f[2].data)
         f.close()
@@ -123,6 +129,20 @@ def read_used(exp_dir, root, use_piff=False):
         # NORM_PSF: Big numbers.  I'm guessing total flux?  Possibly weighted flux.
         # CHI2_PSF: Mostly a little more than 1.  Reduced chi^2 presumably.
         # RESI_PSF: Very small numbers. <1e-4 typically.  Presumably the rms residual.
+    return data
+
+def read_reserve(exp_dir, root):
+    """Read in the _reserve.fits file if it exists.
+    """
+    file_name = os.path.join(exp_dir, root + '_reserve.fits')
+    if not os.path.isfile(file_name):
+        return None
+    print 'Read reserve file ',file_name
+    try:
+        data = fitsio.read(file_name)
+    except Exception as e:
+        print 'Caught ',e
+        return None
     return data
 
 def read_findstars(exp_dir, root):
@@ -149,9 +169,9 @@ def read_findstars(exp_dir, root):
             new_data['y'] = data['Y_IMAGE']
             new_data['mag'] = data['MAG_AUTO']
             new_data['star_flag'][:] = 1
-            print 'id = ',new_data['id']
-            print 'x = ',new_data['x']
-            print 'y = ',new_data['y']
+            #print 'id = ',new_data['id']
+            #print 'x = ',new_data['x']
+            #print 'y = ',new_data['y']
             return new_data
         except Exception as e:
             print 'Caught exception:'
@@ -203,22 +223,22 @@ def find_index(x1, y1, x2, y2):
     return index
 
  
-def find_fs_index(used_data, fs_data):
+def find_fs_index(used_data, fs_data, suffix='_IMAGE'):
     """Find the index in the fs_data records corresponding to each star in used_data.
     """
-    used_x = used_data['X_IMAGE']
-    used_y = used_data['Y_IMAGE']
+    used_x = used_data['X' + suffix]
+    used_y = used_data['Y' + suffix]
     fs_x = fs_data['x']
     fs_y = fs_data['y']
     return find_index(used_x, used_y, fs_x, fs_y)
 
-def find_used_index(fs_data, used_data):
+def find_used_index(fs_data, used_data, suffix='_IMAGE'):
     """Find the index in the used_data records corresponding to each star in fs_data.
     """
     fs_x = fs_data['x']
     fs_y = fs_data['y']
-    used_x = used_data['X_IMAGE']
-    used_y = used_data['Y_IMAGE']
+    used_x = used_data['X' + suffix]
+    used_y = used_data['Y' + suffix]
     return find_index(fs_x, fs_y, used_x, used_y)
 
 
@@ -235,13 +255,13 @@ def measure_shapes(xlist, ylist, file_name, wcs, noweight):
     #wt_im = galsim.fits.read(file_name, hdu=3)
     print 'file_name = ',file_name
     with pyfits.open(file_name) as f:
-        print 'f = ',f
-        print 'len(f) = ',len(f)
+        #print 'f = ',f
+        #print 'len(f) = ',len(f)
         # Some DES images have bad cards.  Fix them with verify('fix') before sending to GalSim.
         for i in range(1,len(f)):
             f[i].verify('fix')
-            print 'f[i] = ',f[i]
-        print 'after verify, f = ',f
+            #print 'f[i] = ',f[i]
+        #print 'after verify, f = ',f
         if file_name.endswith('fz'):
             im = galsim.fits.read(hdu_list=f, hdu=1, compression='rice')
             if noweight:
@@ -256,7 +276,7 @@ def measure_shapes(xlist, ylist, file_name, wcs, noweight):
             else:
                 bp_im = galsim.fits.read(hdu_list=f, hdu=1)
                 wt_im = galsim.fits.read(hdu_list=f, hdu=2)
-        print 'im = ',im
+        #print 'im = ',im
 
     if not noweight:
         # The badpix image is offset by 32768 from the true value.  Subtract it off.
@@ -335,8 +355,8 @@ def measure_shapes(xlist, ylist, file_name, wcs, noweight):
 
         #print 'shape_data = ',shape_data
         #print 'image_bounds = ',shape_data.image_bounds
-        print 'shape = ',shape_data.observed_shape
-        print 'sigma = ',shape_data.moments_sigma
+        #print 'shape = ',shape_data.observed_shape
+        #print 'sigma = ',shape_data.moments_sigma
         #print 'amp = ',shape_data.moments_amp
         #print 'centroid = ',shape_data.moments_centroid
         #print 'rho4 = ',shape_data.moments_rho4
@@ -364,9 +384,9 @@ def measure_shapes(xlist, ylist, file_name, wcs, noweight):
         # So, not all that different, especially for stars with e ~= 0.
 
         # Account for the WCS:
-        print 'wcs = ',wcs
+        #print 'wcs = ',wcs
         jac = wcs.jacobian(galsim.PositionD(x,y))
-        print 'jac = ',jac
+        #print 'jac = ',jac
         # ( Iuu  Iuv ) = ( dudx  dudy ) ( Ixx  Ixy ) ( dudx  dvdx )
         # ( Iuv  Ivv )   ( dvdx  dvdy ) ( Ixy  Iyy ) ( dudy  dvdy )
         M = numpy.matrix( [[ 1+e1, e2 ], [ e2, 1-e1 ]] )
@@ -437,12 +457,13 @@ def measure_psf_shapes(xlist, ylist, psf_file_name, file_name, use_piff=False):
         y = ylist[i]
         print 'Measure PSFEx model shape at ',x,y
         image_pos = galsim.PositionD(x,y)
+        #print 'im_pos = ',image_pos
         if use_piff:
             im = psf.draw(x=x, y=y, image=im)
         else:
             psf_i = psf.getPSF(image_pos)
             im = psf_i.drawImage(image=im, method='no_pixel')
-        #print 'im = ',im.array
+        #print 'im = ',im
 
         try:
             shape_data = im.FindAdaptiveMom(strict=False)
@@ -450,6 +471,7 @@ def measure_psf_shapes(xlist, ylist, psf_file_name, file_name, use_piff=False):
             print ' *** Bad measurement (caught exception).  Mask this one.'
             flag_list[i] = PSFEX_BAD_MEASUREMENT
             continue
+        #print 'shape_date = ',shape_data
 
         if shape_data.moments_status != 0:
             print 'status = ',shape_data.moments_status
@@ -459,9 +481,9 @@ def measure_psf_shapes(xlist, ylist, psf_file_name, file_name, use_piff=False):
 
         dx = shape_data.moments_centroid.x - im.trueCenter().x
         dy = shape_data.moments_centroid.y - im.trueCenter().y
-        print 'centroid = ',shape_data.moments_centroid
-        print 'trueCenter = ',im.trueCenter()
-        print 'dcentroid = ',dx,dy
+        #print 'centroid = ',shape_data.moments_centroid
+        #print 'trueCenter = ',im.trueCenter()
+        #print 'dcentroid = ',dx,dy
         if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
             print ' *** Centroid shifted by ',dx,dy,'.  Mask this one.'
             flag_list[i] = PSFEX_CENTROID_SHIFT
@@ -743,12 +765,6 @@ def main():
         psf_e1_col = []
         psf_e2_col = []
         psf_size_col = []
-        erin_e1_col = []
-        erin_e2_col = []
-        erin_size_col = []
-        desdm_e1_col = []
-        desdm_e2_col = []
-        desdm_size_col = []
 
         for file_name in files:
             print '\nProcessing ', file_name
@@ -795,7 +811,11 @@ def main():
             print '   n_fs = ',n_fs
             mask = fs_data['star_flag'] == 1
 
-            used_data = read_used(exp_dir, root, use_piff=args.use_piff)
+            if args.reference_tag:
+                used_dir = exp_dir.replace(args.tag, args.reference_tag)
+            else:
+                used_dir = exp_dir
+            used_data = read_used(used_dir, root, use_piff=args.use_piff)
             if used_data is None:
                 print '   No .used.fits file found'
                 continue
@@ -869,41 +889,43 @@ def main():
                 psf_file_name = os.path.join(exp_dir, root + '_psfcat.psf')
                 psf_e1, psf_e2, psf_size, psf_flag = measure_psf_shapes(
                         x, y, psf_file_name, file_name, use_piff=args.use_piff)
-                if not args.use_piff:
-                    erin_e1, erin_e2, erin_size, erin_flag = measure_psf_shapes_erin(
-                            x, y, psf_file_name, file_name)
-                else:
-                    erin_e1 = erin_e2 = erin_size = erin_flag = numpy.zeros_like(x, dtype=int)
-
-                # Measure the desdm model shapes, sizes.
-                if not args.use_piff and desdm_dir is not None:
-                    desdm_file_name = os.path.join(desdm_dir, root + '_psfcat.psf')
-                    desdm_e1, desdm_e2, desdm_size, desdm_flag = measure_psf_shapes(
-                            x, y, desdm_file_name, file_name)
-                    desdm_flag = [ f * DESDM_FLAG_FACTOR for f in desdm_flag ]
-                else:
-                    desdm_e1 = desdm_e2 = desdm_size = desdm_flag = numpy.zeros_like(x, dtype=int)
             except Exception as e:
                 print 'Catastrophic error trying to measure the shapes:'
                 print e
                 print 'Skip this file'
-                raise
+                #raise
                 continue
 
             # Put all the flags together:
-            flag = [ m | p | e | d for m,p,e,d in zip(meas_flag,psf_flag,erin_flag,desdm_flag) ]
+            flag = numpy.array([ m | p for m,p in zip(meas_flag,psf_flag) ])
             print 'meas_flag = ',meas_flag
             print 'psf_flag = ',psf_flag
-            print 'erin_flag = ',erin_flag
-            print 'desdm_flag = ',desdm_flag
             print 'flag = ',flag
 
             # Add in flags for bad indices
             bad_index = numpy.where(used_index < 0)[0]
             print 'bad_index = ',bad_index
-            for i in bad_index:
-                flag[i] |= NOT_USED
+            flag[bad_index] |= NOT_USED
             print 'flag => ',flag
+
+            # Add in flags for reserved stars
+            reserve_data = read_reserve(exp_dir, root)
+            if reserve_data is None:
+                print '   No _reserve.fits file found'
+            else:
+                n_reserve = len(reserve_data)
+                print '   n_reserve = ',n_reserve
+
+                # Figure out which fs objects go with which reserved objects.
+                fs2_index = find_fs_index(reserve_data, fs_data, suffix='WIN_IMAGE')
+                res_index = find_used_index(fs_data[mask], reserve_data, suffix='WIN_IMAGE')
+                print '   fs2_index = ',fs2_index
+                print '   res_index = ',res_index
+
+                res_index = numpy.where(res_index >= 0)[0]
+                print 'res_index = ',res_index
+                flag[res_index] |= RESERVED
+                print 'flag => ',flag
 
             # If the ccd is blacklisted, everything gets the blacklist flag
             if black_flag:
@@ -913,7 +935,7 @@ def main():
                 print 'type(flag[0] | black_flag) = ',type(flag[0] | black_flag)
                 black_flag *= BLACK_FLAG_FACTOR
                 print 'black_flag => ',black_flag
-                flag = [ f | black_flag for f in flag ]
+                flag |= black_flag
                 print 'flag => ',flag
 
             # Compute ra,dec from the wcs:
@@ -940,12 +962,6 @@ def main():
             psf_e1_col.extend(psf_e1)
             psf_e2_col.extend(psf_e2)
             psf_size_col.extend(psf_size)
-            erin_e1_col.extend(erin_e1)
-            erin_e2_col.extend(erin_e2)
-            erin_size_col.extend(erin_size)
-            desdm_e1_col.extend(desdm_e1)
-            desdm_e2_col.extend(desdm_e2)
-            desdm_size_col.extend(desdm_size)
             assert len(ccdnum_col) == len(x_col)
             assert len(ccdnum_col) == len(y_col)
             assert len(ccdnum_col) == len(ra_col)
@@ -958,12 +974,6 @@ def main():
             assert len(ccdnum_col) == len(psf_e1_col)
             assert len(ccdnum_col) == len(psf_e2_col)
             assert len(ccdnum_col) == len(psf_size_col)
-            assert len(ccdnum_col) == len(erin_e1_col)
-            assert len(ccdnum_col) == len(erin_e2_col)
-            assert len(ccdnum_col) == len(erin_size_col)
-            assert len(ccdnum_col) == len(desdm_e1_col)
-            assert len(ccdnum_col) == len(desdm_e2_col)
-            assert len(ccdnum_col) == len(desdm_size_col)
 
             cols = pyfits.ColDefs([
                 pyfits.Column(name='ccdnum', format='I', array=[ccdnum] * n_fs),
@@ -979,12 +989,6 @@ def main():
                 pyfits.Column(name='psf_e1', format='E', array=psf_e1),
                 pyfits.Column(name='psf_e2', format='E', array=psf_e2),
                 pyfits.Column(name='psf_size', format='E', array=psf_size),
-                pyfits.Column(name='erin_e1', format='E', array=erin_e1),
-                pyfits.Column(name='erin_e2', format='E', array=erin_e2),
-                pyfits.Column(name='erin_size', format='E', array=erin_size),
-                pyfits.Column(name='desdm_e1', format='E', array=desdm_e1),
-                pyfits.Column(name='desdm_e2', format='E', array=desdm_e2),
-                pyfits.Column(name='desdm_size', format='E', array=desdm_size),
                 ])
 
             # Depending on the version of pyfits, one of these should work:
@@ -1014,12 +1018,6 @@ def main():
             pyfits.Column(name='psf_e1', format='E', array=psf_e1_col),
             pyfits.Column(name='psf_e2', format='E', array=psf_e2_col),
             pyfits.Column(name='psf_size', format='E', array=psf_size_col),
-            pyfits.Column(name='erin_e1', format='E', array=erin_e1_col),
-            pyfits.Column(name='erin_e2', format='E', array=erin_e2_col),
-            pyfits.Column(name='erin_size', format='E', array=erin_size_col),
-            pyfits.Column(name='desdm_e1', format='E', array=desdm_e1_col),
-            pyfits.Column(name='desdm_e2', format='E', array=desdm_e2_col),
-            pyfits.Column(name='desdm_size', format='E', array=desdm_size_col),
             ])
 
         # Depending on the version of pyfits, one of these should work:

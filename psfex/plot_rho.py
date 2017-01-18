@@ -720,10 +720,10 @@ def plot_overall_rho(work):
 
     print 'Plot overall rho stats'
 
-    base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
+    #base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
     #base_keys = ['ri', 'r', 'i']
     #base_keys = ['ri']
-    #base_keys = ['r']
+    base_keys = ['r']
 
     # Build full key from these for the three kinds
     keys = [ 'all_' + k for k in base_keys ]

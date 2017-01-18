@@ -1,2 +1,3 @@
-wq ls | grep jarvis | grep ' W ' | awk 'BEGIN {printf "wq rm "}; {printf "%d ",$1}; END {printf "\n"}' > ./kj_temp
+#wq ls | grep jarvis | grep ' W ' | awk 'BEGIN {printf "wq rm "}; {printf "%d ",$1}; END {printf "\n"}' > ./kj_temp
+wq ls | grep jarvis | awk 'BEGIN {printf "wq rm "}; {printf "%d ",$1}; END {printf "\n"}' > ./kj_temp
 echo "Run kj_temp to remove the currently waiting wq jobs."

@@ -9,6 +9,7 @@ import numpy
 import copy
 import glob
 import time
+import fitsio
 
 # Define the parameters for the blacklist
 
@@ -120,6 +121,8 @@ def parse_args():
                         help='How much extra room around tape bumps to exclude stars in units of FWHM')
     parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
                         help='Only do 1 ccd per exposure (used for debugging)')
+    parser.add_argument('--reserve', default=0, type=float,
+                        help='Reserve some fraction of the good stars for testing')
 
 
     args = parser.parse_args()
@@ -333,15 +336,15 @@ def run_findstars(wdir, root, cat_file, fs_dir, fs_config):
         # create new catalog file with only these entries
         hdu3 = pyfits.BinTableHDU(data)
         hdu3.name = 'LDAC_OBJECTS'
-        list = pyfits.HDUList([hdu1, hdu2, hdu3])
+        hdu_list = pyfits.HDUList([hdu1, hdu2, hdu3])
         new_cat_file = cat_file.replace('psfcat','psfcat_findstars')
-        list.writeto(new_cat_file,clobber=True)
+        hdu_list.writeto(new_cat_file,clobber=True)
 
     return new_cat_file, nstars, ntot
 
 def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
                      mag_cut, nbright_stars, max_mag,
-                     use_tapebumps, tapebump_extra, fwhm):
+                     use_tapebumps, tapebump_extra, reserve, fwhm):
     """Remove stars that are considered bad for some reason.
 
     Currently these reasons include:
@@ -391,17 +394,43 @@ def remove_bad_stars(wdir, root, ccdnum, cat_file, tbdata,
         print '   after exclude tapebumps: len(data) = ',len(data)
         new_cat_file = new_cat_file.replace('psfcat','psfcat_tb')
 
+    if reserve:
+        print '   reserve ',reserve
+        n = len(data)
+        perm = numpy.random.permutation(n)
+        n1 = int(reserve * n)
+        print '   initial ids = ',data['NUMBER']
+        reserve_data = data[perm[:n1]]
+        data = data[perm[n1:]]
+        print '   reserve_data ids = ',reserve_data['NUMBER']
+        print '   final ids = ',data['NUMBER']
+        print '   after reserve: len(data) = ',len(data)
+        new_cat_file = new_cat_file.replace('psfcat','psfcat_reserve_%0.2f'%reserve)
+
+        reserve_file = os.path.join(wdir,root+'_reserve.fits')
+        cols = []
+        dtypes = []
+        for name in ['NUMBER', 'FLAGS', 'XWIN_IMAGE', 'YWIN_IMAGE', 'BACKGROUND', 
+                     'ALPHAWIN_J2000', 'DELTAWIN_J2000', 'FLUX_RADIUS']:
+            cols.append(reserve_data[name])
+            dtypes.append((name, reserve_data[name].dtype))
+        print 'cols = ',cols
+        print 'dtypes = ',dtypes
+        reserve_data = numpy.array(list(zip(*cols)), dtype=dtypes)
+        with fitsio.FITS(reserve_file,'rw',clobber=True) as f:
+            f.write_table(reserve_data)
+
     # create new catalog file with only these entries
     with pyfits.open(cat_file,memmap=False) as pyf:
         hdu1 = copy.copy(pyf[0])
         hdu2 = copy.copy(pyf[1])
         hdu3 = pyfits.BinTableHDU(data)
         hdu3.name = 'LDAC_OBJECTS'
-        list = pyfits.HDUList([hdu1, hdu2, hdu3])
+        hdu_list = pyfits.HDUList([hdu1, hdu2, hdu3])
         # Apparently pyf still needs to be open when this command occurs in order to 
         # be able to handle the hdu1 and hdu2 objects correctly.
         # Hence, we don't read those earlier when we read data.
-        list.writeto(new_cat_file,clobber=True)
+        hdu_list.writeto(new_cat_file,clobber=True)
 
     return new_cat_file, len(data)
 
@@ -434,9 +463,9 @@ def run_psfex(wdir, root, cat_file, psf_file, used_file, xml_file, resid_file,
         print '   deleting existing',psf_file
         os.unlink(psf_file)
     print '   running psfex'
-    psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file} -CHECKIMAGE_NAME {resid_file}'.format(
+    psf_cmd = '{psfex_exe} {cat_file} -c {config} -OUTCAT_TYPE FITS_LDAC -OUTCAT_NAME {used_file} -XML_NAME {xml_file}'.format(
             psfex_exe=psfex_exe, cat_file=cat_file, config=psfex_config,
-            used_file=used_file, xml_file=xml_file, resid_file=resid_file)
+            used_file=used_file, xml_file=xml_file)
     print psf_cmd
     os.system(psf_cmd)
 
@@ -630,6 +659,7 @@ def main():
                     root = os.path.splitext(base_file)[0]
                     ccdnum = 0
             print '   root, ccdnum = ',root,ccdnum
+            cat_file = None
 
             try:
 
@@ -669,11 +699,11 @@ def main():
 
 
                 # If we want to cut the brighest magnitudes
-                if args.mag_cut>0 or args.use_tapebumps or args.max_mag>0:
+                if args.mag_cut>0 or args.use_tapebumps or args.max_mag>0 or args.reserve>0:
                     cat_file, nstars = remove_bad_stars(
                             wdir, root, ccdnum, cat_file, tbdata,
                             args.mag_cut, args.nbright_stars, args.max_mag,
-                            args.use_tapebumps, args.tapebump_extra, fwhm)
+                            args.use_tapebumps, args.tapebump_extra, args.reserve, fwhm)
                     # Recheck this.
                     if nstars < FEW_STARS:
                         print '     -- flag for too few stars: ',nstars
@@ -699,6 +729,7 @@ def main():
                     star_file = cat_file
                 psf_file = os.path.join(wdir,root+'_psfcat.psf')
                 used_file = os.path.join(wdir,root+'_psfcat.used.fits')
+                reserve_file = os.path.join(wdir,root+'_reserve.fits')
                 xml_file = os.path.join(wdir,root+'_psfcat.xml')
 
                 if args.run_psfex:
@@ -733,7 +764,7 @@ def main():
 
                 print 'rm_files = ',args.rm_files
                 if args.rm_files:
-                    remove_temp_files(wdir, root, star_file, psf_file, used_file,
+                    remove_temp_files(wdir, root, star_file, psf_file, used_file, reserve_file,
                                       xml_file)
 
             except NoStarsException:

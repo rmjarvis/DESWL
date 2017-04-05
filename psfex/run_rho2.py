@@ -49,6 +49,7 @@ def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False
     datadir = '/astro/u/astrodat/data/DES'
 
     RESERVED = 64
+    BAD_CCDS = [2, 31, 61]
 
     if args.file != '':
         print 'Read file ',args.file
@@ -156,10 +157,11 @@ def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False
         nreserved += numpy.sum((data['flag'] & 64) != 0)
         ngood += numpy.sum(data['flag'] == 0)
 
+        bad_ccd = numpy.in1d(data['ccdnum'], BAD_CCDS)
         if args.use_reserved:
-            mask = (data['flag'] == RESERVED)
+            mask = (data['flag'] == RESERVED) & ~bad_ccd
         else:
-            mask = (data['flag'] == 0)
+            mask = (data['flag'] == 0) & ~bad_ccd
 
         ngood = numpy.sum(mask)
         assert ngood == len(data[mask])
@@ -241,7 +243,7 @@ def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False
     return data, filters, tilings
 
 
-def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False):
+def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
     """Compute the rho statistics
     """
     import treecorr
@@ -287,8 +289,8 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False):
             cat.name = tag + ":"  + cat.name
 
     min_sep = 0.5
-    bin_size = 0.5
-    bin_slop = 0.3
+    bin_size = 0.2
+    bin_slop = 0.1
 
     results = []
     for (cat1, cat2) in [ (decat, decat),
@@ -305,6 +307,14 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False):
             rho.process(cat1)
         else:
             rho.process(cat1, cat2)
+        results.append(rho)
+
+    if alt_tt:
+        print 'Doing alt correlation of %s vs %s'%(dtcat.name, dtcat.name)
+
+        rho = treecorr.KKCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
+                                     bin_size=bin_size, bin_slop=bin_slop, verbose=2)
+        rho.process(dtcat)
         results.append(rho)
 
     return results
@@ -342,9 +352,9 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
             for cat, tag in zip(catlist, tags):
                 cat.name = tag + ":"  + cat.name
 
-    min_sep = 0.3
+    min_sep = 0.5
     bin_size = 0.2
-    bin_slop = 0.3
+    bin_slop = 0.1
 
     results = []
     for (catlist1, catlist2) in [ (decats, decats),
@@ -372,11 +382,10 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
 
     return results
 
-def write_stats(rho1, rho2, rho3, rho4, rho5, stat_file):
+def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
     import json
 
-    stats = []
-    stats.append([
+    stats = [
         rho1.meanlogr.tolist(),
         rho1.xip.tolist(),
         rho1.xip_im.tolist(),
@@ -403,11 +412,16 @@ def write_stats(rho1, rho2, rho3, rho4, rho5, stat_file):
         rho5.xim.tolist(),
         rho5.xim_im.tolist(),
         rho5.varxi.tolist(),
-    ])
+    ]
+    if corr_tt is not None:
+        stats.extend([
+            corr_tt.xi.tolist(),
+            corr_tt.varxi.tolist()
+        ])
     #print 'stats = ',stats
     print 'stat_file = ',stat_file
     with open(stat_file,'w') as fp:
-        json.dump(stats, fp)
+        json.dump([stats], fp)
     print 'Done writing ',stat_file
 
 
@@ -431,7 +445,7 @@ def filter_combinations(filters, single=True, combo=True):
     return use_filters
 
 
-def do_canonical_stats(data, filters, tilings, work, prefix='', name='all'):
+def do_canonical_stats(data, filters, tilings, work, prefix='', name='all', alt_tt=False):
     print 'Start CANONICAL: ',prefix,name
     # Measure the canonical rho stats using all pairs:
     use_filters = filter_combinations(filters)
@@ -441,10 +455,9 @@ def do_canonical_stats(data, filters, tilings, work, prefix='', name='all'):
         print 'sum(mask) = ',numpy.sum(mask)
         print 'len(data[mask]) = ',len(data[mask])
         tag = ''.join(filt)
-        rho1, rho2, rho3, rho4, rho5 = measure_rho(data[mask], max_sep=300, tag=tag,
-                                                   prefix=prefix)
+        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
-        write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
+        write_stats(stat_file,*stats)
 
 def do_cross_tiling_stats(data, filters, tilings, work, prefix='', name='cross'):
     print 'Start CROSS_TILING: ',prefix,name
@@ -460,10 +473,9 @@ def do_cross_tiling_stats(data, filters, tilings, work, prefix='', name='cross')
             tile_data.append(data[mask])
         tag = ''.join(filt)
         tags = [ tag + ":" + str(til) for til in tilings ]
-        rho1, rho2, rho3, rho4, rho5 = measure_cross_rho(tile_data, max_sep=300, tags=tags,
-                                                         prefix=prefix)
+        stats = measure_cross_rho(tile_data, max_sep=300, tags=tags, prefix=prefix)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
-        write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
+        write_stats(stat_file,*stats)
 
 
 def do_cross_band_stats(data, filters, tilings, work, prefix='', name='crossband'):
@@ -477,11 +489,10 @@ def do_cross_band_stats(data, filters, tilings, work, prefix='', name='crossband
         for f in filt:
             mask = data['filter'] == f
             filt_data.append(data[mask])
-        rho1, rho2, rho3, rho4, rho5 = measure_cross_rho(filt_data, max_sep=300, tags=filt,
-                                                         prefix=prefix)
+        stats = measure_cross_rho(filt_data, max_sep=300, tags=filt, prefix=prefix)
         tag = ''.join(filt)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
-        write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
+        write_stats(stat_file,*stats)
 
 
 def do_odd_even_stats(data, filters, tilings, work, prefix='', name='oddeven'):
@@ -496,10 +507,9 @@ def do_odd_even_stats(data, filters, tilings, work, prefix='', name='oddeven'):
         cats = [ data[odd], data[even] ]
         tag = ''.join(filt)
         tags = [ tag + ":odd", tag + ":even" ]
-        rho1, rho2, rho3, rho4, rho5 = measure_cross_rho(cats, max_sep=300, tags=tags,
-                                                         prefix=prefix)
+        stats = measure_cross_rho(cats, max_sep=300, tags=tags, prefix=prefix)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
-        write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
+        write_stats(stat_file,*stats)
 
 
 def do_fov_stats(data, filters, tilings, work, prefix='', name='fov'):
@@ -512,10 +522,10 @@ def do_fov_stats(data, filters, tilings, work, prefix='', name='fov'):
         print 'sum(mask) = ',numpy.sum(mask)
         print 'len(data[mask]) = ',len(data[mask])
         tag = ''.join(filt)
-        rho1, rho2, rho3, rho4, rho5 = measure_rho(data[mask], max_sep=300, tag=tag,
+        stats = measure_rho(data[mask], max_sep=300, tag=tag,
                                                    prefix=prefix, use_xy=True)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
-        write_stats(rho1,rho2,rho3,rho4,rho5,stat_file)
+        write_stats(stat_file,*stats)
 
 
 def set_args(**kwargs):
@@ -566,9 +576,10 @@ def main():
         print e
         pass
 
+    filters = None
+    #filters = ['r']
     #filters = ['r', 'i']
-    filters = ['r']
-    #filters = None
+    #filters = ['r', 'i', 'z']
     data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=False)
 
     print 'all filters = ',filters
@@ -598,7 +609,7 @@ def main():
 
     #filters = ['r', 'i']
 
-    do_canonical_stats(data, filters, tilings, work)
+    do_canonical_stats(data, filters, tilings, work, alt_tt=True)
 
     #do_cross_tiling_stats(data, filters, tilings, work)
 
@@ -606,7 +617,7 @@ def main():
 
     #do_odd_even_stats(data, filters, tilings, work)
 
-    do_fov_stats(data, filters, tilings, work)
+    #do_fov_stats(data, filters, tilings, work)
 
     # Use subtract_mean=True to do these:
     #do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')

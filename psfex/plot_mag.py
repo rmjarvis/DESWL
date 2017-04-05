@@ -444,7 +444,26 @@ def bin_by_fov(ccd, x, y, ds, de1, de2, key):
     plt.savefig('de_fov_' + key + '.pdf')
     plt.savefig('de_fov_' + key + '.eps')
 
- 
+def make_hist(dt, t, de1, de2, key):
+
+    import numpy
+    import matplotlib.pyplot as plt
+
+    nbins = 1000
+    range = (-0.1,0.1)
+
+    fig, ax = plt.subplots(1,4, sharey=True)
+
+    ax[0].hist(dt/t, bins=nbins, histtype='step', range=range, fill=True)
+    ax[0].set_xlabel('dT/T')
+    ax[1].hist(de1, bins=nbins, histtype='step', range=range, fill=True)
+    ax[1].set_xlabel('de1')
+    ax[2].hist(de2, bins=nbins, histtype='step', range=range, fill=True)
+    ax[2].set_xlabel('de2')
+
+    fig.set_size_inches(15.0,7.0)
+    plt.tight_layout()
+    plt.savefig('dpsf_hist_' + key + '.pdf')
 
 def main():
     import os
@@ -558,6 +577,7 @@ def main():
         de2 = e2 - pe2
         ds = s - ps
         dt = s**2 - ps**2
+        t = s**2
         print 'mean ds (used) = ',numpy.mean(ds[used])
         print 'mean de1 (used) = ',numpy.mean(de1[used])
         print 'mean de2 (used) = ',numpy.mean(de2[used])
@@ -565,6 +585,10 @@ def main():
         min_mused = numpy.min(m[used])
         bin_by_mag(m[mask], dt[mask], de1[mask], de2[mask], min_mused, key)
         bin_by_mag(m[used], dt[used], de1[used], de2[used], min_mused, key+'_used')
+
+        make_hist(dt[mask], t[mask], de1[mask], de2[mask], key)
+        make_hist(dt[used], t[used], de1[used], de2[used], key+'_used')
+
         #bin_by_mag(m[mask], s[mask], e1[mask], e2[mask], min_mused, key+'_orig')
         #bin_by_mag(m[mask], ps[mask], pe1[mask], pe2[mask], min_mused, key+'_model')
 

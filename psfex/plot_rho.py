@@ -234,6 +234,20 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
 
+
+def plot_corr_tt(meanr, corr, sig):
+    plt.plot(meanr, corr, color='blue')
+    plt.plot(meanr, -corr, color='blue', ls=':')
+    plt.errorbar(meanr[corr>0], corr[corr>0], yerr=sig[corr>0], color='blue', ls='', marker='o')
+    plt.errorbar(meanr[corr<0], -corr[corr<0], yerr=sig[corr<0], color='blue', ls='', marker='o')
+    plt.ylim( [1.e-7, 5.e-5] )
+    plt.xlim( [0.5,300.] )
+    plt.xlabel(r'$\theta$ (arcmin)')
+    plt.ylabel(r'$\langle (dT_p/T_p) (dT_p/T_p) \rangle (\theta)$')
+    plt.xscale('log')
+    plt.yscale('log', nonposy='clip')
+    plt.tight_layout()
+
 def plot_single_rho(args,work):
     # Plot rho stats for one ccd at at time
 
@@ -720,18 +734,18 @@ def plot_overall_rho(work):
 
     print 'Plot overall rho stats'
 
-    #base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
+    base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
     #base_keys = ['ri', 'r', 'i']
     #base_keys = ['ri']
-    base_keys = ['r']
+    #base_keys = ['r']
 
     # Build full key from these for the three kinds
     keys = [ 'all_' + k for k in base_keys ]
-    keys += [ 'cross_' + k for k in base_keys ]
-    keys += [ 'crossband_' + k for k in base_keys if len(k) > 1 ]
-    keys += [ 'oddeven_' + k for k in base_keys ]
-    keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
-    keys += [ 'fov_' + k for k in base_keys ]
+    #keys += [ 'cross_' + k for k in base_keys ]
+    #keys += [ 'crossband_' + k for k in base_keys if len(k) > 1 ]
+    #keys += [ 'oddeven_' + k for k in base_keys ]
+    #keys += [ 'fov_' + k for k in base_keys if len(k) == 1 ]
+    #keys += [ 'fov_' + k for k in base_keys ]
     #keys += [ 'alt_' + k for k in base_keys ]
     #keys += [ 'altoddeven_' + k for k in base_keys ]
 
@@ -746,6 +760,8 @@ def plot_overall_rho(work):
             stats = json.load(f)
 
         print' stats = ',stats
+        if len(stats) == 1:  # I used to save a list of length 1 that in turn was a list
+            stats = stats[0]
 
         ( meanlogr,
           rho1p,
@@ -773,7 +789,7 @@ def plot_overall_rho(work):
           rho5m,
           rho5m_im,
           var5,
-        ) = stats[-1]
+        ) = stats[:26]
 
         meanr = numpy.exp(meanlogr)
         rho1p = numpy.array(rho1p)
@@ -812,6 +828,16 @@ def plot_overall_rho(work):
         pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p)
         #plt.savefig('rho2_' + key + '.png')
         plt.savefig('rho2_' + key + '.pdf')
+
+        if len(stats) > 26:
+            corr_tt, var_corr_tt = stats[26:28]
+            corr_tt = numpy.array(corr_tt)
+            sig_corr_tt = numpy.sqrt(var_corr_tt)
+
+            plt.clf()
+            plot_corr_tt(meanr, corr_tt, sig_corr_tt)
+            #plt.savefig('rho2_' + key + '.png')
+            plt.savefig('corrtt_' + key + '.pdf')
 
 
 def main():

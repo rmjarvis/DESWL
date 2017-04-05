@@ -3,10 +3,10 @@ import fitsio
 
 meds_dir = '/astro/u/mjarvis/DES/meds'
 #meds_tag = 'y1a1-spt-002'
-meds_tag = 'tb-y1a1-us82-48-001'
+meds_tag = 'y1a1-cosmos'
 dirs = [ os.path.join(meds_dir, meds_tag) ]
 
-outfile = 'y1s82'
+outfile = 'y1a1_cosmos'
 bands = ['g','r','i','z']
 #dir = '/astro/u/mjarvis/DES/meds/tb-y1a1-v01'
 #outfile = 'tb-y1a1'
@@ -16,7 +16,7 @@ for b in bands:
     print out_b
     exps = set()
     for dir in dirs:
-        pat = os.path.join(dir,'*','*-'+b+'-meds-stubby-%s.fits'%meds_tag)
+        pat = os.path.join(dir,'*','*-'+b+'-meds-stubby-*.fits')
         print pat
         for srclist in glob.glob(pat):
             print srclist

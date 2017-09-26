@@ -1,30 +1,39 @@
+modules:
+    - galsim_extra
+
 input:
 
-    image_dir: '/gpfs/mnt/gpfs01/astro/workarea/esheldon/lensing/des-lensing/psfsim/v009/output'
-    images: 'psfsim-stars-v009-000000.fits'
-    image_hdu: 0
-    badpix_hdu: 1
-    weight_hdu: 2
+    #dir: '/astro/u/mjarvis/work/y3_piff/y3a1-v01/226650'
+    image_file_name: 'D00226650_z_c13_r2355p02_immasked.fits.fz'
+    image_hdu: 1
+    badpix_hdu: 2
+    weight_hdu: 3
 
-    cat_dir: '/astro/u/mjarvis/work/sims/psfsim-stars-v009/v01'
-    cats: 'psfsim-stars-v009-000000_psfcat.fits'
-    cat_hdu: 2
+    cat_file_name: 'D00226650_z_c13_r2355p02_stars.fits'
+    cat_hdu: 1
 
-    x_col: XWIN_IMAGE
-    y_col: YWIN_IMAGE
-    sky_col: BACKGROUND
+    x_col: x
+    y_col: y
+    sky_col: sky
     ra: TELRA
     dec: TELDEC
-    gain: 4.0
-    #noise: 469.  # Variance in ADU per pixel.
-    #sky: 231.    # Sky level in ADU per pixel.
+    gain: 1.0
+
+    max_snr: 100
+    min_snr: 20
 
     stamp_size: 25
-    #nstars: 50
+
+    wcs:
+        type: Pixmappy
+        dir: '/astro/u/mjarvis/rmjarvis/DESWL/psf/'
+        file_name: 'zone029.astro'
+        exp: 226650
+        ccdnum: 13
 
 output:
-    dir: '/astro/u/mjarvis/work/sims/psfsim-stars-v009/v04'
-    file_name: 'psfsim-stars-v009-000000_piff.fits'
+    #dir: '/astro/u/mjarvis/work/y3_piff/y3a1-v01/226650'
+    file_name: 'D00226650_z_c13_r2355p02_piff.fits'
 
 psf:
 
@@ -43,6 +52,6 @@ psf:
     outliers:
         type: Chisq
         nsigma: 4
-        max_remove: 3
+        max_remove: 0.01
 
 verbose: 2

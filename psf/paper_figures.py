@@ -6,9 +6,9 @@ import os
 #expinfo_file = '/astro/u/mjarvis/work/exposure_info_v4.fits'
 #file = 'spte_gold_exp'
 #work = '/astro/u/mjarvis/work/psfex_rerun/v4'
-expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v02.fits'
-file = 'y1all_r'
-work = '/astro/u/mjarvis/work/psfex_rerun/y1a1-v02'
+expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v13.fits'
+file = 'y1all'
+work = '/astro/u/mjarvis/work/psfex_rerun/y1a1-v13'
 
 def add_to_list(filter, vlist, value):
     if 'griz' not in vlist.keys():
@@ -72,7 +72,7 @@ def get_psf_data():
         filter = expinfo['filter'][k]
         print 'filter = ',filter
 
-        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
+        cat_file = os.path.join(cat_dir, exp + "_exppsf.fits")
         try:
             with pyfits.open(cat_file) as pyf:
                 data = pyf[1].data.copy()
@@ -114,7 +114,7 @@ def get_psf_data():
         add_to_list(filter, e2_list, data['e2'])
         add_to_list(filter, s_list, data['size'])
 
-        psfex = 'psfex'
+        psfex = 'psf'
         #psfex = 'erin'
         add_to_list(filter, pe1_list, data[psfex + '_e1'])
         add_to_list(filter, pe2_list, data[psfex + '_e2'])
@@ -596,6 +596,7 @@ def bin_by_fov(ccd, x, y, e1, e2, s, w=None, nwhisk=5):
         mask = numpy.where(ccd == ccdnum)[0]
         print 'ccdnum = ',ccdnum,', nstar = ',len(mask)
         if mask.sum() < 100: continue
+        if ccdnum in [31, 61]: continue
 
         x_index = numpy.digitize(x[mask], x_bins)
         y_index = numpy.digitize(y[mask], y_bins)
@@ -755,6 +756,10 @@ def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=Non
     plt.savefig(filename, bbox_inches='tight')
     print 'wrote',filename
 
+    numpy.savetxt(os.path.splitext(filename)[0] + '.dat',
+                  numpy.array(zip(x, y, u, v, e1, e2, s)), fmt='%r',
+                  header='x  y  u (=e cos(theta/2))  v (=e sin(theta/2))  e1  e2  size')
+
 def psf_whiskers(ccd, x, y, e1, e2, s, de1, de2, ds):
     psf_binned_data = bin_by_fov(ccd, x, y, e1, e2, s, nwhisk=4)
     make_whiskers(*psf_binned_data, filename='psf_whiskers.eps', scale=3, title='PSF', 
@@ -904,7 +909,7 @@ def main():
         psfex_resid(m[mask], de1[mask], de2[mask], ds[mask])
 
         psf_whiskers(ccd[used], x[used], y[used], e1[used], e2[used], s[used],
-                    de1[used], de2[used], ds[used])
+                     de1[used], de2[used], ds[used])
 
     if False:
         ngmix_data = get_ngmix_epoch_data()

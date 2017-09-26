@@ -1,9 +1,9 @@
 #!/bin/bash
 
-FILE=y1all_r
-TAG=y1a1-v13
+FILE=zone029.exp
+TAG=y3a1-v01
 #FILE=y1all
 #TAG=y1a1-v02
 
-./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/psfex_rerun/$TAG
+./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG
 

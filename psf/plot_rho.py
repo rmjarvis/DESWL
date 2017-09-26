@@ -11,6 +11,7 @@ import os
 import sys
 
 #plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
+plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/SVA1StyleSheet.mplstyle')
  
 def parse_args():
     import argparse
@@ -142,7 +143,8 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
                    [r'$\rho_1(\theta)$', r'$\rho_3(\theta)$', r'$\rho_4(\theta)$'],
                    loc='upper right', fontsize=24)
         #plt.ylim( [1.e-9, 5.e-6] )
-        plt.ylim( [1.e-9, 2.e-5] )
+        #plt.ylim( [1.e-9, 2.e-5] )
+        plt.ylim( [5.e-9, 5.e-6] )
     elif True:
         plt.legend([rho1_line, sv_req],
                    [r'$\rho_1(\theta)$', r'Requirement'],
@@ -154,9 +156,10 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
                     r'Requirements for $d\sigma_8/\sigma_8 < 0.03$'],
                    loc='upper right')
         plt.ylim( [1.e-9, 3.e-6] )
+    plt.tick_params(axis='both', which='major', labelsize=24)
     plt.xlim( [0.5,300.] )
-    plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\rho(\theta)$')
+    plt.xlabel(r'$\theta$ (arcmin)', fontsize=24)
+    plt.ylabel(r'$\rho(\theta)$', fontsize=24)
     plt.xscale('log')
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
@@ -215,7 +218,7 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
                    [r'$\rho_2(\theta)$', r'$\rho_5(\theta)$'],
                    loc='upper right', fontsize=24)
         #plt.ylim( [1.e-7, 5.e-4] )
-        plt.ylim( [1.e-7, 1.e-4] )
+        plt.ylim( [5.e-8, 1.e-5] )
     elif True: # For paper
         plt.legend([rho2_line, sv_req],
                    [r'$\rho_2(\theta)$', r'Requirement'],
@@ -227,9 +230,10 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
                     r'Requirements for $d\sigma_8/\sigma_8 < 0.03$'],
                    loc='upper right')
         plt.ylim( [1.e-7, 3.e-4] )
+    plt.tick_params(axis='both', which='major', labelsize=24)
     plt.xlim( [0.5,300.] )
-    plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\rho(\theta)$')
+    plt.xlabel(r'$\theta$ (arcmin)', fontsize=24)
+    plt.ylabel(r'$\rho(\theta)$', fontsize=24)
     plt.xscale('log')
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
@@ -242,8 +246,9 @@ def plot_corr_tt(meanr, corr, sig):
     plt.errorbar(meanr[corr<0], -corr[corr<0], yerr=sig[corr<0], color='blue', ls='', marker='o')
     plt.ylim( [1.e-7, 5.e-5] )
     plt.xlim( [0.5,300.] )
-    plt.xlabel(r'$\theta$ (arcmin)')
-    plt.ylabel(r'$\langle (dT_p/T_p) (dT_p/T_p) \rangle (\theta)$')
+    plt.tick_params(axis='both', which='major', labelsize=24)
+    plt.xlabel(r'$\theta$ (arcmin)', fontsize=24)
+    plt.ylabel(r'$\langle (dT_p/T_p) (dT_p/T_p) \rangle (\theta)$', fontsize=24)
     plt.xscale('log')
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
@@ -314,8 +319,13 @@ def plot_single_rho(args,work):
             exp_dir = os.path.join(work,exp)
 
             cat_file = os.path.join(cat_dir, exp + "_psf.fits")
-            with pyfits.open(cat_file) as pyf:
-                data = pyf[1].data
+            try:
+                with pyfits.open(cat_file) as pyf:
+                    data = pyf[1].data
+            except IOError as e:
+                print 'Caught exception: ',e
+                print 'skipping this exposure'
+                continue
             ccdnums = numpy.unique(data['ccdnum'])
             for ccdnum in ccdnums:
                 nstars = ((data['ccdnum'] == ccdnum) & (data['flag'] == 0)).sum()
@@ -326,8 +336,8 @@ def plot_single_rho(args,work):
                     ngoodccd += 1
                     listnstars.append(nstars)
             mask = data['flag'] == 0
-            de1 = data['e1'][mask] - data['psfex_e1'][mask]
-            de2 = data['e2'][mask] - data['psfex_e2'][mask]
+            de1 = data['obs_e1'][mask] - data['piff_e1'][mask]
+            de2 = data['obs_e2'][mask] - data['piff_e2'][mask]
             meande1 += numpy.sum(de1)
             meande2 += numpy.sum(de2)
             varde1 += numpy.sum(de1*de1)
@@ -811,12 +821,21 @@ def plot_overall_rho(work):
 
         print 'meanr = ',meanr
 
-        if False:
-            cols = numpy.array((meanr, rho1p, sig_rho1, rho2p, sig_rho2,
-                                rho1m, sig_rho1, rho2m, sig_rho2)).T
+        if True:
+            cols = numpy.array((meanr,
+                                rho1p, rho1m, sig_rho1,
+                                rho2p, rho2m, sig_rho2,
+                                rho3p, rho3m, sig_rho3,
+                                rho4p, rho4m, sig_rho4,
+                                rho5p, rho5m, sig_rho5))
             outfile = 'rho_' + key + '.dat'
             numpy.savetxt(outfile, cols, fmt='%.6e',
-                          header='meanr  rho1  sig_rho1  rho2  sig_rho2  rho1_xim  sig_rho1_xim  rho2_xim  sig_rho2_xim')
+                          header='meanr  '+
+                                 'rho1  rho1_xim  sig_rho1  '+
+                                 'rho2  rho2_xim  sig_rho2  '+
+                                 'rho3  rho3_xim  sig_rho3  '+
+                                 'rho4  rho4_xim  sig_rho4  '+
+                                 'rho5  rho5_xim  sig_rho5  ')
             print 'wrote',outfile
  
         plt.clf()

@@ -3,6 +3,7 @@
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
+import os
 import matplotlib
 matplotlib.use('Agg') # needs to be done before import pyplot
 import matplotlib.pyplot as plt
@@ -31,14 +32,14 @@ def parse_args():
                         help='list of run/exposures (in lieu of separate exps, runs)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
-    parser.add_argument('--runs', default='', nargs='+',
-                        help='list of runs')
 
     # Options
     parser.add_argument('--do_blacklist', default=False, action='store_const', const=True,
                         help='Blacklist files that have bad findstars properties')
     parser.add_argument('--do_plot', default=None, action='store_const', const=True,
                         help='Do plot even if blacklisting')
+    parser.add_argument('--no_plot', default=None, action='store_const', const=True,
+                        help='Do not do plot')
     parser.add_argument('--make_stats', default=False, action='store_const', const=True,
                         help='Make stats.fits with statistics about the sizes')
     parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
@@ -52,19 +53,21 @@ def parse_args():
             args.do_plot = False
         else:
             args.do_plot = True
+    if args.no_plot:
+        args.do_plot = False
 
     return args
 
-def log_blacklist(blacklist_file, run, exp, ccdnum, flag):
+def log_blacklist(blacklist_file, exp, ccdnum, flag):
     try:
         with open(blacklist_file,'a') as f:
-            f.write("%s %s %d %d\n"%(run,exp,ccdnum,flag))
+            f.write("%s %s %d %d\n"%(exp,ccdnum,flag))
     except OSError as e:
         print e
         print 'Error opening blacklist.  Wait and try again.'
         import time
         time.sleep(1)
-        return log_blacklist(blacklist_file,run,exp,ccdnum,flag)
+        return log_blacklist(blacklist_file,exp,ccdnum,flag)
 
 
 def plot_fs(size, mag, flag, filename, modest=None):
@@ -96,13 +99,21 @@ def plot_fs(size, mag, flag, filename, modest=None):
         psf = ax.scatter(mag[s][flag[s] == 2], size[s][flag[s] == 2],
                          color='green', marker='*', s=40.)
 
-    ax.legend([det, cand, psf, mod],
+        legend_items = [det, cand, psf]
+        if modest is not None:
+            legend_items += [mod]
+
+    ax.legend(legend_items,
               ['Detected Object', 'Candidate Star', 'PSF Star', 'Modest Star'],
               loc='upper left', frameon=True)
 
     plt.tight_layout()
     plt.savefig(filename)
     plt.close(fig)
+
+    numpy.savetxt(os.path.splitext(filename)[0] + '.dat',
+                  numpy.array(zip(size, mag, flag), dtype='f8, f8, i2'), fmt='%r',
+                  header='size  mag  flag (0=detected, 1=candidate, 2=psf, 4=bad measurement)')
 
 
 def main():
@@ -133,102 +144,99 @@ def main():
 
     datadir = '/astro/u/astrodat/data/DES'
 
+    # A listing Erin made of all the exposures in Y3 used in meds files
+    all_exp = fitsio.read('/astro/u/mjarvis/work/y3_piff/exposures-ccds-Y3A1_COADD.fits')
+
     if args.file != '':
-        print 'Read file ',args.file
+        print('Read file ',args.file)
         with open(args.file) as fin:
-            data = [ line.split() for line in fin ]
-        runs, exps = zip(*data)
-    else:
-        runs = args.runs
+            exps = [ line for line in fin if line[0] != '#' ]
+        print('File includes %d exposures'%len(exps))
+    elif args.exps is not None:
         exps = args.exps
+        print('Explicit listing of %d exposures'%len(exps))
+    else:
+        exps = sorted(list(set(all_exp['expnum'])))
+        print('There are a total of %d exposures'%len(exps))
 
     cat_dir = os.path.join(work,'psf_cats')
 
     stats = []
 
-    for run,exp in zip(runs,exps):
+    for exp in exps:
+        print 'Start work on exp = ',exp
+        exp = int(exp)
+        data = all_exp[all_exp['expnum'] == exp]
 
-        print 'Start work on run, exp = ',run,exp
-        expnum = int(exp[6:])
-        print 'expnum = ',expnum
+        wdir = os.path.join(work,str(exp))
+        print('wdir = ',wdir)
 
-        exp_dir = os.path.join(work,exp)
-        print 'exp_dir = ',exp_dir
+        for row in data:
+            key, expnum, ccdnum, band = row['key'], row['expnum'], row['ccdnum'], row['band']
+            print('\nProcessing ', key, expnum, ccdnum, band)
+            path = row['path'].strip()
+            print('path = ',path)
+            flag = 0
 
-        input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
+            try:
 
-        psf_file = os.path.join(cat_dir, exp + "_psf.fits")
-        with pyfits.open(psf_file) as pyf:
-            psf_data = pyf[1].data
+                image_file_name = path.rsplit('/')[1]
+                root = image_file_name.rsplit('_immasked')[0]
+                star_file_name = root + '_starcat.fits'
+                star_file = os.path.join(wdir,star_file_name)
+                print('star_file = ',star_file_name)
 
-        ccdnums = numpy.unique(psf_data['ccdnum'])
-        #print 'ccdnums = ',ccdnums
+                star_data = fitsio.read(star_file)
 
-        for ccdnum in ccdnums:
-            print '\nProcessing ', ccdnum
+                mag = star_data['MAG_AUTO']
+                size = 2. * cat_data['sigma0']**2
+                # Flag definitions:
+                # 0 = good detection
+                # 1 = star candidate
+                # 2 = final star
+                # 4 = bad measurement
+                flag = cat_data['star_flag']
+                print 'ntot = ',len(cat_data)
+                print 'nstar = ',numpy.sum(flag==1)
+                cand = numpy.where(flag == 1)[0]
+                flag[cat_data['size_flags']>0] = 4
+                print 'nbad = ',numpy.sum(flag==4)
 
-            mask = (psf_data['ccdnum'] == ccdnum)
-            if mask.sum() == 0:
-                print '   All objects with this ccdnum are flagged.'
-                continue
+                x = cat_data['x']
+                y = cat_data['y']
 
-            sex_file = os.path.join(input_dir, exp + "_%02d_cat.fits"%ccdnum)
-            with pyfits.open(sex_file) as pyf:
-                sex_data = pyf[2].data
+                psfex_file = os.path.join(exp_dir, exp + "_%02d_psfcat.used.fits"%ccdnum)
+                with pyfits.open(psfex_file) as pyf:
+                    psfex_data = pyf[2].data
 
-            cat_file = os.path.join(exp_dir, exp + "_%02d_findstars.fits"%ccdnum)
-            with pyfits.open(cat_file) as pyf:
-                cat_data = pyf[1].data
+                xu = psfex_data['X_IMAGE']
+                yu = psfex_data['Y_IMAGE']
+                used = [ numpy.where((numpy.abs(xxu-x)<1) & (numpy.abs(yyu-y)<1))[0][0] for (xxu,yyu) in zip(xu,yu) ]
+                flag[used] = 2
+                print 'nused = ',numpy.sum(flag==2)
 
-            mag = cat_data['mag']
-            size = 2. * cat_data['sigma0']**2
-            # Flag definitions:
-            # 0 = good detection
-            # 1 = star candidate
-            # 2 = final star
-            # 4 = bad measurement
-            flag = cat_data['star_flag']
-            print 'ntot = ',len(cat_data)
-            print 'nstar = ',numpy.sum(flag==1)
-            cand = numpy.where(flag == 1)[0]
-            flag[cat_data['size_flags']>0] = 4
-            print 'nbad = ',numpy.sum(flag==4)
+                xs = sex_data['X_IMAGE']
+                ys = sex_data['Y_IMAGE']
+                # Matching this is a bit tricky, since they are different detections, measurements
+                # Just pick out the items with a single match within 1 pixel.
+                m1 = [ numpy.where((numpy.abs(xxs-x)<1) & (numpy.abs(yys-y)<1))[0] for (xxs,yys) in zip(xs,ys) ]
+                m2 = numpy.array([ len(a) for a in m1 ])
+                cat_m = numpy.concatenate(numpy.array(m1)[m2==1])
+                # Now cat_data[cat_m] gives rows that are in the original sextractor catalog.
+                sex_m = numpy.where(m2==1)
+                # And sex_data[sex_m] gives the corresponding rows in the sextractor catalog.
+                modest = numpy.zeros_like(size, dtype=bool)
+                bright_test = (sex_data[sex_m]['CLASS_STAR'] > 0.3) & (sex_data[sex_m]['MAG_AUTO'] < 18.0-zp)
+                locus_test = (sex_data[sex_m]['SPREAD_MODEL'] + 3.*sex_data[sex_m]['SPREADERR_MODEL'] < 0.003)
+                faint_psf_test = (sex_data[sex_m]['MAG_PSF'] > 30.-zp) & (sex_data[sex_m]['MAG_AUTO'] < 21.-zp)
+                modest[cat_m] = (bright_test | locus_test) & ~faint_psf_test
 
-            x = cat_data['x']
-            y = cat_data['y']
+                nused_modest = numpy.sum( (flag==2) & modest )
+                nused_not_modest = numpy.sum( (flag==2) & ~modest )
 
-            psfex_file = os.path.join(exp_dir, exp + "_%02d_psfcat.used.fits"%ccdnum)
-            with pyfits.open(psfex_file) as pyf:
-                psfex_data = pyf[2].data
-
-            xu = psfex_data['X_IMAGE']
-            yu = psfex_data['Y_IMAGE']
-            used = [ numpy.where((numpy.abs(xxu-x)<1) & (numpy.abs(yyu-y)<1))[0][0] for (xxu,yyu) in zip(xu,yu) ]
-            flag[used] = 2
-            print 'nused = ',numpy.sum(flag==2)
-
-            xs = sex_data['X_IMAGE']
-            ys = sex_data['Y_IMAGE']
-            # Matching this is a bit tricky, since they are different detections, measurements
-            # Just pick out the items with a single match within 1 pixel.
-            m1 = [ numpy.where((numpy.abs(xxs-x)<1) & (numpy.abs(yys-y)<1))[0] for (xxs,yys) in zip(xs,ys) ]
-            m2 = numpy.array([ len(a) for a in m1 ])
-            cat_m = numpy.concatenate(numpy.array(m1)[m2==1])
-            # Now cat_data[cat_m] gives rows that are in the original sextractor catalog.
-            sex_m = numpy.where(m2==1)
-            # And sex_data[sex_m] gives the corresponding rows in the sextractor catalog.
-            modest = numpy.zeros_like(size, dtype=bool)
-            bright_test = (sex_data[sex_m]['CLASS_STAR'] > 0.3) & (sex_data[sex_m]['MAG_AUTO'] < 18.0-zp)
-            locus_test = (sex_data[sex_m]['SPREAD_MODEL'] + 3.*sex_data[sex_m]['SPREADERR_MODEL'] < 0.003)
-            faint_psf_test = (sex_data[sex_m]['MAG_PSF'] > 30.-zp) & (sex_data[sex_m]['MAG_AUTO'] < 21.-zp)
-            modest[cat_m] = (bright_test | locus_test) & ~faint_psf_test
-
-            nused_modest = numpy.sum( (flag==2) & modest )
-            nused_not_modest = numpy.sum( (flag==2) & ~modest )
-
-            # These two get named, since we might use them to do the blacklist.
-            meanT = numpy.mean(size[cand])
-            stdT = numpy.std(size[cand])
+                # These two get named, since we might use them to do the blacklist.
+                meanT = numpy.mean(size[cand])
+                stdT = numpy.std(size[cand])
 
             if args.make_stats:
                 stats.append( (expnum, ccdnum,
@@ -244,13 +252,20 @@ def main():
 
             if args.do_plot:
                 plot_file = os.path.join(exp_dir, exp + "_%02d.pdf"%ccdnum)
-                plot_fs(size, mag, flag, plot_file, modest)
+                #plot_fs(size, mag, flag, plot_file, modest)
+                plot_fs(size, mag, flag, plot_file)
 
             if args.do_blacklist and stdT > 0.15 * meanT:
                 log_blacklist(blacklist_file,run,exp,ccdnum,flag=FINDSTARS_FAILURE)
 
             if args.single_ccd:
                 break
+          except Exception as e:  # In case any errors
+            print 'Caught exception: ',e
+            continue
+      except Exception as e:  # In case any errors
+        print 'Caught exception: ',e
+        continue
 
     if args.make_stats:
         dt = numpy.dtype([
@@ -274,6 +289,10 @@ def main():
 
         recstats = numpy.array(stats, dtype=dt)
         import fitsio
+        print 'Median ncand = ',numpy.median(recstats['ncand'])
+        print 'Median nused = ',numpy.median(recstats['nused'])
+        print 'Median seeing = ',numpy.median(recstats['median_used'])
+
         fitsio.write('stats.fits', recstats, clobber=True)
 
     print '\nFinished processing all exposures'

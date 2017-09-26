@@ -3,6 +3,7 @@
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg') # Don't use X-server.  Must be before importing matplotlib.pyplot or pylab!
 import matplotlib.pyplot as plt
@@ -20,18 +21,10 @@ def parse_args():
                         help='A version tag to add to the directory name')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
-                        help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
                         help='list of run/exposures (in lieu of separate exps, runs)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
-    parser.add_argument('--runs', default='', nargs='+',
-                        help='list of runs')
-
-    # Options
-    parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
-                        help='Only do 1 ccd per exposure (used for debugging)')
 
     args = parser.parse_args()
     return args
@@ -56,107 +49,113 @@ def break_axes(ax, ax2):
     ax2.plot((-d,+d),(-d,+d), **kwargs)
     ax2.plot((-d,+d),(1-d,1+d), **kwargs)
 
-def add_to_list(filter, vlist, value):
+def add_to_list(band, vlist, value):
     vlist['griz'].append(value)
-    if filter not in vlist.keys():
-        vlist[filter] = []
-    if 'g' not in filter:
+    if band not in vlist.keys():
+        vlist[band] = []
+    if 'g' not in band:
         vlist['riz'].append(value)
-    if 'g' not in filter and 'z' not in filter:
+    if 'g' not in band and 'z' not in band:
         vlist['ri'].append(value)
-    vlist[filter].append(value)
+    vlist[band].append(value)
 
-def get_data(runs, exps, work,
+def get_data(exps, work,
              mask_list, used_list, ccd_list, 
              airmass_list, sky_list, sigsky_list, fwhm_list,
              ra_list, dec_list, x_list, y_list, m_list,
-             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list,
-             tag, psfex = 'psfex'):
+             e1_list, e2_list, T_list, pe1_list, pe2_list, pT_list,
+             tag, piff = 'piff'):
 
-    import astropy.io.fits as pyfits
+    import fitsio
     import numpy
     import os
 
-    expinfo_file = '/astro/u/mjarvis/work/exposure_info_' + tag + '.fits'
-    with pyfits.open(expinfo_file) as pyf:
-        expinfo = pyf[1].data
+    BAD_CCDS = [2, 31, 61]
 
-    cat_dir = os.path.join(work,'psf_cats')
+    for exp in exps:
 
-    for run,exp in zip(runs,exps):
-
-        print 'Start work on run, exp = ',run,exp
-        expnum = int(exp[6:])
-        #print 'expnum = ',expnum
+        print('Start work on exp = ',exp)
+        expnum = int(exp)
+        print('expnum = ',expnum)
+        expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
 
         if expnum not in expinfo['expnum']:
-            print 'expnum is not in expinfo!'
-            print 'expinfo[expnum] = ',expinfo['expnum']
+            print('expnum is not in expinfo!')
+            print('expinfo[expnum] = ',expinfo['expnum'])
             #raise RuntimeError("Could not find information about this expnum")
-            print 'Skipping ',run,exp
-            continue
-        k = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
-        #print 'k = ',k
-        filter = expinfo['filter'][k]
-        print 'filter = ',filter
-
-        cat_file = os.path.join(cat_dir, exp + "_psf.fits")
-        try:
-            with pyfits.open(cat_file) as pyf:
-                data = pyf[1].data.copy()
-        except:
-            print 'Could not open cat_file %s.  Skipping this one.'%cat_file
-            continue
-            
-
-        #print 'max flag = ',max(data['flag'])
-        #print 'min flag = ',min(data['flag'])
-        if len(data['flag']) == 0:
-            print 'No data'
-            continue
-        if min(data['flag']) < 0:
-            print '!!!Flag is negative!!!'
-        mask = (data['flag'] == 0) | (data['flag'] == 1)
-        if mask.sum() == 0:
-            print 'All objects in this exposure are flagged.'
-            print 'Probably due to astrometry flags. Skip this exposure.'
+            print('Skipping ',run,exp)
             continue
 
-        used = (data['flag'] == 0)
-        bright = mask & (data['mag'] < 10.2)
+        i = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
+        #print('i = ',i)
+        band = expinfo['band'][i]
+        print('band = ',band)
+        
+        for k in range(len(expinfo)):
+            ccdnum = expinfo[k]['ccdnum']
+            if expinfo[k]['flag'] != 0:
+                print('Skipping ccd %d because it is blacklisted: '%ccdnum, expinfo[k]['flag'])
+                continue
+            if ccdnum in BAD_CCDS:
+                print('Skipping ccd %d because it is BAD'%ccdnum)
 
-        #print 'nobject = ',sum(mask)
-        #print 'nused = ',sum(used)
-        #print 'full mag range = ',min(data['mag']),max(data['mag'])
-        #print 'masked mag range = ',min(data['mag'][mask]),max(data['mag'][mask])
-        #print 'used mag range = ',min(data['mag'][used]),max(data['mag'][used])
-        #print 'alt used mag range = ',min(data[used]['mag']),max(data[used]['mag'])
+            cat_file = os.path.join(work, exp, "psf_cat_%d_%d.fits"%(expnum,ccdnum))
+            #print('cat_file = ',cat_file)
+            try:
+                data = fitsio.read(cat_file)
+                data['piff_flag']
+            except (OSError, IOError):
+                print('Unable to open cat_file %s.  Skipping this file.'%cat_file)
+                continue
 
-        add_to_list(filter, mask_list, mask)
-        add_to_list(filter, used_list, used)
-        add_to_list(filter, ccd_list, data['ccdnum'])
+            #print('max flag = ',max(data['piff_flag']))
+            #print('min flag = ',min(data['piff_flag']))
+            if len(data['piff_flag']) == 0:
+                print('No data')
+                continue
+            if min(data['piff_flag']) < 0:
+                print('!!!Flag is negative!!!')
+            mask = (data['piff_flag'] == 0) | (data['piff_flag'] == 1)
+            if mask.sum() == 0:
+                print('All objects in this exposure are flagged.')
+                print('Probably due to astrometry flags. Skip this exposure.')
+                continue
 
-        add_to_list(filter, ra_list, data['ra'])
-        add_to_list(filter, dec_list, data['dec'])
-        add_to_list(filter, x_list, data['x'])
-        add_to_list(filter, y_list, data['y'])
-        add_to_list(filter, m_list, data['mag'])
+            used = (data['piff_flag'] == 0)
+            bright = mask & (data['mag'] < 10.2)
 
-        add_to_list(filter, e1_list, data['e1'])
-        add_to_list(filter, e2_list, data['e2'])
-        add_to_list(filter, s_list, data['size'])
+            #print('nobject = ',sum(mask))
+            #print('nused = ',sum(used))
+            #print('full mag range = ',min(data['mag']),max(data['mag']))
+            #print('masked mag range = ',min(data['mag'][mask]),max(data['mag'][mask]))
+            #print('used mag range = ',min(data['mag'][used]),max(data['mag'][used]))
+            #print('alt used mag range = ',min(data[used]['mag']),max(data[used]['mag']))
 
-        add_to_list(filter, pe1_list, data[psfex + '_e1'])
-        add_to_list(filter, pe2_list, data[psfex + '_e2'])
-        add_to_list(filter, ps_list, data[psfex + '_size'])
+            add_to_list(band, mask_list, mask)
+            add_to_list(band, used_list, used)
+            add_to_list(band, ccd_list, ccdnum)
 
-        n = len(mask)
-        add_to_list(filter, airmass_list, [expinfo['airmass'][k]] * n)
-        add_to_list(filter, sky_list, [expinfo['sky'][k]] * n)
-        add_to_list(filter, sigsky_list, [expinfo['sigsky'][k]] * n)
-        add_to_list(filter, fwhm_list, [expinfo['fwhm'][k]] * n)
+            add_to_list(band, ra_list, data['ra'])
+            add_to_list(band, dec_list, data['dec'])
+            add_to_list(band, x_list, data['x'])
+            add_to_list(band, y_list, data['y'])
+            add_to_list(band, m_list, data['mag'])
 
-    print '\nFinished processing all exposures'
+            add_to_list(band, e1_list, data['obs_e1'])
+            add_to_list(band, e2_list, data['obs_e2'])
+            add_to_list(band, T_list, data['obs_T'])
+
+            add_to_list(band, pe1_list, data[piff + '_e1'])
+            add_to_list(band, pe2_list, data[piff + '_e2'])
+            add_to_list(band, pT_list, data[piff + '_T'])
+
+            n = len(mask)
+            #add_to_list(band, airmass_list, [expinfo['airmass'][k]] * n)
+            #add_to_list(band, sky_list, [expinfo['sky'][k]] * n)
+            #add_to_list(band, sigsky_list, [expinfo['sigsky'][k]] * n)
+            #add_to_list(band, fwhm_list, [expinfo['fwhm'][k]] * n)
+
+    print('\nFinished processing all exposures')
 
 
 def bin_by_mag(m, dt, de1, de2, min_mused, key):
@@ -174,25 +173,25 @@ def bin_by_mag(m, dt, de1, de2, min_mused, key):
 
     # Bin by mag
     mag_bins = numpy.linspace(15.3,22,71)
-    print 'mag_bins = ',mag_bins
+    print('mag_bins = ',mag_bins)
 
     index = numpy.digitize(m, mag_bins)
-    print 'len(index) = ',len(index)
+    print('len(index) = ',len(index))
     bin_de1 = [de1[index == i].mean() for i in range(1, len(mag_bins))]
-    print 'bin_de1 = ',bin_de1
+    print('bin_de1 = ',bin_de1)
     bin_de2 = [de2[index == i].mean() for i in range(1, len(mag_bins))]
-    print 'bin_de2 = ',bin_de2
+    print('bin_de2 = ',bin_de2)
     bin_dt = [dt[index == i].mean() for i in range(1, len(mag_bins))]
-    print 'bin_dt = ',bin_dt
+    print('bin_dt = ',bin_dt)
     bin_de1_err = [ numpy.sqrt(de1[index == i].var() / len(de1[index == i])) 
                     for i in range(1, len(mag_bins)) ]
-    print 'bin_de1_err = ',bin_de1_err
+    print('bin_de1_err = ',bin_de1_err)
     bin_de2_err = [ numpy.sqrt(de2[index == i].var() / len(de2[index == i])) 
                     for i in range(1, len(mag_bins)) ]
-    print 'bin_de2_err = ',bin_de2_err
+    print('bin_de2_err = ',bin_de2_err)
     bin_dt_err = [ numpy.sqrt(dt[index == i].var() / len(dt[index == i])) 
                     for i in range(1, len(mag_bins)) ]
-    print 'bin_dt_err = ',bin_dt_err
+    print('bin_dt_err = ',bin_dt_err)
 
     # Fix up nans
     for i in range(1,len(mag_bins)):
@@ -203,12 +202,12 @@ def bin_by_mag(m, dt, de1, de2, min_mused, key):
             bin_de1_err[i-1] = 0.
             bin_de2_err[i-1] = 0.
             bin_dt_err[i-1] = 0.
-    print 'fixed nans'
+    print('fixed nans')
 
-    print 'index = ',index
-    print 'bin_de1 = ',bin_de1
-    print 'bin_de2 = ',bin_de2
-    print 'bin_dt = ',bin_dt
+    print('index = ',index)
+    print('bin_de1 = ',bin_de1)
+    print('bin_de2 = ',bin_de2)
+    print('bin_dt = ',bin_dt)
 
     fig, axes = plt.subplots(2,1, sharex=True)
 
@@ -251,24 +250,24 @@ def bin_by_chip_pos(x, ds, de1, de2, key, xy):
         xmax = 4096
 
     x_bins = numpy.linspace(0,xmax,129)
-    print 'x_bins = ',x_bins
+    print('x_bins = ',x_bins)
     index = numpy.digitize(x, x_bins)
-    print 'len(index) = ',len(index)
+    print('len(index) = ',len(index))
     bin_de1 = [de1[index == i].mean() for i in range(1, len(x_bins))]
-    print 'bin_de1 = ',bin_de1
+    print('bin_de1 = ',bin_de1)
     bin_de2 = [de2[index == i].mean() for i in range(1, len(x_bins))]
-    print 'bin_de2 = ',bin_de2
+    print('bin_de2 = ',bin_de2)
     bin_ds = [ds[index == i].mean() for i in range(1, len(x_bins))]
-    print 'bin_ds = ',bin_ds
+    print('bin_ds = ',bin_ds)
     bin_de1_err = [ numpy.sqrt(de1[index == i].var() / len(de1[index == i])) 
                     for i in range(1, len(x_bins)) ]
-    print 'bin_de1_err = ',bin_de1_err
+    print('bin_de1_err = ',bin_de1_err)
     bin_de2_err = [ numpy.sqrt(de2[index == i].var() / len(de2[index == i])) 
                     for i in range(1, len(x_bins)) ]
-    print 'bin_de2_err = ',bin_de2_err
+    print('bin_de2_err = ',bin_de2_err)
     bin_ds_err = [ numpy.sqrt(ds[index == i].var() / len(ds[index == i])) 
                     for i in range(1, len(x_bins)) ]
-    print 'bin_ds_err = ',bin_ds_err
+    print('bin_ds_err = ',bin_ds_err)
 
     # Fix up nans
     for i in range(1,len(x_bins)):
@@ -279,12 +278,12 @@ def bin_by_chip_pos(x, ds, de1, de2, key, xy):
             bin_de1_err[i-1] = 0.
             bin_de2_err[i-1] = 0.
             bin_ds_err[i-1] = 0.
-    print 'fixed nans'
+    print('fixed nans')
 
-    print 'index = ',index
-    print 'bin_de1 = ',bin_de1
-    print 'bin_de2 = ',bin_de2
-    print 'bin_ds = ',bin_ds
+    print('index = ',index)
+    print('bin_de1 = ',bin_de1)
+    print('bin_de2 = ',bin_de2)
+    print('bin_ds = ',bin_ds)
 
     plt.clf()
     plt.title('PSF Size residuals')
@@ -382,7 +381,7 @@ def bin_by_fov(ccd, x, y, ds, de1, de2, key):
     ccdnums = numpy.unique(ccd)
     for ccdnum in ccdnums:
         mask = numpy.where(ccd == ccdnum)[0]
-        print 'ccdnum = ',ccdnum,', nstar = ',mask.sum()
+        print('ccdnum = ',ccdnum,', nstar = ',mask.sum())
         if mask.sum() < 100: continue
 
         x_index = numpy.digitize(x[mask], x_bins)
@@ -390,27 +389,27 @@ def bin_by_fov(ccd, x, y, ds, de1, de2, key):
 
         bin_de1 = numpy.array([ de1[mask][(x_index == i) & (y_index == j)].mean() 
                     for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_de1 = ',bin_de1
+        print('bin_de1 = ',bin_de1)
         bin_de2 = numpy.array([ de2[mask][(x_index == i) & (y_index == j)].mean() 
                     for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_de2 = ',bin_de2
+        print('bin_de2 = ',bin_de2)
         bin_ds = numpy.array([ ds[mask][(x_index == i) & (y_index == j)].mean() 
                     for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_ds = ',bin_ds
+        print('bin_ds = ',bin_ds)
         bin_x = numpy.array([ x[mask][(x_index == i) & (y_index == j)].mean() 
                   for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_x = ',bin_x
+        print('bin_x = ',bin_x)
         bin_y = numpy.array([ y[mask][(x_index == i) & (y_index == j)].mean() 
                   for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_y = ',bin_y
+        print('bin_y = ',bin_y)
         bin_count = numpy.array([ ((x_index == i) & (y_index == j)).sum()
                       for i in range(1, len(x_bins)) for j in range(1, len(y_bins)) ])
-        print 'bin_count = ',bin_count
+        print('bin_count = ',bin_count)
 
         focal_x, focal_y = toFocal(ccdnum, bin_x, bin_y)
 
         mask2 = numpy.where(bin_count > 0)[0]
-        print 'num with count > 0 = ',mask2.sum()
+        print('num with count > 0 = ',mask2.sum())
         all_x = numpy.append(all_x, focal_x[mask2])
         all_y = numpy.append(all_y, focal_y[mask2])
         all_e1 = numpy.append(all_e1, bin_de1[mask2])
@@ -426,8 +425,8 @@ def bin_by_fov(ccd, x, y, ds, de1, de2, key):
     v = r*numpy.sin(theta)
     plt.xlim(-250,250)
     plt.ylim(-250,250)
-    print 'all_x = ',all_x
-    print 'len(all_x) = ',len(all_x)
+    print('all_x = ',all_x)
+    print('len(all_x) = ',len(all_x))
     qv = plt.quiver(all_x,all_y,u,v, pivot='middle', scale_units='xy',
                     headwidth=0., headlength=0., headaxislength=0.,
                     width=0.001, scale=1.e-3, color='blue')
@@ -477,16 +476,15 @@ def main():
     args = parse_args()
 
     work = os.path.expanduser(args.work)
-    print 'work dir = ',work
+    print('work dir = ',work)
 
     if args.file != '':
-        print 'Read file ',args.file
+        print('Read file ',args.file)
         with open(args.file) as fin:
-            data = [ line.split() for line in fin ]
-        runs, exps = zip(*data)
+            exps = [ line.strip() for line in fin if line[0] != '#' ]
     else:
-        runs = args.runs
         exps = args.exps
+    exps = sorted(exps)
 
     mask_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
     used_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
@@ -505,18 +503,17 @@ def main():
 
     e1_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
     e2_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
-    s_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    T_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
     pe1_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
     pe2_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
-    ps_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
+    pT_list = { 'griz' : [], 'riz' : [], 'ri' : [] }
 
-    get_data(runs, exps, work,
+    get_data(exps, work,
              mask_list, used_list, ccd_list,
              airmass_list, sky_list, sigsky_list, fwhm_list,
              ra_list, dec_list, x_list, y_list, m_list,
-             e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, args.tag, psfex='psfex')
-             #e1_list, e2_list, s_list, pe1_list, pe2_list, ps_list, psfex='erin')
+             e1_list, e2_list, T_list, pe1_list, pe2_list, pT_list, args.tag, piff='piff')
 
     #for key in ra_list.keys():
     for key in ['r', 'ri', 'riz']:
@@ -533,54 +530,52 @@ def main():
         med_sky = numpy.median(sky)
         med_sigsky = numpy.median(sigsky)
         med_fwhm = numpy.median(fwhm)
-        print 'airmass: ',min(airmass),med_airmass,max(airmass)
-        print 'sky: ',min(sky),med_sky,max(sky)
-        print 'sigsky: ',min(sigsky),med_sigsky,max(sigsky)
-        print 'fwhm: ',min(fwhm),med_fwhm,max(fwhm)
+        print('airmass: ',min(airmass),med_airmass,max(airmass))
+        print('sky: ',min(sky),med_sky,max(sky))
+        print('sigsky: ',min(sigsky),med_sigsky,max(sigsky))
+        print('fwhm: ',min(fwhm),med_fwhm,max(fwhm))
 
         ra = numpy.concatenate(ra_list[key])
         dec = numpy.concatenate(dec_list[key])
         x = numpy.concatenate(x_list[key])
         y = numpy.concatenate(y_list[key])
         m = numpy.concatenate(m_list[key])
-        print 'full mag range = ',numpy.min(m),numpy.max(m)
-        print 'masked mag range = ',numpy.min(m[mask]),numpy.max(m[mask])
-        print 'used mag range = ',numpy.min(m[used]),numpy.max(m[used])
-        print 'len(m) = ',len(m)
-        print 'len(mask) = ',len(mask)
-        print 'len(used) = ',len(used)
-        print 'sum(mask) = ',numpy.sum(mask)
-        print 'sum(used) = ',numpy.sum(used)
+        print('full mag range = ',numpy.min(m),numpy.max(m))
+        print('masked mag range = ',numpy.min(m[mask]),numpy.max(m[mask]))
+        print('used mag range = ',numpy.min(m[used]),numpy.max(m[used]))
+        print('len(m) = ',len(m))
+        print('len(mask) = ',len(mask))
+        print('len(used) = ',len(used))
+        print('sum(mask) = ',numpy.sum(mask))
+        print('sum(used) = ',numpy.sum(used))
 
         e1 = numpy.concatenate(e1_list[key])
-        print 'mean e1 = ',numpy.mean(e1[mask])
+        print('mean e1 = ',numpy.mean(e1[mask]))
         e2 = numpy.concatenate(e2_list[key])
-        print 'mean e2 = ',numpy.mean(e2[mask])
-        s = numpy.concatenate(s_list[key])
-        print 'mean s = ',numpy.mean(s[mask])
+        print('mean e2 = ',numpy.mean(e2[mask]))
+        T = numpy.concatenate(T_list[key])
+        print('mean s = ',numpy.mean(T[mask]))
         pe1 = numpy.concatenate(pe1_list[key])
-        print 'mean pe1 = ',numpy.mean(pe1[mask])
+        print('mean pe1 = ',numpy.mean(pe1[mask]))
         pe2 = numpy.concatenate(pe2_list[key])
-        print 'mean pe2 = ',numpy.mean(pe2[mask])
-        ps = numpy.concatenate(ps_list[key])
-        print 'mean ps = ',numpy.mean(ps[mask])
+        print('mean pe2 = ',numpy.mean(pe2[mask]))
+        pT = numpy.concatenate(pT_list[key])
+        print('mean pT = ',numpy.mean(pT[mask]))
 
-        print 'min mag = ',numpy.min(m)
-        print 'max mag = ',numpy.max(m)
-        print 'mean s (used) = ',numpy.mean(s[used])
-        print 'mean e1 (used) = ',numpy.mean(e1[used])
-        print 'mean e2 (used) = ',numpy.mean(e2[used])
-        print 'mean ps (used) = ',numpy.mean(ps[used])
-        print 'mean pe1 (used) = ',numpy.mean(pe1[used])
-        print 'mean pe2 (used) = ',numpy.mean(pe2[used])
+        print('min mag = ',numpy.min(m))
+        print('max mag = ',numpy.max(m))
+        print('mean T (used) = ',numpy.mean(T[used]))
+        print('mean e1 (used) = ',numpy.mean(e1[used]))
+        print('mean e2 (used) = ',numpy.mean(e2[used]))
+        print('mean pT (used) = ',numpy.mean(pT[used]))
+        print('mean pe1 (used) = ',numpy.mean(pe1[used]))
+        print('mean pe2 (used) = ',numpy.mean(pe2[used]))
         de1 = e1 - pe1
         de2 = e2 - pe2
-        ds = s - ps
-        dt = s**2 - ps**2
-        t = s**2
-        print 'mean ds (used) = ',numpy.mean(ds[used])
-        print 'mean de1 (used) = ',numpy.mean(de1[used])
-        print 'mean de2 (used) = ',numpy.mean(de2[used])
+        dT = T - pT
+        print('mean ds (used) = ',numpy.mean(ds[used]))
+        print('mean de1 (used) = ',numpy.mean(de1[used]))
+        print('mean de2 (used) = ',numpy.mean(de2[used]))
 
         min_mused = numpy.min(m[used])
         bin_by_mag(m[mask], dt[mask], de1[mask], de2[mask], min_mused, key)
@@ -590,7 +585,7 @@ def main():
         make_hist(dt[used], t[used], de1[used], de2[used], key+'_used')
 
         #bin_by_mag(m[mask], s[mask], e1[mask], e2[mask], min_mused, key+'_orig')
-        #bin_by_mag(m[mask], ps[mask], pe1[mask], pe2[mask], min_mused, key+'_model')
+        #bin_by_mag(m[mask], pT[mask], pe1[mask], pe2[mask], min_mused, key+'_model')
 
         #mask2 = mask & (sky<med_sky)
         #bin_by_mag(m[mask2], ds[mask2], de1[mask2], de2[mask2], min_mused, key+'_lowsky')

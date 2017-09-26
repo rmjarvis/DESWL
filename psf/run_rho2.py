@@ -3,7 +3,7 @@
 # This involves creating catalogs of shapes based on the PSFEx files, and then using
 # TreeCorr to compute the correlation functions.
 
- 
+from __future__ import print_function
 import os
 import numpy
 from toFocal import toFocal
@@ -11,63 +11,52 @@ from toFocal import toFocal
 def parse_args():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Run PSFEx on a set of runs/exposures')
+    parser = argparse.ArgumentParser(description='Run rho stats on a set of exposures')
 
     # Drectory arguments
-    parser.add_argument('--work', default='./',
+    parser.add_argument('--work', default='/astro/u/mjarvis/work/y3_piff',
                         help='location of work directory')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
-                        help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
-                        help='list of run/exposures (in lieu of separate exps, runs)')
+                        help='list of exposures (in lieu of separate exps, runs)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
-    parser.add_argument('--runs', default='', nargs='+',
-                        help='list of runs')
     parser.add_argument('--max_tiling', default=10,
                         help='maximum tiling to use')
     parser.add_argument('--use_reserved', default=False, action='store_const', const=True,
                         help='just use the objects with the RESERVED flag')
+    parser.add_argument('--bands', default='grizY', type=str,
+                            help='Limit to the given bands')
 
     # Options
-    parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
-                        help='Only do 1 ccd per exposure (used for debugging)')
-    parser.add_argument('--oldkeys', default=False, action='store_const', const=True,
-                        help='Use old psfex_* keys in the cats files')
+    parser.add_argument('--use_psfex', default=False, action='store_const', const=True,
+                        help='Use PSFEx rather than Piff model')
 
     args = parser.parse_args()
     return args
 
 
-def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False):
-    import astropy.io.fits as pyfits
-
-    datadir = '/astro/u/astrodat/data/DES'
+def read_data(args, work, limit_bands=None, reserved=False, prefix='piff'):
+    import fitsio
 
     RESERVED = 64
     BAD_CCDS = [2, 31, 61]
 
     if args.file != '':
-        print 'Read file ',args.file
+        print('Read file ',args.file)
         with open(args.file) as fin:
-            data = [ line.split() for line in fin ]
-        runs, exps = zip(*data)
+            exps = [ line.strip() for line in fin if line[0] != '#' ]
+        print('File included %d exposures'%len(exps))
     else:
-        runs = args.runs
         exps = args.exps
+        print('Explicit listing of %d exposures'%len(exps))
+    exps = sorted(exps)
 
-    expinfo_file = '/astro/u/mjarvis/work/exposure_info_' + args.tag + '.fits'
-    #expinfo_file = '/astro/u/mjarvis/work/exposure_info_y1a1-v01.fits'
-    #expinfo_file = 'exposure_info_y1spte-v02.fits'
-    print 'reading exposure_info file: ',expinfo_file
-    with pyfits.open(expinfo_file) as pyf:
-        expinfo = pyf[1].data
-
-    keys = ['ra', 'dec', 'x', 'y', 'e1', 'e2', 'size', 'psf_e1', 'psf_e2', 'psf_size']
+    keys = ['ra', 'dec', 'x', 'y', 'obs_e1', 'obs_e2', 'obs_T',
+            prefix+'_e1', prefix+'_e2', prefix+'_T']
     all_data = { key : [] for key in keys }
     all_keys = keys
 
@@ -75,197 +64,156 @@ def read_data(args, work, limit_filters=None, subtract_mean=True, reserved=False
     all_data['ccd'] = []
     all_keys = all_keys + ['exp', 'ccd' ]
 
-    if subtract_mean:
-        all_data['alt_e1'] = []
-        all_data['alt_e2'] = []
-        all_data['alt_size'] = []
-        all_keys = all_keys + ['alt_e1', 'alt_e2', 'alt_size']
     if 'x' in keys:
         all_data['fov_x'] = []
         all_data['fov_y'] = []
         all_keys = all_keys + ['fov_x', 'fov_y']
 
-    if args.oldkeys:
-        inkeys =  [ k.replace('psf_','psfex_') for k in keys ]
-    else:
-        inkeys = keys
+    inkeys = keys
 
-    all_filters = []  # This keeps track of the filter for each record
-    all_tilings = []  # This keeps track of the tiling for each record
-    filters = set()   # This is the set of all filters being used
-    tilings = set()   # This is the set of all tilings being used
+    all_bands = []  # This keeps track of the band for each record
+    #all_tilings = []  # This keeps track of the tiling for each record
+    bands = set()   # This is the set of all bands being used
+    #tilings = set()   # This is the set of all tilings being used
 
-    ntot = 0
-    nused = 0
-    nreserved = 0
-    ngood = 0
+    for exp in exps:
 
-    cat_dir = os.path.join(work,'psf_cats')
-
-    for run,exp in zip(runs,exps):
-
-        print 'Start work on run, exp = ',run,exp
-        expnum = int(exp[6:])
-        print 'expnum = ',expnum
+        print('Start work on exp = ',exp)
+        expnum = int(exp)
+        print('expnum = ',expnum)
+        expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
 
         if expnum not in expinfo['expnum']:
-            print 'expnum is not in expinfo!'
-            print 'expinfo[expnum] = ',expinfo['expnum']
-            print 'Could not find information about this expnum.  Skipping ',run,exp
+            print('expnum is not in expinfo!')
+            print('expinfo[expnum] = ',expinfo['expnum'])
+            print('Could not find information about this expnum.  Skipping ',run,exp)
             continue
-        k = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
-        print 'k = ',k
-        filter = expinfo['filter'][k]
-        print 'filter[k] = ',filter
-        if (limit_filters is not None) and (filter not in limit_filters):
-            print 'Not doing this filter.'
+        i = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
+        #print('i = ',i)
+        band = expinfo['band'][i]
+        #print('band[k] = ',band)
+        if (limit_bands is not None) and (band not in limit_bands):
+            print('Not doing band = %s.'%band)
             continue
 
-        tiling = int(expinfo['tiling'][k])
-        print 'tiling[k] = ',tiling
+        #tiling = int(expinfo['tiling'][k])
+        #print('tiling[k] = ',tiling)
 
-        if tiling == 0:
+        #if tiling == 0:
             # This shouldn't happen, but it did for a few exposures.  Just skip them, since this
             # might indicate some kind of problem.
-            print 'tiling == 0.  Skip this exposure.'
-            continue
+            #print('tiling == 0.  Skip this exposure.')
+            #continue
 
-        if tiling > args.max_tiling:
-            print 'tiling is > %d.  Skip this exposure.'%args.max_tiling
-            continue
+        #if tiling > args.max_tiling:
+            #print('tiling is > %d.  Skip this exposure.'%args.max_tiling)
+            #continue
 
-        cat_file = os.path.join(cat_dir, exp + "_exppsf.fits")
-        if not os.path.exists(cat_file):
-            cat_file = os.path.join(cat_dir, exp + "_psf.fits")
-        print 'cat_file = ',cat_file
-        try:
-            with pyfits.open(cat_file) as pyf:
-                data = pyf[1].data
-        except:
-            print 'Unable to open cat_file %s.  Skipping this file.'%cat_file
-            continue
+        for k in range(len(expinfo)):
+            ccdnum = expinfo[k]['ccdnum']
+            if expinfo[k]['flag'] != 0:
+                print('Skipping ccd %d because it is blacklisted: '%ccdnum, expinfo[k]['flag'])
+                continue
+            if ccdnum in BAD_CCDS:
+                print('Skipping ccd %d because it is BAD'%ccdnum)
 
-        #ccdnums = numpy.unique(data['ccdnum'])
-        #print 'ccdnums = ',ccdnums
+            cat_file = os.path.join(work, exp, "psf_cat_%d_%d.fits"%(expnum,ccdnum))
+            #print('cat_file = ',cat_file)
+            try:
+                data = fitsio.read(cat_file)
+                flag = data[prefix+'_flag']
+            except (OSError, IOError):
+                print('Unable to open cat_file %s.  Skipping this file.'%cat_file)
+                continue
 
-        print 'n = ',len(data)
-        print 'nused = ',numpy.sum((data['flag'] & 1) != 0)
-        print 'nreserved = ',numpy.sum((data['flag'] & 64) != 0)
-        print 'ngood = ',numpy.sum(data['flag'] == 0)
-        ntot += len(data)
-        nused += numpy.sum((data['flag'] & 1) != 0)
-        nreserved += numpy.sum((data['flag'] & 64) != 0)
-        ngood += numpy.sum(data['flag'] == 0)
+            ntot = len(data)
+            nused = numpy.sum((flag & 1) != 0)
+            nreserved = numpy.sum((flag & 64) != 0)
+            ngood = numpy.sum(flag == 0)
+            #print('nused = ',nused)
+            #print('nreserved = ',nreserved)
+            #print('ngood = ',ngood)
 
-        bad_ccd = numpy.in1d(data['ccdnum'], BAD_CCDS)
-        if args.use_reserved:
-            mask = (data['flag'] == RESERVED) & ~bad_ccd
-        else:
-            mask = (data['flag'] == 0) & ~bad_ccd
+            if args.use_reserved:
+                mask = (flag == RESERVED)
+            else:
+                mask = (flag == 0)
+            #print('mask = ',mask)
 
-        ngood = numpy.sum(mask)
-        assert ngood == len(data[mask])
-        if ngood == 0:
-            print 'All objects in this exposure are flagged.'
-            print 'Probably due to astrometry flags. Skip this exposure.'
-            continue
+            ngood = numpy.sum(mask)
+            #print('ngood = ',ngood,'/',len(data))
+            assert ngood == len(data[mask])
+            if ngood == 0:
+                print('All objects in ccd %d are flagged.'%ccdnum)
+                print('Probably due to astrometry flags. Skip this exposure.')
+                continue
 
-        for key, inkey in zip(keys, inkeys):
-            all_data[key].append(data[inkey][mask])
+            for key, inkey in zip(keys, inkeys):
+                all_data[key].append(data[inkey][mask])
 
-        all_data['exp'].append([expnum] * ngood)
-        all_data['ccd'].append(data['ccdnum'][mask])
+            all_data['exp'].append([expnum] * ngood)
+            all_data['ccd'].append([ccdnum] * ngood)
 
-        if subtract_mean:
-            e1 = data['e1'][mask]
-            e2 = data['e2'][mask]
-            s = data['size'][mask]
-            p_e1 = data['psf_e1'][mask]
-            p_e2 = data['psf_e2'][mask]
-            p_s = data['psf_size'][mask]
-            de1 = numpy.mean(e1-p_e1)
-            de2 = numpy.mean(e2-p_e2)
-            # Really want <(s^2 - p_s^2)/s^2> => 0  after subtracting ds
-            # <1 - p_s^2/(s-ds)^2> = 0
-            # <1 - p_s^2/s^2 (1 + 2ds/s + 3ds^2/s^2 + ...)  > = 0
-            # 1 - <p_s^2/s^2> - 2ds<p_s^2/s^3> - 3ds^2<p_s^2/s^4> = 0
-            a1 = numpy.mean(p_s**2/s**2)
-            a2 = numpy.mean(p_s**2/s**3)
-            a3 = numpy.mean(p_s**2/s**4)
-            ds = (1. - a1) / (2.*a2)
-            # Iterate once to refine
-            ds = (1. - a1 - 3.*ds**2*a3) / (2.*a2)
-            print 'de = ',de1,de2, 'mean e = ',numpy.mean(e1),numpy.mean(e2),
-            print ' -> ',numpy.mean(e1-de1), numpy.mean(e2-de2)
-            print 'ds = ',ds, 'mean s = ',numpy.mean(s),' -> ',numpy.mean(s-ds)
-            print 'mean dt = ',numpy.mean( (s**2 - p_s**2) / s**2 ),
-            print ' -> ',numpy.mean( ((s-ds)**2 - p_s**2) / (s-ds)**2 )
-            all_data['alt_e1'].append(e1 - de1)
-            all_data['alt_e2'].append(e2 - de2)
-            all_data['alt_size'].append(s - ds)
+            if 'x' in keys:
+                # Convert to focal position.
+                x,y = toFocal(ccdnum, data['x'][mask], data['y'][mask])
+                # This comes back in units of mm.  Convert to arcsec.
+                # 1 pixel = 15e-3 mm = 0.263 arcsec
+                x *= 0.263/15e-3
+                y *= 0.263/15e-3
+                all_data['fov_x'].append(x)
+                all_data['fov_y'].append(y)
 
-        if 'x' in keys:
-            # Convert to focal position.
-            x,y = toFocal(data['ccdnum'][mask], data['x'][mask], data['y'][mask])
-            # This comes back in units of mm.  Convert to arcsec.
-            # 1 pixel = 15e-3 mm = 0.263 arcsec
-            x *= 0.263/15e-3
-            y *= 0.263/15e-3
-            all_data['fov_x'].append(x)
-            all_data['fov_y'].append(y)
+            all_bands.extend( ([band] * ngood) )
+            #all_tilings.extend( ([tiling] * ngood) )
+            bands.add(band)
+            #tilings.add(tiling)
 
-        all_filters.extend( ([filter] * ngood) )
-        all_tilings.extend( ([tiling] * ngood) )
-        filters.add(filter)
-        tilings.add(tiling)
-    print '\nFinished processing all exposures'
-    print 'filters = ',filters
-    print 'tilings = ',tilings
+    print('\nFinished processing all exposures')
+    print('bands = ',bands)
+    #print('tilings = ',tilings)
 
     # Turn the data into a recarray
-    print 'all_data.keys = ',all_data.keys()
+    print('all_data.keys = ',all_data.keys())
     formats = ['f8'] * len(all_keys) + ['a1', 'i2']
-    names = all_keys + ['filter', 'tiling']
-    data = numpy.recarray(shape = (len(all_filters),),
+    #names = all_keys + ['band', 'tiling']
+    names = all_keys + ['band']
+    data = numpy.recarray(shape = (len(all_bands),),
                           formats = formats, names = names)
-    print 'data.dtype = ',data.dtype
+    print('data.dtype = ',data.dtype)
     for key in all_keys:
         data[key] = numpy.concatenate(all_data[key])
-    data['filter'] = all_filters
-    data['tiling'] = all_tilings
-    print 'made recarray'
+    data['band'] = all_bands
+    #data['tiling'] = all_tilings
+    print('made recarray')
 
-    print 'ntot = ',ntot
-    print 'nused = ',nused
-    print 'nreserved = ',nreserved
-    print 'ngood = ',ngood
-
-    return data, filters, tilings
+    tilings = None
+    return data, bands, tilings
 
 
-def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
+def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='piff'):
     """Compute the rho statistics
     """
     import treecorr
 
-    e1 = data[prefix+'e1']
-    e2 = data[prefix+'e2']
-    s = data[prefix+'size']
-    p_e1 = data['psf_e1']
-    p_e2 = data['psf_e2']
-    p_s = data['psf_size']
+    e1 = data['obs_e1']
+    e2 = data['obs_e2']
+    s = data['obs_T']
+    p_e1 = data[prefix+'_e1']
+    p_e2 = data[prefix+'_e2']
+    p_s = data[prefix+'_T']
 
     de1 = e1-p_e1
     de2 = e2-p_e2
     dt = (s**2-p_s**2)/s**2
-    print 'mean de = ',numpy.mean(de1),numpy.mean(de2)
-    print 'mean dt = ',numpy.mean(dt)
+    print('mean de = ',numpy.mean(de1),numpy.mean(de2))
+    print('mean dt = ',numpy.mean(dt))
 
     if use_xy:
         x = data['fov_x']
         y = data['fov_y']
-        print 'x = ',x
-        print 'y = ',y
+        print('x = ',x)
+        print('y = ',y)
 
         ecat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=e1, g2=e2)
         decat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=de1, g2=de2)
@@ -274,8 +222,8 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
     else:
         ra = data['ra']
         dec = data['dec']
-        print 'ra = ',ra
-        print 'dec = ',dec
+        print('ra = ',ra)
+        print('dec = ',dec)
 
         ecat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=e1, g2=e2)
         decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=de1, g2=de2)
@@ -298,7 +246,7 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
                           (dtcat, dtcat),
                           (decat, dtcat),
                           (ecat, dtcat) ]:
-        print 'Doing correlation of %s vs %s'%(cat1.name, cat2.name)
+        print('Doing correlation of %s vs %s'%(cat1.name, cat2.name))
 
         rho = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
                                      bin_size=bin_size, bin_slop=bin_slop, verbose=2)
@@ -310,7 +258,7 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
         results.append(rho)
 
     if alt_tt:
-        print 'Doing alt correlation of %s vs %s'%(dtcat.name, dtcat.name)
+        print('Doing alt correlation of %s vs %s'%(dtcat.name, dtcat.name))
 
         rho = treecorr.KKCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
                                      bin_size=bin_size, bin_slop=bin_slop, verbose=2)
@@ -320,31 +268,31 @@ def measure_rho(data, max_sep, tag=None, prefix='', use_xy=False, alt_tt=False):
     return results
 
 
-def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
+def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
     """Compute the rho statistics
     """
     import treecorr
 
     ntilings = len(tile_data)
-    print 'len(tile_data) = ',ntilings
+    print('len(tile_data) = ',ntilings)
 
-    de1 = [ d[prefix+'e1']-d['psf_e1'] for d in tile_data ]
-    de2 = [ d[prefix+'e2']-d['psf_e2'] for d in tile_data ]
-    dt = [ (d[prefix+'size']**2-d['psf_size']**2)/d['size']**2 for d in tile_data ]
+    de1 = [ d['obs_e1']-d[prefix+'_e1'] for d in tile_data ]
+    de2 = [ d['obs_e2']-d[prefix+'_e2'] for d in tile_data ]
+    dt = [ (d['obs_T']-d[prefix+'_T'])/d['obs_T'] for d in tile_data ]
     for k in range(len(tile_data)):
-        print 'k = ',k
-        print 'mean de = ',numpy.mean(de1[k]),numpy.mean(de2[k])
-        print 'mean dt = ',numpy.mean(dt[k])
+        print('k = ',k)
+        print('mean de = ',numpy.mean(de1[k]),numpy.mean(de2[k]))
+        print('mean dt = ',numpy.mean(dt[k]))
 
     ecats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg', 
-                               g1=d['e1'], g2=d['e2']) 
+                               g1=d['obs_e1'], g2=d['obs_e2']) 
               for d in tile_data ]
     for cat in ecats: cat.name = 'ecat'
     decats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg', 
                                 g1=de1[k], g2=de2[k]) for k,d in enumerate(tile_data) ]
     for cat in decats: cat.name = 'decat'
     dtcats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg', 
-                                k=dt[k], g1=d['e1']*dt[k], g2=d['e2']*dt[k])
+                                k=dt[k], g1=d['obs_e1']*dt[k], g2=d['obs_e2']*dt[k])
                for k,d in enumerate(tile_data) ]
     for cat in dtcats: cat.name = 'dtcat'
     if tags is not None:
@@ -365,7 +313,7 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
 
         catnames1 = [ cat.name for cat in catlist1 ]
         catnames2 = [ cat.name for cat in catlist2 ]
-        print 'Doing correlation of %s vs %s'%(catnames1, catnames2)
+        print('Doing correlation of %s vs %s'%(catnames1, catnames2))
         rho = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
                                      bin_size=bin_size, bin_slop=bin_slop, verbose=2)
         # Avoid all auto correlations:
@@ -373,7 +321,7 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix=''):
             for j in range(ntilings):
                 if i == j: continue
                 if catlist1 is catlist2 and i > j: continue
-                print 'names: ',catlist1[i].name,catlist2[j].name
+                print('names: ',catlist1[i].name,catlist2[j].name)
                 rho.process_cross(catlist1[i], catlist2[j])
         varg1 = treecorr.calculateVarG(catlist1)
         varg2 = treecorr.calculateVarG(catlist2)
@@ -418,112 +366,111 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
             corr_tt.xi.tolist(),
             corr_tt.varxi.tolist()
         ])
-    #print 'stats = ',stats
-    print 'stat_file = ',stat_file
+    #print('stats = ',stats)
+    print('stat_file = ',stat_file)
     with open(stat_file,'w') as fp:
         json.dump([stats], fp)
-    print 'Done writing ',stat_file
+    print('Done writing ',stat_file)
 
 
-def filter_combinations(filters, single=True, combo=True):
+def band_combinations(bands, single=True, combo=True):
 
     if single:
-        use_filters = [ [f] for f in filters ]
+        use_bands = [ [b] for b in bands ]
     else:
-        use_filters = []
+        use_bands = []
 
     if combo:
-        if 'r' in filters and 'i' in filters:
-            use_filters.append(['r', 'i'])
-        if 'r' in filters and 'i' in filters and 'z' in filters:
-            use_filters.append(['r', 'i', 'z'])
-        if 'g' in filters and 'r' in filters and 'i' in filters and 'z' in filters:
-            use_filters.append(['g', 'r', 'i', 'z'])
+        if 'r' in bands and 'i' in bands:
+            use_bands.append(['r', 'i'])
+        if 'r' in bands and 'i' in bands and 'z' in bands:
+            use_bands.append(['r', 'i', 'z'])
+        if 'g' in bands and 'r' in bands and 'i' in bands and 'z' in bands:
+            use_bands.append(['g', 'r', 'i', 'z'])
 
-    print 'use_filters = ',use_filters
-    print 'tags = ',[ ''.join(filt) for filt in use_filters ]
-    return use_filters
+    print('use_bands = ',use_bands)
+    print('tags = ',[ ''.join(band) for band in use_bands ])
+    return use_bands
 
 
-def do_canonical_stats(data, filters, tilings, work, prefix='', name='all', alt_tt=False):
-    print 'Start CANONICAL: ',prefix,name
+def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', alt_tt=False):
+    print('Start CANONICAL: ',prefix,name)
     # Measure the canonical rho stats using all pairs:
-    use_filters = filter_combinations(filters)
-    for filt in use_filters:
-        print 'filter ',filt
-        mask = numpy.in1d(data['filter'],filt)
-        print 'sum(mask) = ',numpy.sum(mask)
-        print 'len(data[mask]) = ',len(data[mask])
-        tag = ''.join(filt)
+    use_bands = band_combinations(bands)
+    for band in use_bands:
+        print('band ',band)
+        mask = numpy.in1d(data['band'],band)
+        print('sum(mask) = ',numpy.sum(mask))
+        print('len(data[mask]) = ',len(data[mask]))
+        tag = ''.join(band)
         stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
-def do_cross_tiling_stats(data, filters, tilings, work, prefix='', name='cross'):
-    print 'Start CROSS_TILING: ',prefix,name
+def do_cross_tiling_stats(data, bands, tilings, work, prefix='piff', name='cross'):
+    print('Start CROSS_TILING: ',prefix,name)
     # Measure the rho stats using only cross-correlations between tiles.
-    use_filters = filter_combinations(filters)
-    for filt in use_filters:
+    use_bands = band_combinations(bands)
+    for band in use_bands:
         tile_data = []
         for til in tilings:
-            print 'til = ',til
-            mask = numpy.in1d(data['filter'],filt) & (data['tiling'] == til)
-            print 'sum(mask) = ',numpy.sum(mask)
-            print 'len(data[mask]) = ',len(data[mask])
+            print('til = ',til)
+            mask = numpy.in1d(data['band'],band) & (data['tiling'] == til)
+            print('sum(mask) = ',numpy.sum(mask))
+            print('len(data[mask]) = ',len(data[mask]))
             tile_data.append(data[mask])
-        tag = ''.join(filt)
+        tag = ''.join(band)
         tags = [ tag + ":" + str(til) for til in tilings ]
         stats = measure_cross_rho(tile_data, max_sep=300, tags=tags, prefix=prefix)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
 
-def do_cross_band_stats(data, filters, tilings, work, prefix='', name='crossband'):
-    print 'Start CROSS_BAND: ',prefix,name
+def do_cross_band_stats(data, bands, tilings, work, prefix='piff', name='crossband'):
+    print('Start CROSS_BAND: ',prefix,name)
     # Measure the rho stats cross-correlating the different bands.
-    use_filters = filter_combinations(filters, single=False)
+    use_bands = band_combinations(bands, single=False)
 
-    for filt in use_filters:
-        print 'cross filters ',filt
-        filt_data = []
-        for f in filt:
-            mask = data['filter'] == f
-            filt_data.append(data[mask])
-        stats = measure_cross_rho(filt_data, max_sep=300, tags=filt, prefix=prefix)
-        tag = ''.join(filt)
+    for band in use_bands:
+        print('cross bands ',band)
+        band_data = []
+        for b in band:
+            mask = data['band'] == b
+            band_data.append(data[mask])
+        stats = measure_cross_rho(band_data, max_sep=300, tags=band, prefix=prefix)
+        tag = ''.join(band)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
 
-def do_odd_even_stats(data, filters, tilings, work, prefix='', name='oddeven'):
-    print 'Start ODD_EVEN: ',prefix,name
+def do_odd_even_stats(data, bands, tilings, work, prefix='piff', name='oddeven'):
+    print('Start ODD_EVEN: ',prefix,name)
     # Measure the rho stats using only cross-correlations between odd vs even tilings.
-    use_filters = filter_combinations(filters)
+    use_bands = band_combinations(bands)
 
-    for filt in use_filters:
-        print 'odd/even ',filt
-        odd = numpy.in1d(data['filter'], filt) & (data['tiling'] % 2 == 1)
-        even = numpy.in1d(data['filter'], filt) & (data['tiling'] % 2 == 0)
+    for band in use_bands:
+        print('odd/even ',band)
+        odd = numpy.in1d(data['band'], band) & (data['tiling'] % 2 == 1)
+        even = numpy.in1d(data['band'], band) & (data['tiling'] % 2 == 0)
         cats = [ data[odd], data[even] ]
-        tag = ''.join(filt)
+        tag = ''.join(band)
         tags = [ tag + ":odd", tag + ":even" ]
         stats = measure_cross_rho(cats, max_sep=300, tags=tags, prefix=prefix)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
 
-def do_fov_stats(data, filters, tilings, work, prefix='', name='fov'):
-    print 'Start FOV: ',prefix,name
+def do_fov_stats(data, bands, tilings, work, prefix='piff', name='fov'):
+    print('Start FOV: ',prefix,name)
     # Measure the rho stats using the field-of-view positions.
-    use_filters = filter_combinations(filters)
-    for filt in use_filters:
-        print 'filter ',filt
-        mask = numpy.in1d(data['filter'],filt)
-        print 'sum(mask) = ',numpy.sum(mask)
-        print 'len(data[mask]) = ',len(data[mask])
-        tag = ''.join(filt)
-        stats = measure_rho(data[mask], max_sep=300, tag=tag,
-                                                   prefix=prefix, use_xy=True)
+    use_bands = band_combinations(bands)
+    for band in use_bands:
+        print('band ',band)
+        mask = numpy.in1d(data['band'],band)
+        print('sum(mask) = ',numpy.sum(mask))
+        print('len(data[mask]) = ',len(data[mask]))
+        tag = ''.join(band)
+        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, use_xy=True)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
@@ -557,72 +504,68 @@ def set_args(**kwargs):
 
 def write_data(data, file_name):
     import fitsio
-    print "Writing data to ",file_name
+    print("Writing data to ",file_name)
     fitsio.write(file_name, data, clobber=True)
 
 def main():
 
     args = parse_args()
-    print 'args = ',args
+    print('args = ',args)
 
     # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)
-    print 'work dir = ',work
+    print('work dir = ',work)
     try:
         if not os.path.isdir(work):
             os.makedirs(work)
     except OSError as e:
-        print "Ignore OSError from makedirs(work):"
-        print e
+        print("Ignore OSError from makedirs(work):")
+        print(e)
         pass
 
-    filters = None
-    #filters = ['r']
-    #filters = ['r', 'i']
-    #filters = ['r', 'i', 'z']
-    data, filters, tilings = read_data(args, work, limit_filters=filters, subtract_mean=False)
+    if args.use_psfex:
+        prefix='psfex'
+    else:
+        prefix='piff'
 
-    print 'all filters = ',filters
-    print 'all tilings = ',tilings
+    data, bands, tilings = read_data(args, work, limit_bands=args.bands, prefix=prefix)
+
+    print('all bands = ',bands)
+    #print('all tilings = ',tilings)
 
     out_file_name = os.path.join(work, "psf_%s.fits"%args.tag)
     write_data(data, out_file_name)
 
-    for filt in filters:
-        print 'n for filter %s = '%filt, numpy.sum(data['filter'] == filt)
-    for til in tilings:
-        print 'n for tiling %d = '%til, numpy.sum(data['tiling'] == til)
+    for band in bands:
+        print('n for band %s = '%band, numpy.sum(data['band'] == band))
+    #for til in tilings:
+        #print('n for tiling %d = '%til, numpy.sum(data['tiling'] == til))
 
-    gdata = numpy.where(data['filter'] == 'g')[0]
-    rdata = numpy.where(data['filter'] == 'r')[0]
-    idata = numpy.where(data['filter'] == 'i')[0]
-    zdata = numpy.where(data['filter'] == 'z')[0]
-    odddata = numpy.where(data['tiling']%2 == 1)[0]
-    evendata = numpy.where(data['tiling']%2 == 0)[0]
+    gdata = numpy.where(data['band'] == 'g')[0]
+    rdata = numpy.where(data['band'] == 'r')[0]
+    idata = numpy.where(data['band'] == 'i')[0]
+    zdata = numpy.where(data['band'] == 'z')[0]
+    #odddata = numpy.where(data['tiling']%2 == 1)[0]
+    #evendata = numpy.where(data['tiling']%2 == 0)[0]
 
-    print 'len(gdata) = ',len(gdata)
-    print 'len(rdata) = ',len(rdata)
-    print 'len(idata) = ',len(idata)
-    print 'len(zdata) = ',len(zdata)
-    print 'len(odddata) = ',len(odddata)
-    print 'len(evendata) = ',len(evendata)
+    print('len(gdata) = ',len(gdata))
+    print('len(rdata) = ',len(rdata))
+    print('len(idata) = ',len(idata))
+    print('len(zdata) = ',len(zdata))
+    #print('len(odddata) = ',len(odddata))
+    #print('len(evendata) = ',len(evendata))
 
-    #filters = ['r', 'i']
+    #bands = ['r', 'i']
 
-    do_canonical_stats(data, filters, tilings, work, alt_tt=True)
+    do_canonical_stats(data, bands, tilings, work, alt_tt=False, prefix=prefix)
 
-    #do_cross_tiling_stats(data, filters, tilings, work)
+    #do_cross_tiling_stats(data, bands, tilings, work, prefix=prefix)
 
-    #do_cross_band_stats(data, filters, tilings, work)
+    #do_cross_band_stats(data, bands, tilings, work, prefix=prefix)
 
-    #do_odd_even_stats(data, filters, tilings, work)
+    #do_odd_even_stats(data, bands, tilings, work, prefix=prefix)
 
-    #do_fov_stats(data, filters, tilings, work)
-
-    # Use subtract_mean=True to do these:
-    #do_canonical_stats(data, filters, tilings, work, prefix='alt_', name='alt')
-
-    #do_odd_even_stats(data, filters, tilings, work, prefix='alt_', name='altoddeven')
+    #do_fov_stats(data, bands, tilings, work, prefix=prefix)
 
 
 if __name__ == "__main__":

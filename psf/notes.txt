@@ -1,3 +1,7 @@
+TODO:
+Fix reserved in psf_cat files.  The reserved stars seem not to have made it in.
+Get other kinds of blacklisting to put in as flags in expinfo
+
 make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
 go runs run_psfex.py, runs findstars and psfex

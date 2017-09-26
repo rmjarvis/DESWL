@@ -18,6 +18,8 @@
 # 
 # See https://github.com/esheldon/wq for information about using wq.
 
+from __future__ import print_function
+
 import argparse,os,re
 import time
 import numpy
@@ -26,16 +28,16 @@ import datetime
 # Note: I originally had the wrong shell set.  I ran bash in my .login
 # rather than setting it correctly by mailing RT-RACF-UserAccounts@bnl.gov.
 # If you have the same problem, you can have the command look like:
-#    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+#    cd /astro/u/mjarvis/rmjarvis/DESWL/psf
 #    bash -l -c '{cmd}'
 # instead of 
-#    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+#    cd /astro/u/mjarvis/rmjarvis/DESWL/psf
 #    source /astro/u/mjarvis/.bashrc
 #    {cmd}
 
 top_txt="""
 command: |
-    cd /astro/u/mjarvis/rmjarvis/DESWL/psfex
+    cd /astro/u/mjarvis/rmjarvis/DESWL/psf
     source /astro/u/mjarvis/.bashrc
     {cmd}
 
@@ -48,7 +50,7 @@ N: {cores_per_job}
 
 # Select from this group(s)
 # I've had trouble with OS operations from a31, a32, so avoid them.
-group: [new, new2, a22, a23, a24, a25, a26, a27, a28, a29, a30]
+group: [gen7, gen6, gen4, a22, a24, a25, a26, a27, a28, a29, a30]
 """
 
 
@@ -82,31 +84,37 @@ else:
     submit_dir = args.submit_dir
 
 submit_dir = os.path.expanduser(submit_dir)
-print 'submit_dir = ',submit_dir
+print('submit_dir = ',submit_dir)
 if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
 
 # Read in the runs, exps from the input file
-print 'Read file ',args.file
+print('Read file ',args.file)
 with open(args.file) as fin:
-    data = [ line.split() for line in fin ]
+    data = [ line.split() for line in fin if line[0] != '#' ]
 nexps = len(data)
 
 if args.njobs != 1:
     # Shuffle the order so we don't have all the LMC exposures in the same job.
-    print 'first 3 lines of input file are ',data[0:3]
+    print('first 3 lines of input file are ',data[0:3])
     numpy.random.shuffle(data)
-    print 'After shuffling, first 3 lines of input file are ',data[0:3]
+    print('After shuffling, first 3 lines of input file are ',data[0:3])
 
-runs, exps = zip(*data)
+if len(data[0]) == 2:
+    runs, exps = zip(*data)
+else:
+    runs = None
+    exps = zip(*data)[0]
+print('runs = ',runs)
+print('exps = ',exps)
 
 if args.njobs > nexps:
     args.njobs = nexps
 
 import math
 n_per_job = int(math.ceil(float(nexps) / float(args.njobs)))
-print 'njobs = ',args.njobs
-print 'total n = ',nexps
-print 'n_per_job = ',n_per_job
+print('njobs = ',args.njobs)
+print('total n = ',nexps)
+print('n_per_job = ',n_per_job)
 
 submit_list = []
 
@@ -123,9 +131,11 @@ for job in range(args.njobs):
         cmd=args.cmd+' --file %s'%(args.file)
     else:
         # Make single string with a list of the runs and exps for this job:
-        s_runs = " ".join(runs[start:end])
+        if runs is not None:
+            s_runs = " ".join(runs[start:end])
+            cmd=args.cmd+' --runs %s'%(s_runs)
         s_exps = " ".join(exps[start:end])
-        cmd=args.cmd+' --runs %s --exps %s'%(s_runs,s_exps)
+        cmd=args.cmd+' --exps %s'%(s_exps)
 
     job_name = args.file + '_' + str(job)
     job_submit = top_txt.format(name=job_name, cores_per_job=args.cores_per_job,
@@ -142,8 +152,8 @@ for job in range(args.njobs):
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
 cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,submit_dir,args.file)
-print cmd
-print 'Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list)
-print '      between each job submission.'
+print(cmd)
+print('Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list))
+print('      between each job submission.')
 os.system(cmd)
 

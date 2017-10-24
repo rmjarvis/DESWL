@@ -6,7 +6,7 @@ from __future__ import print_function
 import os
 import sys
 import traceback
-import numpy
+import numpy as np
 import copy
 import glob
 import time
@@ -16,6 +16,7 @@ import pandas
 import galsim
 import galsim.des
 import piff
+import ngmix
 
 import matplotlib
 matplotlib.use('Agg') # needs to be done before import pyplot
@@ -51,6 +52,7 @@ MAX_CENTROID_SHIFT = 1.0
 NOT_USED = 1
 BAD_MEASUREMENT = 2
 CENTROID_SHIFT = 4
+OUTLIER = 8
 FAILURE = 32
 RESERVED = 64
 NOT_STAR = 128
@@ -142,20 +144,22 @@ def parse_args():
                         help='remove the top mags using mag_auto')
     parser.add_argument('--nbright_stars', default=10, type=int,
                         help='use median of this many brightest stars for min mag')
-    parser.add_argument('--max_mag', default=-1, type=float,
+    parser.add_argument('--max_mag', default=0, type=float,
                         help='only use stars brighter than this mag')
     parser.add_argument('--use_tapebumps', default=1, type=int,
                         help='avoid stars in or near tape bumps')
     parser.add_argument('--tapebump_extra', default=2, type=float,
                         help='How much extra room around tape bumps to exclude stars in units of FWHM')
-    parser.add_argument('--single_ccd', default=False, action='store_const', const=True,
-                        help='Only do 1 ccd per exposure (used for debugging)')
+    parser.add_argument('--single_ccd', default=0, type=int,
+                        help='Only do the specified ccd (used for debugging)')
     parser.add_argument('--reserve', default=0, type=float,
                         help='Reserve some fraction of the good stars for testing')
     parser.add_argument('--get_psfex', default=False, action='store_const', const=True,
                         help='Download the PSFEx files along the way')
     parser.add_argument('--plot_fs', default=False, action='store_const', const=True,
                         help='Make a size-magnitude plot of the findstars output')
+    parser.add_argument('--use_ngmix', default=False, action='store_const', const=True,
+                        help='Use ngmix rather than hsm for the measurements')
 
     args = parser.parse_args()
     return args
@@ -164,7 +168,7 @@ def parse_args():
 def read_tapebump_file(file_name):
     """Read and parse the tapebump file if we are going to need it.
     """
-    raw_tbdata = numpy.genfromtxt(file_name, delimiter=',')
+    raw_tbdata = np.genfromtxt(file_name, delimiter=',')
     # repackage this as  dict (key = ccdnum) of lists of tuples (ymin, xmin, ymax, xmax)
     tbdata = {}
     for d in raw_tbdata:
@@ -253,9 +257,9 @@ def read_image_header(row, img_file):
         telra = h['TELRA']
         teldec = h['TELDEC']
         telha = h['HA']
-        telra = galsim.HMS_Angle(telra) / galsim.degrees
-        teldec = galsim.DMS_Angle(teldec) / galsim.degrees
-        telha = galsim.HMS_Angle(telha) / galsim.degrees
+        telra = galsim.Angle.from_hms(telra) / galsim.degrees
+        teldec = galsim.Angle.from_dms(teldec) / galsim.degrees
+        telha = galsim.Angle.from_hms(telha) / galsim.degrees
 
         airmass = float(h.get('AIRMASS',-999))
         sky = float(h.get('SKYBRITE',-999))
@@ -389,8 +393,8 @@ def remove_bad_stars(df, ccdnum, tbdata,
     use = df['star_flag'] == 1
 
     if mag_cut > 0:
-        mags = numpy.sort(df['mag'])
-        min_star = numpy.median(mags[0:nbright_stars])
+        mags = np.sort(df['mag'])
+        min_star = np.median(mags[0:nbright_stars])
         print('   min mag = ',mags[0])
         print('   median of brightest %d is '%nbright_stars, min_star)
 
@@ -403,6 +407,12 @@ def remove_bad_stars(df, ccdnum, tbdata,
         print('   also select stars brighter than',max_mag)
         print('   which brings star count to ',use.sum())
 
+    elif max_mag < 0:
+        mag_limit = np.min(df['mag'][use]) + abs(max_mag)
+        use = use & (df['mag'] < mag_limit)
+        print('   also select stars brighter than',mag_limit)
+        print('   which brings star count to ',use.sum())
+
     if use_tapebumps:
         # I'm sure it doesn't matter, but add an extra 0.5 pixel to the slop because the tape bump
         # values are in terms of which pixels to include as part of the tape bump.  So the edges
@@ -412,30 +422,30 @@ def remove_bad_stars(df, ccdnum, tbdata,
         y = df['y']
         tbd = tbdata[ccdnum]
         mask = [(y>tb[0]-extra) & (x>tb[1]-extra) & (y<tb[2]+extra) & (x<tb[3]+extra) for tb in tbd]
-        mask = numpy.any(mask, axis=0)
+        mask = np.any(mask, axis=0)
         use = use & ~mask
         print('   excluding tape bumps brings star count to ',use.sum())
 
     if reserve:
         print('   reserve ',reserve)
         n = use.sum()
-        perm = numpy.random.permutation(n)
+        perm = np.random.permutation(n)
         n1 = int(reserve * n)
         print('   reserving',n1)
         print('   initial ids = ',df[use]['id'].values)
         # There is surely a more efficient way to do this, but I kept getting confused about
         # when numpy makes a copy vs a view.  This step-by-step calculation works.
-        r1 = numpy.zeros((n), dtype=bool)
+        r1 = np.zeros((n), dtype=bool)
         r1[:n1] = True
-        r2 = numpy.zeros((n), dtype=bool)
+        r2 = np.zeros((n), dtype=bool)
         r2[perm] = r1
-        reserve = numpy.zeros_like(use, dtype=bool)
+        reserve = np.zeros_like(use, dtype=bool)
         reserve[use] = r2
-        print('   nreserve = ',numpy.sum(reserve))
+        print('   nreserve = ',np.sum(reserve))
         df['reserve'] = reserve
         print('   reserve ids = ',df['id'][df['reserve']].values)
-        print('   final ids = ',df['id'][~df['reserve']].values)
         use = use & ~reserve
+        print('   final ids = ',df['id'][use].values)
         print('   after reserve: nstars = ',use.sum())
 
     df['use'] = use
@@ -450,13 +460,12 @@ def get_fwhm(df):
     # strange magnitudes were selected
     use = df['use']
     fwhm = 2. * df[use]['sigma0']  # 2 * sigma is approx fwhm
-    stats = ( numpy.min(fwhm), numpy.max(fwhm),
-              numpy.mean(fwhm), numpy.median(fwhm) )
+    stats = ( np.min(fwhm), np.max(fwhm),
+              np.mean(fwhm), np.median(fwhm) )
     return stats
 
 
 def plot_fs(df, filename):
-    import numpy
     fig, ax = plt.subplots(1,1)
 
     # Overall zeropoint adjustment from Eli.
@@ -472,20 +481,24 @@ def plot_fs(df, filename):
     flag = df['star_flag'].copy()
     flag[df['piff_flag']==0] = 2
     flag[df['piff_flag']==RESERVED] = 2  # Also count the reserve stars as psf stars
-    print('num detections: ',numpy.sum(flag == 0))
-    print('num candidates: ',numpy.sum(flag == 1))
-    print('num final psf stars: ',numpy.sum(flag == 2))
+    print('num detections: ',np.sum(flag == 0))
+    print('num candidates: ',np.sum(flag == 1))
+    print('num final psf stars: ',np.sum(flag == 2))
 
     # Mag adjustment from Eli.
     mag = mag + zp
 
-    ax.set_xlim(10+zp, 24.)
+    print('mag range = ',np.min(mag),np.max(mag))
+    print('mag range for size < 1.2 = ',np.min(mag[size<1.2]),np.max(mag[size<1.2]))
+
+    ax.set_xlim(np.floor(np.min(mag[size<1.2])), np.ceil(np.max(mag[size<1.2])))
+    #ax.set_xlim(14, 24.)
     ax.set_ylim(0., 1.2)
     ax.set_xlabel('Magnitude')
     ax.set_ylabel(r'$T = 2\sigma^2$ (arcsec${}^2$)')
 
-    index = numpy.argsort(mag)
-    n = numpy.arange(len(mag))
+    index = np.argsort(mag)
+    n = np.arange(len(mag))
 
     for i in range(20):
         s = index[n%20==i]
@@ -508,9 +521,9 @@ def plot_fs(df, filename):
     print('Wrote fs plot to ',filename)
     plt.close(fig)
 
-    numpy.savetxt(os.path.splitext(filename)[0] + '.dat',
-                  numpy.array(zip(size, mag, flag), dtype='f8, f8, i2'), fmt='%r',
-                  header='size  mag  flag (0=detected, 1=candidate, 2=psf, 4=bad measurement)')
+    np.savetxt(os.path.splitext(filename)[0] + '.dat',
+               np.array(zip(size, mag, flag), dtype='f8, f8, i2'), fmt='%r',
+               header='size  mag  flag (0=detected, 1=candidate, 2=psf, 4=bad measurement)')
 
 
 def run_with_timeout(cmd, timeout_sec):
@@ -613,19 +626,20 @@ def hsm(im, wt=None):
     flag = 0
     try:
         shape_data = im.FindAdaptiveMom(weight=wt, strict=False)
-    except:
+    except Exception as e:
+        print(e)
         print(' *** Bad measurement (caught exception).  Mask this one.')
         flag |= BAD_MEASUREMENT
 
     if shape_data.moments_status != 0:
         print('status = ',shape_data.moments_status)
-        print(' *** Bad measurement.  Mask this one.')
+        print(' *** Bad measurement (hsm status).  Mask this one.')
         flag |= BAD_MEASUREMENT
 
-    dx = shape_data.moments_centroid.x - im.trueCenter().x
-    dy = shape_data.moments_centroid.y - im.trueCenter().y
+    dx = shape_data.moments_centroid.x - im.true_center.x
+    dy = shape_data.moments_centroid.y - im.true_center.y
     if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
-        print(' *** Centroid shifted by ',dx,dy,'.  Mask this one.')
+        print(' *** Centroid shifted by ',dx,dy,' in hsm.  Mask this one.')
         flag |= CENTROID_SHIFT
 
     # Account for the image wcs
@@ -638,8 +652,8 @@ def hsm(im, wt=None):
         e2 = shape_data.observed_shape.e2
         s = shape_data.moments_sigma
 
-        jac = im.wcs.jacobian(im.trueCenter())
-        M = numpy.matrix( [[ 1 + e1, e2 ], [ e2, 1 - e1 ]] ) * s*s
+        jac = im.wcs.jacobian(im.true_center)
+        M = np.matrix( [[ 1 + e1, e2 ], [ e2, 1 - e1 ]] ) * s*s
         J = jac.getMatrix()
         M = J * M * J.T
 
@@ -653,7 +667,53 @@ def hsm(im, wt=None):
 
     return g1, g2, T, flag
 
-def measure_star_shapes(df, image_file, bkg_file, noweight, wcs):
+def ngmix_fit(im, wt=None):
+    flag = 0
+    try:
+        g1,g2,T,hsm_flag = hsm(im)
+        print('hsm: ',g1,g2,T,hsm_flag)
+        if hsm_flag != 0:
+            g1 = g2 = 0.
+            T = 1.
+        wcs = im.wcs.local(im.center)
+        flux = im.array.sum() * wcs.pixelArea()
+        guess = [0., 0., g1, g2, T, flux]
+
+        cen = im.true_center - im.origin
+        jac = ngmix.Jacobian(wcs=wcs, x=cen.x, y=cen.y)
+        if wt is None:
+            obs = ngmix.Observation(image=im.array, jacobian=jac)
+        else:
+            obs = ngmix.Observation(image=im.array, weight=wt.array, jacobian=jac)
+
+        fitter = ngmix.fitting.LMSimple(obs, 'gauss')
+        fitter.go(guess)
+        ngmix_flag = fitter.get_result()['flags']
+        gmix = fitter.get_gmix()
+    except Exception as e:
+        print(e)
+        print(' *** Bad measurement (caught exception).  Mask this one.')
+        flag |= BAD_MEASUREMENT
+        return g1,g2,T,flag  # Use hsm values as a backup
+
+    if ngmix_flag != 0:
+        print(' *** Bad measurement (ngmix flag = %d).  Mask this one.'%ngmix_flag)
+        flag |= BAD_MEASUREMENT
+
+    if abs(g1) > 0.5 or abs(g2) > 0.5:
+        print(' *** Bad shape measurement (%f,%f).  Mask this one.'%(g1,g2))
+        flag |= BAD_MEASUREMENT
+
+    dx, dy = gmix.get_cen()
+    if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
+        print(' *** Centroid shifted by ',dx,dy,' in ngmix.  Mask this one.')
+        flag |= CENTROID_SHIFT
+
+    g1, g2, T = gmix.get_g1g2T()
+    print('ngmix: ',g1,g2,T,flag)
+    return g1, g2, T, flag
+
+def measure_star_shapes(df, image_file, bkg_file, noweight, wcs, use_ngmix):
     """Measure shapes of the raw stellar images at each location.
     """
     print('Read in stars in file: ',image_file)
@@ -671,7 +731,9 @@ def measure_star_shapes(df, image_file, bkg_file, noweight, wcs):
 
     if 'reserve' in df:
         df.loc[df['reserve'], 'obs_flag'] |= RESERVED
-    df.loc[~df['use'], 'obs_flag'] |= NOT_USED
+        df.loc[~df['use'] & ~df['reserve'], 'obs_flag'] |= NOT_USED
+    else:
+        df.loc[~df['use'], 'obs_flag'] |= NOT_USED
 
     full_image = galsim.fits.read(image_file, hdu=1)
 
@@ -685,7 +747,7 @@ def measure_star_shapes(df, image_file, bkg_file, noweight, wcs):
     # Subtract off the background
     if bkg_file is not None:
         bkg = galsim.fits.read(bkg_file)
-        print('median = ',numpy.median(bkg.array))
+        print('median = ',np.median(bkg.array))
         full_image -= bkg
 
     stamp_size = 48
@@ -709,25 +771,63 @@ def measure_star_shapes(df, image_file, bkg_file, noweight, wcs):
         if bkg_file is None:
             im -= df['sky']
 
-        e1, e2, T, flag = hsm(im, wt)
+        if use_ngmix:
+            e1, e2, T, flag = ngmix_fit(im, wt)
+        else:
+            e1, e2, T, flag = hsm(im, wt)
         df.loc[i, 'obs_e1'] = e1
         df.loc[i, 'obs_e2'] = e2
         df.loc[i, 'obs_T'] = T
         df.loc[i, 'obs_flag'] |= flag
     print('final obs_flag = ',df['obs_flag'][ind].values)
     print('df[ind] = ',df.loc[ind].describe())
+    flag_outliers(df, ind, 'obs')
+
+    # Any stars that weren't measurable here, don't use for PSF fitting.
+    df.loc[df['obs_flag']!=0, 'use'] = False
+
+def flag_outliers(df, ind, prefix, nsig=4.):
+    print('ind = ',ind)
+    mask = df[prefix + '_flag'][ind] == 0
+    ind = ind[mask]
+    print('ind => ',ind)
+    mean_e1 = np.mean(df[prefix + '_e1'][ind])
+    mean_e2 = np.mean(df[prefix + '_e2'][ind])
+    mean_T = np.mean(df[prefix + '_T'][ind])
+    std_e1 = np.std(df[prefix + '_e1'][ind])
+    std_e2 = np.std(df[prefix + '_e2'][ind])
+    std_T = np.std(df[prefix + '_T'][ind])
+    print('e1 = ',mean_e1,' +- ',std_e1)
+    print('e2 = ',mean_e2,' +- ',std_e2)
+    print('T = ',mean_T,' +- ',std_T)
+    outlier = np.abs(df[prefix + '_e1'][ind] - mean_e1) > nsig*std_e1
+    outlier |= np.abs(df[prefix + '_e2'][ind] - mean_e2) > nsig*std_e2
+    outlier |= np.abs(df[prefix + '_T'][ind] - mean_T) > nsig*std_T
+    print('outlier = ',ind[outlier])
+    print('n outliers = ',np.sum(outlier),len(ind[outlier]))
+    print('outlier x = ',df['x'][ind[outlier]])
+    print('outlier y = ',df['y'][ind[outlier]])
+    print('outlier e1 = ',df[prefix + '_e1'][ind[outlier]])
+    print('outlier e2 = ',df[prefix + '_e2'][ind[outlier]])
+    print('outlier T = ',df[prefix + '_T'][ind[outlier]])
+    df.loc[ind[outlier], prefix + '_flag'] |= OUTLIER
+    if len(ind[outlier]) > 0:
+        print('Repeat with the new subset')
+        # Increase nsig by 20% so we don't just keep chipping away at the edge of a normal
+        # distribution.
+        return flag_outliers(df, ind, prefix, nsig*1.2)
 
 def find_index(x1, y1, x2, y2):
     """Find the index of the closest point in (x2,y2) to each (x1,y1)
 
     Any points that do not have a corresponding point within 1 arcsec gets index = -1.
     """
-    index = numpy.zeros(len(x1),dtype=int)
+    index = np.zeros(len(x1),dtype=int)
     for i in range(len(x1)):
-        close = numpy.where( (x2 > x1[i]-1.) &
-                             (x2 < x1[i]+1.) &
-                             (y2 > y1[i]-1.) &
-                             (y2 < y1[i]+1.) )[0]
+        close = np.where( (x2 > x1[i]-1.) &
+                          (x2 < x1[i]+1.) &
+                          (y2 > y1[i]-1.) &
+                          (y2 < y1[i]+1.) )[0]
         if len(close) == 0:
             #print('Could not find object near x,y = (%f,%f)'%(x,y))
             index[i] = -1
@@ -735,14 +835,14 @@ def find_index(x1, y1, x2, y2):
             index[i] = close[0]
         else:
             print('Multiple objects found near x,y = (%f,%f)'%(x1[i],y1[i]))
-            amin = numpy.argmin((x2[close] - x1[i])**2 + (y2[close] - y1[i])**2)
+            amin = np.argmin((x2[close] - x1[i])**2 + (y2[close] - y1[i])**2)
             print('Found minimum at ',close[amin],', where (x,y) = (%f,%f)'%(
                     x2[close[amin]], y2[close[amin]]))
             index[i] = close[amin]
     return index
 
 
-def measure_piff_shapes(df, psf_file, image_file, wcs):
+def measure_piff_shapes(df, psf_file, image_file, wcs, use_ngmix):
     """Measure shapes of the Piff solution at each location.
     """
     print('Read in Piff file: ',psf_file)
@@ -801,16 +901,20 @@ def measure_piff_shapes(df, psf_file, image_file, wcs):
 
         im = psf.draw(x=x, y=y, image=im)
 
-        e1, e2, T, flag = hsm(im)
+        if use_ngmix:
+            e1, e2, T, flag = ngmix_fit(im)
+        else:
+            e1, e2, T, flag = hsm(im)
         df.loc[i, 'piff_e1'] = e1
         df.loc[i, 'piff_e2'] = e2
         df.loc[i, 'piff_T'] = T
         df.loc[i, 'piff_flag'] |= flag
     print('final piff_flag = ',df['piff_flag'][ind].values)
     print('df[ind] = ',df.loc[ind].describe())
+    flag_outliers(df, ind, 'piff')
 
 
-def measure_psfex_shapes(df, psfex_file, image_file, wcs):
+def measure_psfex_shapes(df, psfex_file, image_file, wcs, use_ngmix):
     """Measure shapes of the PSFEx solution at each location.
     """
     print('Read in PSFEx file: ',psfex_file)
@@ -858,13 +962,17 @@ def measure_psfex_shapes(df, psfex_file, image_file, wcs):
 
         im = psf_i.drawImage(image=im, method='no_pixel')
 
-        e1, e2, T, flag = hsm(im)
+        if use_ngmix:
+            e1, e2, T, flag = ngmix_fit(im)
+        else:
+            e1, e2, T, flag = hsm(im)
         df.loc[i, 'psfex_e1'] = e1
         df.loc[i, 'psfex_e2'] = e2
         df.loc[i, 'psfex_T'] = T
         df.loc[i, 'psfex_flag'] |= flag
     print('final psfex_flag = ',df['psfex_flag'][ind].values)
     print('df[ind] = ',df.loc[ind].describe())
+    flag_outliers(df, ind, 'psfex')
 
 
 def main():
@@ -902,7 +1010,7 @@ def main():
     if args.file != '':
         print('Read file ',args.file)
         with open(args.file) as fin:
-            exps = [ line for line in fin if line[0] != '#' ]
+            exps = [ line.strip() for line in fin if line[0] != '#' ]
         print('File includes %d exposures'%len(exps))
     elif args.exps is not None:
         exps = args.exps
@@ -913,9 +1021,11 @@ def main():
 
     if args.pixmappy is not None:
         pixmappy_wcs = pixmappy.PixelMapCollection(args.pixmappy).wcs
-        wcs_exps = [k[1:7] for k in pixmappy_wcs.keys() if k[0]=='D']
+        wcs_exps = set([k[1:7] for k in pixmappy_wcs.keys() if k[0]=='D'])
         print('Pixmappy file has %d exposures'%len(wcs_exps))
-        exps = [exp for exp in exps if exp in wcs_exps]
+        #print('exps = ',sorted(exps))
+        #print('wcs_exps = ',sorted(wcs_exps))
+        exps = [exp for exp in exps if str(exp) in wcs_exps]
         print('Limiting to the %d exposures in pixmappy wcs file'%len(exps))
 
     exps = sorted(exps)
@@ -976,9 +1086,13 @@ def main():
 
         for k, row in exp_df.iterrows():
             key, expnum, ccdnum, band = row['key'], row['expnum'], row['ccdnum'], row['band']
+            if args.single_ccd and ccdnum != args.single_ccd: continue
             print('\nProcessing ', key, expnum, ccdnum, band)
             path = row['path'].strip()
             print('path = ',path)
+
+            # Use a well-defined seed so results are repeatable if we see a problem.
+            np.random.seed(((expnum+76876876) * (k+23424524) * 8675309) % 2**32)
 
             # Store all information about the stars in a pandas data frame.
             df = pandas.DataFrame()
@@ -1080,13 +1194,13 @@ def main():
                     wcs = None
 
                 # Measure the shpes and sizes of the stars
-                measure_star_shapes(df, image_file, bkg_file, args.noweight, wcs)
+                measure_star_shapes(df, image_file, bkg_file, args.noweight, wcs, args.use_ngmix)
 
                 # Another check is that the spread in star sizes isn't too large
                 obs_T = df.loc[df['obs_flag']==0, 'obs_T']
-                if numpy.std(obs_T) > 0.15 * numpy.mean(obs_T):
+                if np.std(obs_T) > 0.15 * np.mean(obs_T):
                     print('     -- flag for large size spread: %f > 0.15 * %f'%(
-                            numpy.std(obs_T), numpy.mean(obs_T)))
+                            np.std(obs_T), np.mean(obs_T)))
                     flag |= LARGE_SIZE_SPREAD
 
                 # Run piff
@@ -1101,14 +1215,14 @@ def main():
 
                 # Measure the psf shapes
                 if not (flag & PSF_FAILURE):
-                    measure_piff_shapes(df, psf_file, image_file, wcs)
+                    measure_piff_shapes(df, psf_file, image_file, wcs, args.use_ngmix)
                     good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
                     de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
                     de2 = df.loc[good, 'piff_e2'] - df.loc[good, 'obs_e2']
                     dT = df.loc[good, 'piff_T'] - df.loc[good, 'obs_T']
-                    print('de1 = ',numpy.min(de1),numpy.max(de1),numpy.mean(de1),numpy.std(de1))
-                    print('de2 = ',numpy.min(de2),numpy.max(de2),numpy.mean(de2),numpy.std(de2))
-                    print('dT = ',numpy.min(dT),numpy.max(dT),numpy.mean(dT),numpy.std(dT))
+                    print('de1 = ',np.min(de1),np.max(de1),np.mean(de1),np.std(de1))
+                    print('de2 = ',np.min(de2),np.max(de2),np.mean(de2),np.std(de2))
+                    print('dT = ',np.min(dT),np.max(dT),np.mean(dT),np.std(dT))
                 else:
                     de1 = -999.
                     de2 = -999.
@@ -1120,14 +1234,14 @@ def main():
                     keep_files.append(fs_plot_file)
 
                 if args.get_psfex:
-                    measure_psfex_shapes(df, psfex_file, image_file, wcs)
+                    measure_psfex_shapes(df, psfex_file, image_file, wcs, args.use_ngmix)
                     xgood = (df['psfex_flag'] == 0) & (df['obs_flag'] == 0)
                     xde1 = df.loc[xgood, 'psfex_e1'] - df.loc[xgood, 'obs_e1']
                     xde2 = df.loc[xgood, 'psfex_e2'] - df.loc[xgood, 'obs_e2']
                     xdT = df.loc[xgood, 'psfex_T'] - df.loc[xgood, 'obs_T']
-                    print('de1 = ',numpy.min(xde1),numpy.max(xde1),numpy.mean(xde1),numpy.std(xde1))
-                    print('de2 = ',numpy.min(xde2),numpy.max(xde2),numpy.mean(xde2),numpy.std(xde2))
-                    print('dT = ',numpy.min(xdT),numpy.max(xdT),numpy.mean(xdT),numpy.std(xdT))
+                    print('de1 = ',np.min(xde1),np.max(xde1),np.mean(xde1),np.std(xde1))
+                    print('de2 = ',np.min(xde2),np.max(xde2),np.mean(xde2),np.std(xde2))
+                    print('dT = ',np.min(xdT),np.max(xdT),np.mean(xdT),np.std(xdT))
 
                 if args.rm_files:
                     print('removing temp files')
@@ -1147,25 +1261,25 @@ def main():
                 psf_info_file = os.path.join(wdir, 'psf_cat_%d_%d.fits'%(exp,ccdnum))
                 fitsio.write(psf_info_file, df.to_records(index=False), clobber=True)
                 print('Wrote psf information to ',psf_info_file)
-                row['obs_mean_e1'] = numpy.mean(df.loc[df['obs_flag']==0, 'obs_e1'])
-                row['obs_mean_e2'] = numpy.mean(df.loc[df['obs_flag']==0, 'obs_e2'])
-                row['obs_mean_T'] = numpy.mean(df.loc[df['obs_flag']==0, 'obs_T'])
-                row['obs_std_e1'] = numpy.std(df.loc[df['obs_flag']==0, 'obs_e1'])
-                row['obs_std_e2'] = numpy.std(df.loc[df['obs_flag']==0, 'obs_e2'])
-                row['obs_std_T'] = numpy.std(df.loc[df['obs_flag']==0, 'obs_T'])
-                row['piff_mean_de1'] = numpy.mean(de1)
-                row['piff_mean_de2'] = numpy.mean(de2)
-                row['piff_mean_dT'] = numpy.mean(dT)
-                row['piff_std_de1'] = numpy.std(de1)
-                row['piff_std_de2'] = numpy.std(de2)
-                row['piff_std_dT'] = numpy.std(dT)
+                row['obs_mean_e1'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e1'])
+                row['obs_mean_e2'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e2'])
+                row['obs_mean_T'] = np.mean(df.loc[df['obs_flag']==0, 'obs_T'])
+                row['obs_std_e1'] = np.std(df.loc[df['obs_flag']==0, 'obs_e1'])
+                row['obs_std_e2'] = np.std(df.loc[df['obs_flag']==0, 'obs_e2'])
+                row['obs_std_T'] = np.std(df.loc[df['obs_flag']==0, 'obs_T'])
+                row['piff_mean_de1'] = np.mean(de1)
+                row['piff_mean_de2'] = np.mean(de2)
+                row['piff_mean_dT'] = np.mean(dT)
+                row['piff_std_de1'] = np.std(de1)
+                row['piff_std_de2'] = np.std(de2)
+                row['piff_std_dT'] = np.std(dT)
                 if args.get_psfex:
-                    row['psfex_mean_de1'] = numpy.mean(xde1)
-                    row['psfex_mean_de2'] = numpy.mean(xde2)
-                    row['psfex_mean_dT'] = numpy.mean(xdT)
-                    row['psfex_std_de1'] = numpy.std(xde1)
-                    row['psfex_std_de2'] = numpy.std(xde2)
-                    row['psfex_std_dT'] = numpy.std(xdT)
+                    row['psfex_mean_de1'] = np.mean(xde1)
+                    row['psfex_mean_de2'] = np.mean(xde2)
+                    row['psfex_mean_dT'] = np.mean(xdT)
+                    row['psfex_std_de1'] = np.std(xde1)
+                    row['psfex_std_de2'] = np.std(xde2)
+                    row['psfex_std_dT'] = np.std(xdT)
 
             row['flag'] = flag
             # row is a copy of the row in the original, so make sure to copy it back.

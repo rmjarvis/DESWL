@@ -10,3 +10,4 @@ testing*
 *.wqlog
 kj_temp
 redo_exp
+*.pkl

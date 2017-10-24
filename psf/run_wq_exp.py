@@ -50,7 +50,7 @@ N: {cores_per_job}
 
 # Select from this group(s)
 # I've had trouble with OS operations from a31, a32, so avoid them.
-group: [gen7, gen6, gen4, a22, a24, a25, a26, a27, a28, a29, a30]
+group: [gen7, gen6, gen4, a22, a24, a25, a26, a27, a28, a29, a30, gen5]
 """
 
 

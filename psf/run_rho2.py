@@ -24,14 +24,14 @@ def parse_args():
                         help='list of exposures (in lieu of separate exps, runs)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
+
+    # Options
     parser.add_argument('--max_tiling', default=10,
                         help='maximum tiling to use')
     parser.add_argument('--use_reserved', default=False, action='store_const', const=True,
                         help='just use the objects with the RESERVED flag')
     parser.add_argument('--bands', default='grizY', type=str,
-                            help='Limit to the given bands')
-
-    # Options
+                        help='Limit to the given bands')
     parser.add_argument('--use_psfex', default=False, action='store_const', const=True,
                         help='Use PSFEx rather than Piff model')
 
@@ -39,7 +39,7 @@ def parse_args():
     return args
 
 
-def read_data(args, work, limit_bands=None, reserved=False, prefix='piff'):
+def read_data(args, work, limit_bands=None, prefix='piff'):
     import fitsio
 
     RESERVED = 64
@@ -128,14 +128,14 @@ def read_data(args, work, limit_bands=None, reserved=False, prefix='piff'):
 
             ntot = len(data)
             nused = numpy.sum((flag & 1) != 0)
-            nreserved = numpy.sum((flag & 64) != 0)
+            nreserved = numpy.sum((flag & RESERVED) != 0)
             ngood = numpy.sum(flag == 0)
             #print('nused = ',nused)
             #print('nreserved = ',nreserved)
             #print('ngood = ',ngood)
 
             if args.use_reserved:
-                mask = (flag == RESERVED)
+                mask = (flag == RESERVED) | (flag == RESERVED+1)
             else:
                 mask = (flag == 0)
             #print('mask = ',mask)
@@ -198,14 +198,14 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
 
     e1 = data['obs_e1']
     e2 = data['obs_e2']
-    s = data['obs_T']
+    T = data['obs_T']
     p_e1 = data[prefix+'_e1']
     p_e2 = data[prefix+'_e2']
-    p_s = data[prefix+'_T']
+    p_T = data[prefix+'_T']
 
     de1 = e1-p_e1
     de2 = e2-p_e2
-    dt = (s**2-p_s**2)/s**2
+    dt = (T-p_T)/T
     print('mean de = ',numpy.mean(de1),numpy.mean(de2))
     print('mean dt = ',numpy.mean(dt))
 

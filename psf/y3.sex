@@ -15,8 +15,8 @@ PARAMETERS_NAME daofind.param	# name of the file containing catalog contents
 DETECT_TYPE     CCD             # "CCD" or "PHOTO" (*)
 FLAG_IMAGE      flag.fits       # filename for an input FLAG-image
 DETECT_MINAREA  6               # minimum number of pixels above threshold
-DETECT_THRESH   1.6             # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
-ANALYSIS_THRESH 1.5             # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
+DETECT_THRESH   1.4             # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
+ANALYSIS_THRESH 1.2             # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
 
 FILTER          Y               # apply filter for detection ("Y" or "N")?
 FILTER_NAME     sex.conv	# name of the file containing the filter
@@ -39,7 +39,7 @@ SATUR_LEVEL     50000.0         # level (in ADUs) at which arises saturation
 
 MAG_ZEROPOINT   25.0             # magnitude zero-point
 MAG_GAMMA       4.0             # gamma of emulsion (for photographic scans)
-GAIN            4.0             # detector gain in e-/ADU.
+GAIN            1.0             # detector gain in e-/ADU.
 PIXEL_SCALE     0             # size of pixel in arcsec (0=use FITS WCS info).
 
 #------------------------- Star/Galaxy Separation ----------------------------
@@ -73,7 +73,7 @@ MEMORY_BUFSIZE  1024            # number of lines in buffer
 
 VERBOSE_TYPE    QUIET          # can be "QUIET", "NORMAL" or "FULL" (*)
 #VERBOSE_TYPE    NORMAL          # can be "QUIET", "NORMAL" or "FULL" (*)
-NTHREADS         2              # 1 single thread
+NTHREADS         1              # 1 single thread
 
 #------------------------------- New Stuff -----------------------------------
 PSF_NMAX         1

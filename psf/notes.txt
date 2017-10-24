@@ -1,6 +1,7 @@
 TODO:
 Fix reserved in psf_cat files.  The reserved stars seem not to have made it in.
 Get other kinds of blacklisting to put in as flags in expinfo
+airmass, tiling, etc. still not in exposure_info catalogs.
 
 make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
@@ -14,6 +15,12 @@ rho runs run_rho.py, computes the rho statistics for each exposure/ccd
 rho2 runs run_rho2.py, computes the rho statistics for the full data and each filter
 plots runs plot_rho.py, makes plots
 mag runs plot_mag.py, makes other plots
+
+Y3:
+y3a1-v02    Basic Piff run with pixel grid and basispoly, order=3
+y3a1-v03    Fixed a bunch of findstars failures.  Also use ngmix for measurements.
+y3a1-v04    Same as v03 but with hsm
+
 
 v3 uses degree 2,2, FEW_STARS = 50
 v4 uses degree 2,2, switched FEW_STARS to 20
@@ -95,6 +102,3 @@ v009-v07 scale = 0.20, size = 21, order=3  # Better, new benchmark
 v009-v08 scale = 0.20, size = 21, order=4  # Very slow, not really any better
 v009-v09 scale = 0.20, size = 17, order=3  # Equivalent, faster, new benchmark
 
-
-Notes for Y2:
-GAIN -> 1.  Images are in e-, not ADU.

@@ -5,7 +5,7 @@
 
 from __future__ import print_function
 import os
-import numpy
+import numpy as np
 from toFocal import toFocal
 
 def parse_args():
@@ -88,7 +88,7 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
             print('expinfo[expnum] = ',expinfo['expnum'])
             print('Could not find information about this expnum.  Skipping ',run,exp)
             continue
-        i = numpy.nonzero(expinfo['expnum'] == expnum)[0][0]
+        i = np.nonzero(expinfo['expnum'] == expnum)[0][0]
         #print('i = ',i)
         band = expinfo['band'][i]
         #print('band[k] = ',band)
@@ -116,6 +116,7 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
                 continue
             if ccdnum in BAD_CCDS:
                 print('Skipping ccd %d because it is BAD'%ccdnum)
+                continue
 
             cat_file = os.path.join(work, exp, "psf_cat_%d_%d.fits"%(expnum,ccdnum))
             #print('cat_file = ',cat_file)
@@ -127,9 +128,9 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
                 continue
 
             ntot = len(data)
-            nused = numpy.sum((flag & 1) != 0)
-            nreserved = numpy.sum((flag & RESERVED) != 0)
-            ngood = numpy.sum(flag == 0)
+            nused = np.sum((flag & 1) != 0)
+            nreserved = np.sum((flag & RESERVED) != 0)
+            ngood = np.sum(flag == 0)
             #print('nused = ',nused)
             #print('nreserved = ',nreserved)
             #print('ngood = ',ngood)
@@ -140,7 +141,21 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
                 mask = (flag == 0)
             #print('mask = ',mask)
 
-            ngood = numpy.sum(mask)
+            T = data['obs_T']
+            dT = (data[prefix + '_T'] - data['obs_T'])
+            de1 = (data[prefix + '_e1'] - data['obs_e1'])
+            de2 = (data[prefix + '_e2'] - data['obs_e2'])
+            used = (flag == 0)
+            #if np.std(dT[used]/T[used]) > 0.03:
+                #continue
+            #if np.std(de1[used]) > 0.02:
+                #continue
+            #if np.std(de2[used]) > 0.02:
+                #continue
+            good = (abs(dT/data['obs_T']) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
+            mask = mask & good
+
+            ngood = np.sum(mask)
             #print('ngood = ',ngood,'/',len(data))
             assert ngood == len(data[mask])
             if ngood == 0:
@@ -178,11 +193,11 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
     formats = ['f8'] * len(all_keys) + ['a1', 'i2']
     #names = all_keys + ['band', 'tiling']
     names = all_keys + ['band']
-    data = numpy.recarray(shape = (len(all_bands),),
+    data = np.recarray(shape = (len(all_bands),),
                           formats = formats, names = names)
     print('data.dtype = ',data.dtype)
     for key in all_keys:
-        data[key] = numpy.concatenate(all_data[key])
+        data[key] = np.concatenate(all_data[key])
     data['band'] = all_bands
     #data['tiling'] = all_tilings
     print('made recarray')
@@ -206,8 +221,8 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     de1 = e1-p_e1
     de2 = e2-p_e2
     dt = (T-p_T)/T
-    print('mean de = ',numpy.mean(de1),numpy.mean(de2))
-    print('mean dt = ',numpy.mean(dt))
+    print('mean de = ',np.mean(de1),np.mean(de2))
+    print('mean dt = ',np.mean(dt))
 
     if use_xy:
         x = data['fov_x']
@@ -281,8 +296,8 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
     dt = [ (d['obs_T']-d[prefix+'_T'])/d['obs_T'] for d in tile_data ]
     for k in range(len(tile_data)):
         print('k = ',k)
-        print('mean de = ',numpy.mean(de1[k]),numpy.mean(de2[k]))
-        print('mean dt = ',numpy.mean(dt[k]))
+        print('mean de = ',np.mean(de1[k]),np.mean(de2[k]))
+        print('mean dt = ',np.mean(dt[k]))
 
     ecats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg', 
                                g1=d['obs_e1'], g2=d['obs_e2']) 
@@ -399,8 +414,8 @@ def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', al
     use_bands = band_combinations(bands)
     for band in use_bands:
         print('band ',band)
-        mask = numpy.in1d(data['band'],band)
-        print('sum(mask) = ',numpy.sum(mask))
+        mask = np.in1d(data['band'],band)
+        print('sum(mask) = ',np.sum(mask))
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
         stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt)
@@ -415,8 +430,8 @@ def do_cross_tiling_stats(data, bands, tilings, work, prefix='piff', name='cross
         tile_data = []
         for til in tilings:
             print('til = ',til)
-            mask = numpy.in1d(data['band'],band) & (data['tiling'] == til)
-            print('sum(mask) = ',numpy.sum(mask))
+            mask = np.in1d(data['band'],band) & (data['tiling'] == til)
+            print('sum(mask) = ',np.sum(mask))
             print('len(data[mask]) = ',len(data[mask]))
             tile_data.append(data[mask])
         tag = ''.join(band)
@@ -450,8 +465,8 @@ def do_odd_even_stats(data, bands, tilings, work, prefix='piff', name='oddeven')
 
     for band in use_bands:
         print('odd/even ',band)
-        odd = numpy.in1d(data['band'], band) & (data['tiling'] % 2 == 1)
-        even = numpy.in1d(data['band'], band) & (data['tiling'] % 2 == 0)
+        odd = np.in1d(data['band'], band) & (data['tiling'] % 2 == 1)
+        even = np.in1d(data['band'], band) & (data['tiling'] % 2 == 0)
         cats = [ data[odd], data[even] ]
         tag = ''.join(band)
         tags = [ tag + ":odd", tag + ":even" ]
@@ -466,8 +481,8 @@ def do_fov_stats(data, bands, tilings, work, prefix='piff', name='fov'):
     use_bands = band_combinations(bands)
     for band in use_bands:
         print('band ',band)
-        mask = numpy.in1d(data['band'],band)
-        print('sum(mask) = ',numpy.sum(mask))
+        mask = np.in1d(data['band'],band)
+        print('sum(mask) = ',np.sum(mask))
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
         stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, use_xy=True)
@@ -537,16 +552,16 @@ def main():
     write_data(data, out_file_name)
 
     for band in bands:
-        print('n for band %s = '%band, numpy.sum(data['band'] == band))
+        print('n for band %s = '%band, np.sum(data['band'] == band))
     #for til in tilings:
-        #print('n for tiling %d = '%til, numpy.sum(data['tiling'] == til))
+        #print('n for tiling %d = '%til, np.sum(data['tiling'] == til))
 
-    gdata = numpy.where(data['band'] == 'g')[0]
-    rdata = numpy.where(data['band'] == 'r')[0]
-    idata = numpy.where(data['band'] == 'i')[0]
-    zdata = numpy.where(data['band'] == 'z')[0]
-    #odddata = numpy.where(data['tiling']%2 == 1)[0]
-    #evendata = numpy.where(data['tiling']%2 == 0)[0]
+    gdata = np.where(data['band'] == 'g')[0]
+    rdata = np.where(data['band'] == 'r')[0]
+    idata = np.where(data['band'] == 'i')[0]
+    zdata = np.where(data['band'] == 'z')[0]
+    #odddata = np.where(data['tiling']%2 == 1)[0]
+    #evendata = np.where(data['tiling']%2 == 0)[0]
 
     print('len(gdata) = ',len(gdata))
     print('len(rdata) = ',len(rdata))

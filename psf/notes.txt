@@ -17,9 +17,21 @@ plots runs plot_rho.py, makes plots
 mag runs plot_mag.py, makes other plots
 
 Y3:
-y3a1-v02    Basic Piff run with pixel grid and basispoly, order=3
+y3a1-v02    Basic Piff run with pixel grid and basispoly, order=3, size=17, scale=0.26
 y3a1-v03    Fixed a bunch of findstars failures.  Also use ngmix for measurements.
 y3a1-v04    Same as v03 but with hsm
+y3a1-v05    Same as v03 but using priors
+y3a1-v06    Same as v05 but use mag_cut = 2, min_mag=10, since still some B/F at bright end.
+y3a1-v07    Same as v05 but use mag_cut = 1, (no min_mag, but fixed but in mag_cut)
+y3a1-v08    Same as v05 but use mag_cut = 2, (no min_mag)
+y3a1-v09    Same as v07 but apply zeropoint, so magnitudes are accurate, max_mag=21
+y3a1-v10    Same as v09 but change how background is subtracted.  Do it first on the actual image.
+y3a1-v11    Same as v10 but order=2
+y3a1-v12    Same as v10 but size=22, scale=0.20 (same physical size, but better resolution)
+y3a1-v13    Same as v10 but size=22, scale=0.26 (larger physical size, but same resolution)
+y3a1-v14    Same as v10 but size=18, scale=0.26 (even size, but otherwise basically the same)
+y3a1-v15    Same as v10 but size=19, scale=0.26 (back to odd size to make sure)
+y3a1-v16    Same as v10 but lanczos order 5
 
 
 v3 uses degree 2,2, FEW_STARS = 50

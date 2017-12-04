@@ -5,8 +5,8 @@ FILE=zone029.riz
 #FILE=redo_exp
 #FILE=y1test1
 #FILE=redo_exp
-TAG=y3a1-v04
+TAG=y3a1-v16
 
 /bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
 #./run_wq_exp.py --njobs=250 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_psfex.py --mag_cut=3.0 --max_mag=17.0 --work=~/work/psfex_rerun/$TAG --tag=$TAG --psfex_exe=/astro/u/mjarvis/bin/psfex --reserve=0.2"
-./run_wq_exp.py --njobs=122 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_piff.py --max_mag=-5 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=1 --pixmappy=zone029.astro --get_psfex --reserve=0.2"
+./run_wq_exp.py --njobs=122 --cores_per_job=2 --file=$FILE --tag=go --cmd="./run_piff.py --mag_cut=1 --max_mag=21 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=1 --pixmappy=zone029.astro --reserve=0.2 --use_ngmix"

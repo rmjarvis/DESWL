@@ -273,6 +273,19 @@ def bin_by_mag(m, dT, de1, de2, min_mused, key):
     plt.tight_layout()
     plt.savefig('dpsf_mag_' + key + '.pdf')
 
+    if True:
+        cols = numpy.array((mag_bins[:-1],
+                            bin_dT, bin_dT_err,
+                            bin_de1, bin_de1_err,
+                            bin_de2, bin_de2_err))
+        outfile = 'dpsf_mag_' + key + '.dat'
+        numpy.savetxt(outfile, cols, fmt='%.6e',
+                      header='mag_bins  '+
+                             'dT  sig_dT '+
+                             'de1  sig_de1 '+
+                             'de2  sig_de2 ')
+        print('wrote',outfile)
+ 
 
 def bin_by_chip_pos(x, dT, de1, de2, key, xy):
 

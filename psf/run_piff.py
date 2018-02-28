@@ -234,7 +234,7 @@ def unpack_file(file_name):
 def read_image_header(row, img_file):
     """Read some information from the image header and write into the df row.
     """
-    hdu = 1
+    hdu = 0
 
     # Note: The next line usually works, but fitsio doesn't support CONTINUE lines, which DES
     #       image headers sometimes include.
@@ -316,7 +316,7 @@ def run_sextractor(wdir, root, img_file, sat, fwhm, noweight,
         print('   Error running SExtractor.  No ouput file was written.')
         print('   Try again, in case it was a fluke.')
         run_with_timeout(cat_cmd, 120)
-        if os.path.getsize(psf_file) == 0:
+        if os.path.getsize(cat_file) == 0:
             os.remove(cat_file)
             print('   Error running SExtractor (again).')
             return None
@@ -774,13 +774,13 @@ def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm):
     else:
         df.loc[~df['use'], 'obs_flag'] |= NOT_USED
 
-    full_image = galsim.fits.read(image_file, hdu=1)
+    full_image = galsim.fits.read(image_file, hdu=0)
 
     if wcs is not None:
         full_image.wcs = wcs
 
     if not noweight:
-        full_weight = galsim.fits.read(image_file, hdu=3)
+        full_weight = galsim.fits.read(image_file, hdu=2)
         full_weight.array[full_weight.array < 0] = 0.
 
     stamp_size = 48
@@ -917,13 +917,13 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
         df.loc[ind, 'piff_flag'] = FAILURE
         return
 
-    full_image = galsim.fits.read(image_file, hdu=1)
+    full_image = galsim.fits.read(image_file, hdu=0)
 
     if wcs is not None:
         full_image.wcs = wcs
 
     if not noweight:
-        full_weight = galsim.fits.read(image_file, hdu=3)
+        full_weight = galsim.fits.read(image_file, hdu=2)
         full_weight.array[full_weight.array < 0] = 0.
 
     stamp_size = 48
@@ -1002,13 +1002,13 @@ def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, f
         df.loc[ind, 'psfex_flag'] = FAILURE
         return
 
-    full_image = galsim.fits.read(image_file, hdu=1)
+    full_image = galsim.fits.read(image_file, hdu=0)
 
     if wcs is not None:
         full_image.wcs = wcs
 
     if not noweight:
-        full_weight = galsim.fits.read(image_file, hdu=3)
+        full_weight = galsim.fits.read(image_file, hdu=2)
         full_weight.array[full_weight.array < 0] = 0.
 
     stamp_size = 48
@@ -1208,12 +1208,24 @@ def main():
                 print('bkg_file = ',bkg_file)
                 row['bkg_file'] = bkg_file
 
+                # Unpack the image file if necessary
+                unpack_image_file = unpack_file(image_file)
+                if unpack_image_file is None:
+                    # This was our signal to skip this without blacklisting.  Just continue.
+                    flag |= ERROR_FLAG
+                    raise NoStarsException()
+                print('unpacked to ',unpack_image_file)
+ 
                 # Subtract off the background right from the start
-                with fitsio.FITS(image_file, 'rw') as f:
+                with fitsio.FITS(unpack_image_file, 'rw') as f:
                     bkg = fitsio.read(bkg_file)
-                    img = f[1].read()
+                    #print('after read bkg')
+                    img = f[0].read()
                     img -= bkg
-                    f[1].write(img)
+                    #print('after subtract bkg')
+                    f[0].write(img)
+                    #print('after write new img')
+                print('subtracted off background image')
 
                 if args.get_psfex:
                     psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf')
@@ -1221,7 +1233,8 @@ def main():
                     row['psfex_file'] = psfex_file
                     keep_files.append(psfex_file)
 
-                read_image_header(row, image_file)
+                read_image_header(row, unpack_image_file)
+                #print('read image header.  row = ',row)
                 sat = row['sat']
                 fits_fwhm = row['fits_fwhm']
 
@@ -1231,12 +1244,6 @@ def main():
                 # complete.  Looks like it only has stars maybe?  Which is nominally fine, but
                 # we're not sure if we trust their star selection.  So we run sextractor ourself.
                 if args.run_sextractor or not os.path.isfile(cat_file):
-                    # Unpack the image file if necessary
-                    unpack_image_file = unpack_file(image_file)
-                    if unpack_image_file is None:
-                        # This was our signal to skip this without blacklisting.  Just continue.
-                        flag |= ERROR_FLAG
-                        raise NoStarsException()
                     # Also need the fwhm for doing the tape bumps.
                     cat_file = run_sextractor(sdir, root, unpack_image_file, sat, fits_fwhm,
                             args.noweight, args.sex_dir, args.sex_config, args.sex_params,
@@ -1299,7 +1306,7 @@ def main():
                     wcs = None
 
                 # Measure the shpes and sizes of the stars
-                measure_star_shapes(df, image_file, args.noweight, wcs,
+                measure_star_shapes(df, unpack_image_file, args.noweight, wcs,
                                     args.use_ngmix, fwhm)
 
                 # Another check is that the spread in star sizes isn't too large
@@ -1313,15 +1320,15 @@ def main():
                 psf_file = os.path.join(wdir, root + '_piff.fits')
                 keep_files.append(psf_file)
                 if args.run_piff:
-                    success = run_piff(df, image_file, star_file, psf_file,
+                    success = run_piff(df, unpack_image_file, star_file, psf_file,
                                        args.piff_exe, args.piff_config,
-                                       args.pixmappy, exp, ccdnum)
+                                       pixmappy_file, exp, ccdnum)
                     if not success:
                         flag |= PSF_FAILURE
 
                 # Measure the psf shapes
                 if not (flag & PSF_FAILURE):
-                    measure_piff_shapes(df, psf_file, image_file, args.noweight, wcs,
+                    measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
                                         args.use_ngmix, fwhm)
                     good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
                     de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
@@ -1341,7 +1348,7 @@ def main():
                     keep_files.append(fs_plot_file)
 
                 if args.get_psfex:
-                    measure_psfex_shapes(df, psfex_file, image_file, args.noweight, wcs,
+                    measure_psfex_shapes(df, psfex_file, unpack_image_file, args.noweight, wcs,
                                          args.use_ngmix, fwhm)
                     xgood = (df['psfex_flag'] == 0) & (df['obs_flag'] == 0)
                     xde1 = df.loc[xgood, 'psfex_e1'] - df.loc[xgood, 'obs_e1']

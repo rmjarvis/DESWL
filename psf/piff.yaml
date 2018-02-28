@@ -4,10 +4,10 @@ modules:
 input:
 
     #dir: '/astro/u/mjarvis/work/y3_piff/y3a1-v01/226650'
-    image_file_name: 'D00226650_z_c13_r2355p02_immasked.fits.fz'
-    image_hdu: 1
-    badpix_hdu: 2
-    weight_hdu: 3
+    image_file_name: 'D00226650_z_c13_r2355p02_immasked.fits'
+    image_hdu: 0
+    badpix_hdu: 1
+    weight_hdu: 2
 
     cat_file_name: 'D00226650_z_c13_r2355p02_stars.fits'
     cat_hdu: 1

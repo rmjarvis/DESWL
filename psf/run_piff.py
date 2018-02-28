@@ -578,16 +578,27 @@ def run_piff(df, img_file, cat_file, psf_file, piff_exe, piff_config,
     piff_cmd += ' input.wcs.file_name={pixmappy} input.wcs.exp={exp} input.wcs.ccdnum={ccdnum}'.format(
         pixmappy=pixmappy, exp=exp, ccdnum=ccdnum)
     print(piff_cmd)
-    run_with_timeout(piff_cmd, 300)  # 5 minutes should be way more than plenty!
+    if True:
+        config = piff.read_config(piff_config)
+        config['input']['image_file_name'] = img_file
+        config['input']['cat_file_name'] = piff_cat_file
+        config['output']['file_name'] = psf_file
+        config['input']['wcs']['file_name'] = pixmappy
+        config['input']['wcs']['exp'] = exp
+        config['input']['wcs']['ccdnum'] = ccdnum
+        piff.piffify(config)
+    else:
+        # Old way using piffify executable.
+        run_with_timeout(piff_cmd, 300)  # 5 minutes should be way more than plenty!
 
-    if not os.path.exists(psf_file) or os.path.getsize(psf_file) == 0:
-        print('   Error running Piff.  No ouput file was written.')
-        print('   Try again, in case it was a fluke.')
-        piff_cmd += ' verbose=3'  # Add more debugging so we can see what might have gone wrong.
-        run_with_timeout(piff_cmd, 600)  # And double the time just in case that was the problem.
         if not os.path.exists(psf_file) or os.path.getsize(psf_file) == 0:
-            print('   Error running Piff (again).')
-            return False
+            print('   Error running Piff.  No ouput file was written.')
+            print('   Try again, in case it was a fluke.')
+            piff_cmd += ' verbose=3'  # Add more debugging so we can see what might have gone wrong.
+            run_with_timeout(piff_cmd, 600)  # And double the time just in case that was the problem.
+            if not os.path.exists(psf_file) or os.path.getsize(psf_file) == 0:
+                print('   Error running Piff (again).')
+                return False
     return True
 
 def remove_temp_files(wdir, root, keep_files):

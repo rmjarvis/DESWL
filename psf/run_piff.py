@@ -86,10 +86,10 @@ def parse_args():
                         help='location wl executables')
     parser.add_argument('--work', default='/astro/u/mjarvis/work/y3_piff',
                         help='location of intermediate outputs')
+    parser.add_argument('--scratch', default='/data/mjarvis/y3_piff',
+                        help='location of intermediate outputs')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
-    parser.add_argument('--clear_output', default=False, action='store_const', const=True,
-                        help='should the output directory be cleared before writing new files?')
 
     # Exposure inputs
     parser.add_argument('--file', default='',
@@ -130,6 +130,8 @@ def parse_args():
 
 
     # Options
+    parser.add_argument('--clear_output', default=1, type=int,
+                        help='should the output directory be cleared before writing new files?')
     parser.add_argument('--rm_files', default=1, type=int,
                         help='remove unpacked files after finished')
     parser.add_argument('--blacklist', default=1, type=int,
@@ -1057,17 +1059,21 @@ def main():
     if args.blacklist:
         print('Logging blacklisted chips to',blacklist_file)
 
-
     # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)
     print('work dir = ',work)
     try:
         if not os.path.exists(work):
             os.makedirs(work)
-    except OSError as e:
-        print("Ignore OSError from makedirs(work):")
-        print(e)
-        pass
+    except OSError:
+        if not os.path.exists(work): raise
+    scratch = os.path.expanduser(args.scratch)
+    print('scratch dir = ',scratch)
+    try:
+        if not os.path.exists(scratch):
+            os.makedirs(scratch)
+    except OSError:
+        if not os.path.exists(scratch): raise
 
     
     # The url to use up to just before OPS
@@ -1106,17 +1112,19 @@ def main():
         exp = int(exp)
         data = all_exp[all_exp['expnum'] == exp]
 
-        # TODO: trim to the listed bands above rather than here.
-        if data['band'][0] not in args.bands:  # (All bands should be equal for same exp)
-            print('Skipping %d because band %s not in %s'%(exp,data['band'][0],args.bands))
-            continue
-
         print('Start work on exp = ',exp)
         print('%d images for this exposure'%len(data))
+        if len(data) == 0:
+            print("This exposure is not in Erin's file.  Skip it.")
+            continue
 
         # Store all information about the exposure in a pandas data frame.
         # Copy over the information from Erin's file.
         exp_df = pandas.DataFrame(data)
+
+        if sys.version_info >= (3,):
+            for str_key in ['key', 'band', 'path']:
+                exp_df[str_key] = exp_df[str_key].str.decode("utf-8")
         # Add some blank columns to be filled in below.
         for k in ['root', 'image_file', 'bkg_file', 'psfex_file', 'cat_file', 'star_file',
                   'piff_file']:
@@ -1135,7 +1143,7 @@ def main():
         for k in ['flag']:
             exp_df[k] = [0] * len(data)
 
-        # Make the work directory for this exposure and clear it if necessary.
+        # Make the work and scratch directories for this exposure and clear it if necessary.
         wdir = os.path.join(work,str(exp))
         if args.clear_output:
             import shutil
@@ -1144,14 +1152,27 @@ def main():
                     try:
                         os.remove(os.path.join(wdir, f))
                     except OSError as e:
-                        print("Ignore OSError from remove(wdir/f):")
-                        print(e)
                         pass
         try:
             os.makedirs(wdir)
-        except:
+        except OSError:
             if not os.path.exists(wdir): raise
         print('wdir = ',wdir)
+
+        sdir = os.path.join(scratch,str(exp))
+        if args.clear_output:
+            import shutil
+            if os.path.exists(sdir):
+                for f in os.listdir(sdir):
+                    try:
+                        os.remove(os.path.join(sdir, f))
+                    except OSError as e:
+                        pass
+        try:
+            os.makedirs(sdir)
+        except OSError:
+            if not os.path.exists(sdir): raise
+        print('sdir = ',sdir)
 
         exp_df.sort_values('ccdnum', inplace=True)
 
@@ -1178,12 +1199,13 @@ def main():
                 base_path, _, _, image_file_name = path.rsplit('/',3)
                 root, ext = image_file_name.rsplit('_',1)
                 print('root, ext = |%s| |%s|'%(root,ext))
-                image_file = wget(url_base, base_path + '/red/immask/', wdir, root + '_' + ext)
+                image_file = wget(url_base, base_path + '/red/immask/', sdir, root + '_' + ext)
                 print('image_file = ',image_file)
                 row['root'] = root
                 row['image_file'] = image_file
 
-                bkg_file = wget(url_base, base_path + '/red/bkg/', wdir, root + '_bkg.fits.fz')
+                bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz')
+                print('bkg_file = ',bkg_file)
                 row['bkg_file'] = bkg_file
 
                 # Subtract off the background right from the start
@@ -1195,6 +1217,7 @@ def main():
 
                 if args.get_psfex:
                     psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf')
+                    print('psfex_file = ',psfex_file)
                     row['psfex_file'] = psfex_file
                     keep_files.append(psfex_file)
 
@@ -1203,7 +1226,7 @@ def main():
                 fits_fwhm = row['fits_fwhm']
 
                 # Run Sextractor
-                cat_file = os.path.join(wdir, root + '_cat.fits')
+                cat_file = os.path.join(sdir, root + '_cat.fits')
                 # Unfortunately, the desdm catalog in the cat directory doesn't seem to be
                 # complete.  Looks like it only has stars maybe?  Which is nominally fine, but
                 # we're not sure if we trust their star selection.  So we run sextractor ourself.
@@ -1215,7 +1238,7 @@ def main():
                         flag |= ERROR_FLAG
                         raise NoStarsException()
                     # Also need the fwhm for doing the tape bumps.
-                    cat_file = run_sextractor(wdir, root, unpack_image_file, sat, fits_fwhm,
+                    cat_file = run_sextractor(sdir, root, unpack_image_file, sat, fits_fwhm,
                             args.noweight, args.sex_dir, args.sex_config, args.sex_params,
                             args.sex_filter, args.sex_nnw)
                     if cat_file is None:
@@ -1224,10 +1247,10 @@ def main():
                 row['cat_file'] = cat_file
 
                 # Run findstars
-                star_file = os.path.join(wdir, root + '_stars.fits')
+                star_file = os.path.join(sdir, root + '_stars.fits')
                 row['star_file'] = star_file
                 if args.run_findstars or not os.path.isfile(star_file):
-                    star_file = run_findstars(row, wdir, args.findstars_dir, args.findstars_config)
+                    star_file = run_findstars(row, sdir, args.findstars_dir, args.findstars_config)
                     if star_file is None:
                         raise NoStarsException()
 
@@ -1330,7 +1353,7 @@ def main():
 
                 if args.rm_files:
                     print('removing temp files')
-                    remove_temp_files(wdir, root, keep_files)
+                    remove_temp_files(sdir, root, keep_files)
 
 
             except NoStarsException:

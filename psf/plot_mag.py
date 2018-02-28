@@ -84,7 +84,11 @@ def get_data(exps, work,
         print('Start work on exp = ',exp)
         expnum = int(exp)
         print('expnum = ',expnum)
-        expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
+        try:
+            expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
+        except (OSError, IOError):
+            print('Unable to open exp_file %s.  Skipping this exposure.'%expnum)
+            continue
 
         if expnum not in expinfo['expnum']:
             print('expnum is not in expinfo!')
@@ -147,7 +151,8 @@ def get_data(exps, work,
             de1 = (data[prefix + '_e1'] - data['obs_e1'])
             de2 = (data[prefix + '_e2'] - data['obs_e2'])
             print(expnum, ccdnum, len(dT), band)
-            print('dT = ',np.mean(dT[used]),np.std(dT[used]))
+            print('T = ',np.mean(T[used]),np.std(T[used]))
+            print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
             print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
             print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
             if np.std(dT[used]/T[used]) > 0.03:
@@ -274,16 +279,16 @@ def bin_by_mag(m, dT, de1, de2, min_mused, key):
     plt.savefig('dpsf_mag_' + key + '.pdf')
 
     if True:
-        cols = numpy.array((mag_bins[:-1],
-                            bin_dT, bin_dT_err,
-                            bin_de1, bin_de1_err,
-                            bin_de2, bin_de2_err))
+        cols = np.array((mag_bins[:-1],
+                         bin_dT, bin_dT_err,
+                         bin_de1, bin_de1_err,
+                         bin_de2, bin_de2_err))
         outfile = 'dpsf_mag_' + key + '.dat'
-        numpy.savetxt(outfile, cols, fmt='%.6e',
-                      header='mag_bins  '+
-                             'dT  sig_dT '+
-                             'de1  sig_de1 '+
-                             'de2  sig_de2 ')
+        np.savetxt(outfile, cols, fmt='%.6e',
+                   header='mag_bins  '+
+                          'dT  sig_dT '+
+                          'de1  sig_de1 '+
+                          'de2  sig_de2 ')
         print('wrote',outfile)
  
 

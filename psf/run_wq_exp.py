@@ -24,6 +24,7 @@ import argparse,os,re
 import time
 import numpy
 import datetime
+import numpy as np
 
 # Note: I originally had the wrong shell set.  I ran bash in my .login
 # rather than setting it correctly by mailing RT-RACF-UserAccounts@bnl.gov.
@@ -90,22 +91,30 @@ if not os.path.isdir(submit_dir): os.makedirs(submit_dir)
 # Read in the runs, exps from the input file
 print('Read file ',args.file)
 with open(args.file) as fin:
-    data = [ line.split() for line in fin if line[0] != '#' ]
-nexps = len(data)
+    lines = [ line for line in fin if line[0] != '#' ]
+nexps = len(lines)
+print('Exposures file has %d lines'%nexps)
+lines = np.unique(lines)
+if nexps != len(lines):
+    nexps = len(lines)
+    print('Warning: the exposure list has duplicate entries!')
+    print('Only %d unique exposures'%nexps)
 
 if args.njobs != 1:
     # Shuffle the order so we don't have all the LMC exposures in the same job.
-    print('first 3 lines of input file are ',data[0:3])
-    numpy.random.shuffle(data)
-    print('After shuffling, first 3 lines of input file are ',data[0:3])
+    print('first 3 lines of input file are ',lines[0:3])
+    numpy.random.shuffle(lines)
+    print('After shuffling, first 3 lines of input file are ',lines[0:3])
+
+data = [ line.split() for line in lines ]
 
 if len(data[0]) == 2:
     runs, exps = zip(*data)
 else:
     runs = None
-    exps = zip(*data)[0]
-print('runs = ',runs)
-print('exps = ',exps)
+    exps = list(zip(*data))[0]
+#print('runs = ',runs)
+#print('exps = ',exps)
 
 if args.njobs > nexps:
     args.njobs = nexps
@@ -152,7 +161,7 @@ for job in range(args.njobs):
 time.sleep(0.1)
 s_sub = " ".join(submit_list)
 cmd = 'nohup wq sub -b %s >& %s/wq_sub_%s.out'%(s_sub,submit_dir,args.file)
-print(cmd)
+#print(cmd)
 print('Note: This will take %d seconds to run, since wq waits 1 second'%len(submit_list))
 print('      between each job submission.')
 os.system(cmd)

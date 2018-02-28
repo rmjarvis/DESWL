@@ -27,7 +27,7 @@ input:
     wcs:
         type: Pixmappy
         dir: '/astro/u/mjarvis/rmjarvis/DESWL/psf/'
-        file_name: 'zone029.astro'
+        file_name: 'zone029.astro.orig'
         exp: 226650
         ccdnum: 13
 

@@ -76,12 +76,23 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
     bands = set()   # This is the set of all bands being used
     #tilings = set()   # This is the set of all tilings being used
 
+    n_reject_mean_dt = 0
+    n_reject_mean_de1 = 0
+    n_reject_mean_de2 = 0
+    n_reject_std_dt = 0
+    n_reject_std_de1 = 0
+    n_reject_std_de2 = 0
+    n_reject_rho2 = 0
+
     for exp in exps:
 
-        print('Start work on exp = ',exp)
         expnum = int(exp)
-        print('expnum = ',expnum)
-        expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
+        try:
+            expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
+        except Exception as e:
+            #print('Caught: ',e)
+            #print('Skip this exposure')
+            continue
 
         if expnum not in expinfo['expnum']:
             print('expnum is not in expinfo!')
@@ -93,9 +104,10 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
         band = expinfo['band'][i]
         #print('band[k] = ',band)
         if (limit_bands is not None) and (band not in limit_bands):
-            print('Not doing band = %s.'%band)
+            #print('Not doing band = %s.'%band)
             continue
 
+        print('Start work on exp = ',exp)
         #tiling = int(expinfo['tiling'][k])
         #print('tiling[k] = ',tiling)
 
@@ -112,10 +124,10 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
         for k in range(len(expinfo)):
             ccdnum = expinfo[k]['ccdnum']
             if expinfo[k]['flag'] != 0:
-                print('Skipping ccd %d because it is blacklisted: '%ccdnum, expinfo[k]['flag'])
+                #print('Skipping ccd %d because it is blacklisted: '%ccdnum, expinfo[k]['flag'])
                 continue
             if ccdnum in BAD_CCDS:
-                print('Skipping ccd %d because it is BAD'%ccdnum)
+                #print('Skipping ccd %d because it is BAD'%ccdnum)
                 continue
 
             cat_file = os.path.join(work, exp, "psf_cat_%d_%d.fits"%(expnum,ccdnum))
@@ -124,7 +136,7 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
                 data = fitsio.read(cat_file)
                 flag = data[prefix+'_flag']
             except (OSError, IOError):
-                print('Unable to open cat_file %s.  Skipping this file.'%cat_file)
+                #print('Unable to open cat_file %s.  Skipping this file.'%cat_file)
                 continue
 
             ntot = len(data)
@@ -142,17 +154,51 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
             #print('mask = ',mask)
 
             T = data['obs_T']
+            e1 = data['obs_e1']
+            e2 = data['obs_e2']
             dT = (data[prefix + '_T'] - data['obs_T'])
             de1 = (data[prefix + '_e1'] - data['obs_e1'])
             de2 = (data[prefix + '_e2'] - data['obs_e2'])
             used = (flag == 0)
-            #if np.std(dT[used]/T[used]) > 0.03:
+            print(expnum, ccdnum, len(dT), band)
+            print('T = ',np.mean(T[used]),np.std(T[used]))
+            print('e1 = ',np.mean(e1[used]),np.std(e1[used]))
+            print('e2 = ',np.mean(e2[used]),np.std(e2[used]))
+            print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
+            print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
+            print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
+            rho2 = (e1 - 1j*e2) * (de1 + 1j*de2)
+            print('mean rho2 = ',np.mean(rho2))
+            if abs(np.mean(dT[used]/T[used])) > 0.01:
+                print('mean dT/T = %f on ccd %d.'%(np.mean(dT[used]/T[used]),ccdnum))
+                #n_reject_mean_dt += 1
                 #continue
-            #if np.std(de1[used]) > 0.02:
+            if abs(np.mean(de1[used])) > 0.01:
+                print('mean de1 = %f on ccd %d.'%(np.mean(de1[used]),ccdnum))
+                #n_reject_mean_de1 += 1
                 #continue
-            #if np.std(de2[used]) > 0.02:
+            if abs(np.mean(de2[used])) > 0.01:
+                print('mean de2 = %f on ccd %d.'%(np.mean(de2[used]),ccdnum))
+                #n_reject_mean_de2 += 1
                 #continue
-            good = (abs(dT/data['obs_T']) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
+            if abs(np.std(dT[used]/T[used])) > 0.1:
+                print('std dT/T = %f on ccd %d.'%(np.std(dT[used]/T[used]),ccdnum))
+                #n_reject_std_dt += 1
+                #continue
+            if abs(np.std(de1[used])) > 0.1:
+                print('std de1 = %f on ccd %d.'%(np.std(de1[used]),ccdnum))
+                #n_reject_std_de1 += 1
+                #continue
+            if abs(np.std(de2[used])) > 0.1:
+                print('std de2 = %f on ccd %d.'%(np.std(de2[used]),ccdnum))
+                #n_reject_std_de2 += 1
+                #continue
+            if abs(np.mean(rho2)) > 5.e-4:
+                print('mean rho2 = %f on ccd %d.'%(np.mean(rho2),ccdnum))
+                #n_reject_rho2 += 1
+                #continue
+
+            good = (abs(dT/T) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
             mask = mask & good
 
             ngood = np.sum(mask)
@@ -188,6 +234,14 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
     print('bands = ',bands)
     #print('tilings = ',tilings)
 
+    print('n_reject_mean_dt = ',n_reject_mean_dt)
+    print('n_reject_mean_de1 = ',n_reject_mean_de1)
+    print('n_reject_mean_de2 = ',n_reject_mean_de2)
+    print('n_reject_std_dt = ',n_reject_std_dt)
+    print('n_reject_std_de1 = ',n_reject_std_de1)
+    print('n_reject_std_de2 = ',n_reject_std_de2)
+    print('n_reject_rho2 = ',n_reject_rho2)
+
     # Turn the data into a recarray
     print('all_data.keys = ',all_data.keys())
     formats = ['f8'] * len(all_keys) + ['a1', 'i2']
@@ -221,8 +275,11 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     de1 = e1-p_e1
     de2 = e2-p_e2
     dt = (T-p_T)/T
+    print('mean e = ',np.mean(e1),np.mean(e2))
+    print('mean T = ',np.mean(T))
     print('mean de = ',np.mean(de1),np.mean(de2))
-    print('mean dt = ',np.mean(dt))
+    print('mean dT = ',np.mean(T-p_T))
+    print('mean dT/T = ',np.mean(dt))
 
     if use_xy:
         x = data['fov_x']
@@ -270,6 +327,8 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
             rho.process(cat1)
         else:
             rho.process(cat1, cat2)
+        print('mean xi+ = ',rho.xip.mean())
+        print('mean xi- = ',rho.xim.mean())
         results.append(rho)
 
     if alt_tt:

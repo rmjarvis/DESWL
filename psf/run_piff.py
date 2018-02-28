@@ -59,6 +59,14 @@ NOT_STAR = 128
 BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure blacklist flag
                         # blacklist flags go up to 64, 
 
+# array to convert ccdnum to detpos
+detpos = [None,'S29','S30','S31','S25','S26','S27','S28','S20','S21','S22',
+          'S23','S24','S14','S15','S16','S17','S18','S19','S8','S9',
+          'S10','S11','S12','S13','S1','S2','S3','S4','S5','S6','S7',
+          'N1','N2','N3','N4','N5','N6','N7','N8','N9','N10','N11',
+          'N12','N13','N14','N15','N16','N17','N18','N19','N20','N21',
+          'N22','N23','N24','N25','N26','N27','N28','N29','N30','N31']
+
 
 class NoStarsException(Exception):
     pass
@@ -78,9 +86,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run PSFEx on a set of exposures')
 
     # Directory arguments
-    parser.add_argument('--sex_dir', default='/astro/u/rarmst/soft/bin/',
+    parser.add_argument('--sex_dir', default='/astro/u/mjarvis/bin/',
                         help='location of sextrator executable')
-    parser.add_argument('--piff_exe', default='/astro/u/mjarvis/bin/piffify',
+    parser.add_argument('--piff_exe', default='/astro/u/mjarvis/.conda/envs/py2.7/bin/piffify',
                         help='location of piffify executable')
     parser.add_argument('--findstars_dir', default='/astro/u/mjarvis/bin',
                         help='location wl executables')
@@ -96,10 +104,6 @@ def parse_args():
                         help='list of exposures (in lieu of separate exps)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
-    parser.add_argument('--pixmappy', default='zone029', type=str,
-                        help='Use the given Pixmappy WCS solution')
-    parser.add_argument('--bands', default='grizY', type=str,
-                        help='Limit to the given bands')
 
     # Configuration files
     parser.add_argument('--sex_config',
@@ -337,11 +341,13 @@ def run_findstars(row, wdir, fs_dir, fs_config):
 
     if not os.path.exists(star_file) or os.path.getsize(star_file) == 0:
         print('   Error running findstars.  Rerun with verbose=2.')
-        findstars_cmd = findstars_cmd + ' verbose=2 debug_ext=_fs.debug'
+        #findstars_cmd = findstars_cmd + ' verbose=2 debug_ext=_fs.debug'
+        findstars_cmd = findstars_cmd + ' verbose=2'
         print(findstars_cmd)
         run_with_timeout(findstars_cmd, 240)
-        print('   The debug file is',row['root'] + '_fs.debug')
+        #print('   The debug file is',row['root'] + '_fs.debug')
         if not os.path.exists(star_file) or os.path.getsize(star_file) == 0:
+            print('   Error running findstars (again).')
             return None
     return star_file
 
@@ -374,12 +380,12 @@ def read_findstars(star_file, cat_file, magzp):
         # Can't really do any of the rest of this, so skip out to the end.
         raise NoStarsException()
 
-    print('mag range = ',np.min(df['mag']), np.max(df['mag']))
+    #print('mag range = ',np.min(df['mag']), np.max(df['mag']))
     is_star = df['star_flag'] == 1
-    print('star mag range = ',np.min(df['mag'][is_star]), np.max(df['mag'][is_star]))
-    print('zero point = ',magzp)
+    #print('star mag range = ',np.min(df['mag'][is_star]), np.max(df['mag'][is_star]))
+    #print('zero point = ',magzp)
     df['mag'] += magzp - 25.
-    print('star mag range => ',np.min(df['mag'][is_star]), np.max(df['mag'][is_star]))
+    #print('star mag range => ',np.min(df['mag'][is_star]), np.max(df['mag'][is_star]))
 
     # Add on some extra information from the sextractor catalog
     sdata = fitsio.read(cat_file, 2)
@@ -440,12 +446,12 @@ def remove_bad_stars(df, ccdnum, tbdata,
         print('   excluding tape bumps brings star count to ',use.sum())
 
     if reserve:
-        print('   reserve ',reserve)
+        #print('   reserve ',reserve)
         n = use.sum()
         perm = np.random.permutation(n)
         n1 = int(reserve * n)
         print('   reserving',n1)
-        print('   initial ids = ',df[use]['id'].values)
+        #print('   initial ids = ',df[use]['id'].values)
         # There is surely a more efficient way to do this, but I kept getting confused about
         # when numpy makes a copy vs a view.  This step-by-step calculation works.
         r1 = np.zeros((n), dtype=bool)
@@ -454,11 +460,11 @@ def remove_bad_stars(df, ccdnum, tbdata,
         r2[perm] = r1
         reserve = np.zeros_like(use, dtype=bool)
         reserve[use] = r2
-        print('   nreserve = ',np.sum(reserve))
+        #print('   nreserve = ',np.sum(reserve))
         df['reserve'] = reserve
-        print('   reserve ids = ',df['id'][df['reserve']].values)
+        #print('   reserve ids = ',df['id'][df['reserve']].values)
         use = use & ~reserve
-        print('   final ids = ',df['id'][use].values)
+        #print('   final ids = ',df['id'][use].values)
         print('   after reserve: nstars = ',use.sum())
 
     df['use'] = use
@@ -562,15 +568,15 @@ def run_piff(df, img_file, cat_file, psf_file, piff_exe, piff_config,
 
     print('   making cat file for piff')
     stars_df = df[df['use']]
-    print('stars_df = \n',stars_df.describe())
+    #print('stars_df = \n',stars_df.describe())
     piff_cat_file = cat_file.replace('stars','use_stars')
     fitsio.write(piff_cat_file, stars_df.to_records(index=False), clobber=True)
 
     print('   running piff')
     piff_cmd = '{piff_exe} {config} input.image_file_name={image} input.cat_file_name={cat} output.file_name={psf}'.format(
-            piff_exe=piff_exe, config=piff_config, image=img_file, cat=piff_cat_file, psf=psf_file)
+        piff_exe=piff_exe, config=piff_config, image=img_file, cat=piff_cat_file, psf=psf_file)
     piff_cmd += ' input.wcs.file_name={pixmappy} input.wcs.exp={exp} input.wcs.ccdnum={ccdnum}'.format(
-            pixmappy=pixmappy, exp=exp, ccdnum=ccdnum)
+        pixmappy=pixmappy, exp=exp, ccdnum=ccdnum)
     print(piff_cmd)
     run_with_timeout(piff_cmd, 300)  # 5 minutes should be way more than plenty!
 
@@ -605,34 +611,29 @@ def wget(url_base, path, wdir, file):
     url = url_base + path + file
     full_file = os.path.join(wdir,file)
 
-    import wget
     if not os.path.isfile(full_file):
         print('Downloading ',full_file)
         # Sometimes this fails with an "http protocol error, bad status line".
         # Maybe from too many requests at once or something.  So we retry up to 5 times.
         nattempts = 5
+        cmd = 'wget %s -O %s'%(url, full_file)
         for attempt in range(1,nattempts+1):
-            print('wget %s  (attempt %d)'%(url, attempt))
-            try:
-                wget.download(url, bar=None, out=full_file)
-            except KeyboardInterrupt:
-                raise
-            except Exception as e:
-                print('Caught ',e)
-                if attempt < nattempts:
-                    print('Try again.')
-                    import time
-                    time.sleep(2)
-                continue
-            else:
+            print('%s  (attempt %d)'%(cmd, attempt))
+            run_with_timeout(cmd, 300)
+            if os.path.exists(full_file):
                 break
     return full_file
 
 
 def hsm(im, wt=None):
+    #print('im stats: ',im.array.min(),im.array.max(),im.array.mean(),np.median(im.array))
+    #print('wt = ',wt)
+    #if wt:
+        #print('im stats: ',wt.array.min(),wt.array.max(),wt.array.mean(),np.median(wt.array))
     flag = 0
     try:
         shape_data = im.FindAdaptiveMom(weight=wt, strict=False)
+        #print('shape_data = ',shape_data)
     except Exception as e:
         print(e)
         print(' *** Bad measurement (caught exception).  Mask this one.')
@@ -645,21 +646,25 @@ def hsm(im, wt=None):
 
     dx = shape_data.moments_centroid.x - im.true_center.x
     dy = shape_data.moments_centroid.y - im.true_center.y
+    #print('dx, dy = ',dx,dy)
     if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
         print(' *** Centroid shifted by ',dx,dy,' in hsm.  Mask this one.')
         flag |= CENTROID_SHIFT
 
     flux = shape_data.moments_amp
+    #print('flux = ',flux)
 
     # Account for the image wcs
     if im.wcs.isPixelScale():
         g1 = shape_data.observed_shape.g1
         g2 = shape_data.observed_shape.g2
         T = 2 * shape_data.moments_sigma**2 * im.scale**2
+        #print('simple shape = ',g1,g2,T)
     else:
         e1 = shape_data.observed_shape.e1
         e2 = shape_data.observed_shape.e2
         s = shape_data.moments_sigma
+        #print('simple shape = ',e1,e2,s)
 
         jac = im.wcs.jacobian(im.true_center)
         M = np.matrix( [[ 1 + e1, e2 ], [ e2, 1 - e1 ]] ) * s*s
@@ -673,6 +678,7 @@ def hsm(im, wt=None):
         shear = galsim.Shear(e1=e1, e2=e2)
         g1 = shear.g1
         g2 = shear.g2
+        #print('distorted shape = ',g1,g2,T)
 
     return dx, dy, g1, g2, T, flux, flag
 
@@ -943,10 +949,10 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
             wt = full_weight[b]
 
         im = psf.draw(x=x, y=y, image=im)
-        print('raw piff draw: sum = ',im.array.sum())
-        print('obs_flux = ',df['obs_flux'].iloc[i])
+        #print('raw piff draw: sum = ',im.array.sum())
+        #print('obs_flux = ',df['obs_flux'].iloc[i])
         im *= df['obs_flux'].iloc[i]
-        print('sum => ',im.array.sum())
+        #print('sum => ',im.array.sum())
 
         if use_ngmix:
             dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm)
@@ -1096,14 +1102,11 @@ def main():
         exps = list(set(all_exp['expnum']))
         print('There are a total of %d exposures'%len(exps))
 
-    if args.pixmappy is not None:
-        pixmappy_wcs = pixmappy.PixelMapCollection(args.pixmappy).wcs
-        wcs_exps = set([k[1:7] for k in pixmappy_wcs.keys() if k[0]=='D'])
-        print('Pixmappy file has %d exposures'%len(wcs_exps))
-        #print('exps = ',sorted(exps))
-        #print('wcs_exps = ',sorted(wcs_exps))
-        exps = [exp for exp in exps if str(exp) in wcs_exps]
-        print('Limiting to the %d exposures in pixmappy wcs file'%len(exps))
+    pixmappy_dir = '/astro/u/mjarvis/work/y3_piff/astro'
+    which_zone = fitsio.read(os.path.join(pixmappy_dir, 'which_zone.fits'))
+    which_zone = pandas.DataFrame(which_zone)
+    if sys.version_info >= (3,):
+        which_zone['detpos'] = which_zone['detpos'].str.decode("utf-8")
 
     exps = sorted(exps)
     print('exps = ',exps)
@@ -1299,11 +1302,17 @@ def main():
                 fwhm = star_fwhm[3]
 
                 # Get the pixmappy wcs for this ccd for correcting the shapes
-                if args.pixmappy is not None:
-                    wcs = pixmappy.GalSimWCS(args.pixmappy, exp=exp, ccdnum=ccdnum)
-                    wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
-                else:
-                    wcs = None
+                dp = detpos[ccdnum]
+                wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0][0]
+                print('row in which_zone is ',wz)
+                #print('  ',which_zone[wz])
+                zone = which_zone['zone'][wz]
+                print('zone = ',zone)
+                pixmappy_file = os.path.join(pixmappy_dir, 'zone%03d.astro'%zone)
+                #pixmappy_file = '/astro/u/mjarvis/rmjarvis/DESWL/psf/zone029.astro.orig'
+                print('pixmappy_file = ',pixmappy_file)
+                wcs = pixmappy.GalSimWCS(pixmappy_file, exp=exp, ccdnum=ccdnum)
+                wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
 
                 # Measure the shpes and sizes of the stars
                 measure_star_shapes(df, unpack_image_file, args.noweight, wcs,

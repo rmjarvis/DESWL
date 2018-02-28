@@ -83,7 +83,7 @@ def plot_rho(meanr, rhop, sigp, sqrtn, rhom=None, sigm=None):
     else:
         return [ lp ]
 
-def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
+def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=None):
     import matplotlib.patches as mp
     if False:
         # This is all handwavy arguments about what the requirements are.  
@@ -128,15 +128,15 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
     if rho3 is not None:
         plt.plot(meanr*1.03, rho3, color='green')
         plt.plot(meanr*1.03, -rho3, color='green', ls=':')
-        plt.errorbar(meanr[rho3>0]*1.03, rho3[rho3>0], yerr=sig[rho3>0]/sqrtn, color='green', ls='', marker='s')
-        plt.errorbar(meanr[rho3<0]*1.03, -rho3[rho3<0], yerr=sig[rho3<0]/sqrtn, color='green', ls='', marker='s')
-        rho3_line = plt.errorbar(-meanr, rho3, yerr=sig, color='green', marker='s')
+        plt.errorbar(meanr[rho3>0]*1.03, rho3[rho3>0], yerr=sig3[rho3>0]/sqrtn, color='green', ls='', marker='s')
+        plt.errorbar(meanr[rho3<0]*1.03, -rho3[rho3<0], yerr=sig3[rho3<0]/sqrtn, color='green', ls='', marker='s')
+        rho3_line = plt.errorbar(-meanr, rho3, yerr=sig3, color='green', marker='s')
     if rho4 is not None:
         plt.plot(meanr*1.06, rho4, color='red')
         plt.plot(meanr*1.06, -rho4, color='red', ls=':')
-        plt.errorbar(meanr[rho4>0]*1.06, rho4[rho4>0], yerr=sig[rho4>0]/sqrtn, color='red', ls='', marker='^')
-        plt.errorbar(meanr[rho4<0]*1.06, -rho4[rho4<0], yerr=sig[rho4<0]/sqrtn, color='red', ls='', marker='^')
-        rho4_line = plt.errorbar(-meanr, rho4, yerr=sig, color='red', marker='^')
+        plt.errorbar(meanr[rho4>0]*1.06, rho4[rho4>0], yerr=sig4[rho4>0]/sqrtn, color='red', ls='', marker='^')
+        plt.errorbar(meanr[rho4<0]*1.06, -rho4[rho4<0], yerr=sig4[rho4<0]/sqrtn, color='red', ls='', marker='^')
+        rho4_line = plt.errorbar(-meanr, rho4, yerr=sig4, color='red', marker='^')
     #sv_req = mp.Patch(color='#FFFF82')
     if rho3 is not None and rho4 is not None:
         plt.legend([rho1_line, rho3_line, rho4_line],
@@ -164,7 +164,7 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, rho4=None):
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
 
-def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
+def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None):
     import matplotlib.patches as mp
     # The requirements on rho2 are less stringent.  They are larger by a factor 1/alpha.
     # Let's use alpha = 0.03.
@@ -209,9 +209,9 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None):
     if rho5 is not None:
         plt.plot(meanr*1.03, rho5, color='green')
         plt.plot(meanr*1.03, -rho5, color='green', ls=':')
-        plt.errorbar(meanr[rho5>0]*1.03, rho5[rho5>0], yerr=sig[rho5>0]/sqrtn, color='green', ls='', marker='s')
-        plt.errorbar(meanr[rho5<0]*1.03, -rho5[rho5<0], yerr=sig[rho5<0]/sqrtn, color='green', ls='', marker='s')
-        rho5_line = plt.errorbar(-meanr, rho5, yerr=sig, color='green', marker='s')
+        plt.errorbar(meanr[rho5>0]*1.03, rho5[rho5>0], yerr=sig5[rho5>0]/sqrtn, color='green', ls='', marker='s')
+        plt.errorbar(meanr[rho5<0]*1.03, -rho5[rho5<0], yerr=sig5[rho5<0]/sqrtn, color='green', ls='', marker='s')
+        rho5_line = plt.errorbar(-meanr, rho5, yerr=sig5, color='green', marker='s')
     #sv_req = mp.Patch(color='#FFFF82')
     if rho5 is not None:
         plt.legend([rho2_line, rho5_line],
@@ -839,12 +839,12 @@ def plot_overall_rho(work):
             print 'wrote',outfile
  
         plt.clf()
-        pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, rho4p)
+        pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, sig_rho3, rho4p, sig_rho4)
         #plt.savefig('rho1_' + key + '.png')
         plt.savefig('rho1_' + key + '.pdf')
 
         plt.clf()
-        pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p)
+        pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p, sig_rho5)
         #plt.savefig('rho2_' + key + '.png')
         plt.savefig('rho2_' + key + '.pdf')
 

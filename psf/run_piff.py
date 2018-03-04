@@ -96,10 +96,15 @@ def parse_args():
                         help='location of intermediate outputs')
     parser.add_argument('--scratch', default='/data/mjarvis/y3_piff',
                         help='location of intermediate outputs')
+    parser.add_argument('--pixmappy_dir', default='/astro/u/mjarvis/work/y3_piff/astro',
+                        help='location of pixmappy astrometric solutions')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
 
     # Exposure inputs
+    parser.add_argument('--base_exposures',
+                        default='/astro/u/mjarvis/work/y3_piff/exposures-ccds-Y3A1_COADD.fits',
+                        help='The base file with information about the DES exposures')
     parser.add_argument('--file', default='',
                         help='list of exposures (in lieu of separate exps)')
     parser.add_argument('--exps', default='', nargs='+',
@@ -747,7 +752,7 @@ def ngmix_fit(im, wt, fwhm):
         prior = make_ngmix_prior(T, wcs.minLinearScale())
 
         if galsim.__version__ >= '1.5.1':
-            cen = im.true_center - im.origin()
+            cen = im.true_center - im.origin
         else:
             cen = im.trueCenter() - im.origin()
         jac = ngmix.Jacobian(wcs=wcs, x=cen.x, y=cen.y)
@@ -1084,6 +1089,248 @@ def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, f
     #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'psfex')
 
+def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone):
+
+    # The url to use up to just before OPS
+    url_base = 'https://rmjarvis:%s@desar2.cosmology.illinois.edu/DESFiles/desarchive/'%ps()
+
+    key, expnum, ccdnum, band = row['key'], row['expnum'], row['ccdnum'], row['band']
+    magzp = row['magzp']
+    path = row['path'].strip()
+    print('path = ',path)
+
+    # Use a well-defined seed so results are repeatable if we see a problem.
+    np.random.seed(((expnum+76876876) * (ccdnum+23424524) * 8675309) % 2**32)
+
+    # Store all information about the stars in a pandas data frame.
+    df = pandas.DataFrame()
+    flag = 0
+
+    keep_files = []
+
+    try:
+
+        # Download the files we need:
+        base_path, _, _, image_file_name = path.rsplit('/',3)
+        root, ext = image_file_name.rsplit('_',1)
+        print('root, ext = |%s| |%s|'%(root,ext))
+        image_file = wget(url_base, base_path + '/red/immask/', sdir, root + '_' + ext)
+        print('image_file = ',image_file)
+        row['root'] = root
+        row['image_file'] = image_file
+        print(time.ctime())
+
+        bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz')
+        print('bkg_file = ',bkg_file)
+        row['bkg_file'] = bkg_file
+        print(time.ctime())
+
+        # Unpack the image file if necessary
+        unpack_image_file = unpack_file(image_file)
+        if unpack_image_file is None:
+            # This was our signal to skip this without blacklisting.  Just continue.
+            flag |= ERROR_FLAG
+            raise NoStarsException()
+        print('unpacked to ',unpack_image_file)
+        print(time.ctime())
+
+        # Subtract off the background right from the start
+        with fitsio.FITS(unpack_image_file, 'rw') as f:
+            bkg = fitsio.read(bkg_file)
+            #print('after read bkg')
+            img = f[0].read()
+            img -= bkg
+            #print('after subtract bkg')
+            f[0].write(img)
+            #print('after write new img')
+        print('subtracted off background image')
+        print(time.ctime())
+
+        if args.get_psfex:
+            psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf')
+            print('psfex_file = ',psfex_file)
+            row['psfex_file'] = psfex_file
+            keep_files.append(psfex_file)
+            print(time.ctime())
+
+        read_image_header(row, unpack_image_file)
+        #print('read image header.  row = ',row)
+        sat = row['sat']
+        fits_fwhm = row['fits_fwhm']
+
+        # Run Sextractor
+        cat_file = os.path.join(sdir, root + '_cat.fits')
+        # Unfortunately, the desdm catalog in the cat directory doesn't seem to be
+        # complete.  Looks like it only has stars maybe?  Which is nominally fine, but
+        # we're not sure if we trust their star selection.  So we run sextractor ourself.
+        if args.run_sextractor or not os.path.isfile(cat_file):
+            # Also need the fwhm for doing the tape bumps.
+            cat_file = run_sextractor(sdir, root, unpack_image_file, sat, fits_fwhm,
+                    args.noweight, args.sex_dir, args.sex_config, args.sex_params,
+                    args.sex_filter, args.sex_nnw)
+            if cat_file is None:
+                raise NoStarsException()
+        print('cat_file = ',cat_file)
+        row['cat_file'] = cat_file
+        print(time.ctime())
+
+        # Run findstars
+        star_file = os.path.join(sdir, root + '_stars.fits')
+        row['star_file'] = star_file
+        if args.run_findstars or not os.path.isfile(star_file):
+            star_file = run_findstars(row, sdir, args.findstars_dir, args.findstars_config)
+            if star_file is None:
+                raise NoStarsException()
+
+        # Read the findstars catalog (need to do this even if star_file exists)
+        df = read_findstars(star_file, cat_file, magzp)
+        if df is None:
+            print('     -- flag for findstars failure')
+            flag |= FINDSTARS_FAILURE
+            raise NoStarsException()
+        print(time.ctime())
+
+        # Cut the brighest magnitudes or other exclusions/reservations
+        nstars, ntot = remove_bad_stars(
+                df, ccdnum, tbdata,
+                args.mag_cut, args.nbright_stars, args.min_mag, args.max_mag,
+                args.use_tapebumps, args.tapebump_extra, args.reserve, fits_fwhm)
+
+        # Check if there are few or many staras.
+        if nstars < FEW_STARS:
+            print('     -- flag for too few stars: ',nstars)
+            flag |= TOO_FEW_STARS_FLAG
+        if nstars <= 1:
+            raise NoStarsException()
+        if nstars > MANY_STARS_FRAC * ntot:
+            print('     -- flag for too many stars: %d/%d'%(nstars,ntot))
+            flag |= TOO_MANY_STARS_FLAG
+
+        # Get the median fwhm of the given stars
+        # Returns min, max, mean, median.  We use median, which is index 3.
+        star_fwhm = get_fwhm(df)
+        print('   fwhm of stars = ',star_fwhm)
+        print('   cf. header fwhm = ',fits_fwhm * 0.26)
+        if star_fwhm[3] > HIGH_FWHM:
+            print('     -- flag for too high fwhm')
+            flag |= TOO_HIGH_FWHM_FLAG
+        if star_fwhm[3] > 1.5 * fits_fwhm * 0.26:
+            print('     -- flag for too high fwhm compared to fwhm from fits header')
+            flag |= TOO_HIGH_FWHM_FLAG
+        row['star_fwhm'] = star_fwhm[3]
+        fwhm = star_fwhm[3]
+        print(time.ctime())
+
+        # Get the pixmappy wcs for this ccd for correcting the shapes
+        dp = detpos[ccdnum]
+        wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0][0]
+        print('row in which_zone is ',wz)
+        #print('  ',which_zone[wz])
+        zone = which_zone['zone'][wz]
+        print('zone = ',zone)
+        row['zone'] = zone
+        pixmappy_file = os.path.join(args.pixmappy_dir, 'zone%03d.astro'%zone)
+        print('pixmappy_file = ',pixmappy_file)
+        wcs = pixmappy.GalSimWCS(pixmappy_file, exp=expnum, ccdnum=ccdnum)
+        wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
+        print(time.ctime())
+
+        # Measure the shpes and sizes of the stars
+        measure_star_shapes(df, unpack_image_file, args.noweight, wcs,
+                            args.use_ngmix, fwhm)
+
+        # Another check is that the spread in star sizes isn't too large
+        obs_T = df.loc[df['obs_flag']==0, 'obs_T']
+        if np.std(obs_T) > 0.15 * np.mean(obs_T):
+            print('     -- flag for large size spread: %f > 0.15 * %f'%(
+                    np.std(obs_T), np.mean(obs_T)))
+            flag |= LARGE_SIZE_SPREAD
+        print(time.ctime())
+
+        # Run piff
+        psf_file = os.path.join(wdir, root + '_piff.fits')
+        row['piff_file'] = psf_file
+        keep_files.append(psf_file)
+        if args.run_piff:
+            success = run_piff(df, unpack_image_file, star_file, psf_file,
+                               args.piff_exe, args.piff_config,
+                               pixmappy_file, expnum, ccdnum)
+            if not success:
+                flag |= PSF_FAILURE
+        print(time.ctime())
+
+        # Measure the psf shapes
+        if not (flag & PSF_FAILURE):
+            measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
+                                args.use_ngmix, fwhm)
+            good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
+            de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
+            de2 = df.loc[good, 'piff_e2'] - df.loc[good, 'obs_e2']
+            dT = df.loc[good, 'piff_T'] - df.loc[good, 'obs_T']
+            print('de1 = ',np.min(de1),np.max(de1),np.mean(de1),np.std(de1))
+            print('de2 = ',np.min(de2),np.max(de2),np.mean(de2),np.std(de2))
+            print('dT = ',np.min(dT),np.max(dT),np.mean(dT),np.std(dT))
+        else:
+            de1 = -999.
+            de2 = -999.
+            dT = -999.
+        print(time.ctime())
+
+        if args.plot_fs:
+            fs_plot_file = os.path.join(wdir, root + '_fs.pdf')
+            plot_fs(df, fs_plot_file)
+            keep_files.append(fs_plot_file)
+            print(time.ctime())
+
+        if args.get_psfex:
+            measure_psfex_shapes(df, psfex_file, unpack_image_file, args.noweight, wcs,
+                                 args.use_ngmix, fwhm)
+            xgood = (df['psfex_flag'] == 0) & (df['obs_flag'] == 0)
+            xde1 = df.loc[xgood, 'psfex_e1'] - df.loc[xgood, 'obs_e1']
+            xde2 = df.loc[xgood, 'psfex_e2'] - df.loc[xgood, 'obs_e2']
+            xdT = df.loc[xgood, 'psfex_T'] - df.loc[xgood, 'obs_T']
+            print('de1 = ',np.min(xde1),np.max(xde1),np.mean(xde1),np.std(xde1))
+            print('de2 = ',np.min(xde2),np.max(xde2),np.mean(xde2),np.std(xde2))
+            print('dT = ',np.min(xdT),np.max(xdT),np.mean(xdT),np.std(xdT))
+            print(time.ctime())
+
+        if args.rm_files:
+            print('removing temp files')
+            remove_temp_files(sdir, root, keep_files)
+            print(time.ctime())
+
+    except NoStarsException:
+        print('No stars.  Log this in the blacklist and continue.')
+        flag |= NO_STARS_FLAG
+    except Exception as e:
+        print('Caught exception: ',e)
+        traceback.print_exc()
+        print('Log this in the blacklist and continue.')
+        flag |= ERROR_FLAG
+    else:
+        row['obs_mean_e1'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e1'])
+        row['obs_mean_e2'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e2'])
+        row['obs_mean_T'] = np.mean(df.loc[df['obs_flag']==0, 'obs_T'])
+        row['obs_std_e1'] = np.std(df.loc[df['obs_flag']==0, 'obs_e1'])
+        row['obs_std_e2'] = np.std(df.loc[df['obs_flag']==0, 'obs_e2'])
+        row['obs_std_T'] = np.std(df.loc[df['obs_flag']==0, 'obs_T'])
+        row['piff_mean_de1'] = np.mean(de1)
+        row['piff_mean_de2'] = np.mean(de2)
+        row['piff_mean_dT'] = np.mean(dT)
+        row['piff_std_de1'] = np.std(de1)
+        row['piff_std_de2'] = np.std(de2)
+        row['piff_std_dT'] = np.std(dT)
+        if args.get_psfex:
+            row['psfex_mean_de1'] = np.mean(xde1)
+            row['psfex_mean_de2'] = np.mean(xde2)
+            row['psfex_mean_dT'] = np.mean(xdT)
+            row['psfex_std_de1'] = np.std(xde1)
+            row['psfex_std_de2'] = np.std(xde2)
+            row['psfex_std_dT'] = np.std(xdT)
+
+    row['flag'] = flag
+    return df, row
+
 
 def main():
     print(time.ctime())
@@ -1113,12 +1360,8 @@ def main():
     except OSError:
         if not os.path.exists(scratch): raise
 
-
-    # The url to use up to just before OPS
-    url_base = 'https://rmjarvis:%s@desar2.cosmology.illinois.edu/DESFiles/desarchive/'%ps()
-
     # A listing Erin made of all the exposures in Y3 used in meds files
-    all_exp = fitsio.read('/astro/u/mjarvis/work/y3_piff/exposures-ccds-Y3A1_COADD.fits')
+    all_exp = fitsio.read(args.base_exposures)
     # Switch to native endians, so pandas doesn't complain.
     all_exp = all_exp.astype(all_exp.dtype.newbyteorder('='))
 
@@ -1134,8 +1377,7 @@ def main():
         exps = list(set(all_exp['expnum']))
         print('There are a total of %d exposures'%len(exps))
 
-    pixmappy_dir = '/astro/u/mjarvis/work/y3_piff/astro'
-    which_zone = fitsio.read(os.path.join(pixmappy_dir, 'which_zone.fits'))
+    which_zone = fitsio.read(os.path.join(args.pixmappy_dir, 'which_zone.fits'))
     which_zone = pandas.DataFrame(which_zone)
     if sys.version_info >= (3,):
         which_zone['detpos'] = which_zone['detpos'].str.decode("utf-8")
@@ -1164,23 +1406,24 @@ def main():
         # Add some blank columns to be filled in below.
         for k in ['root', 'image_file', 'bkg_file', 'cat_file', 'star_file',
                   'piff_file']:
-            exp_info_df[k] = [''] * len(data)
-        for k in ['zone']:
-            exp_info_df[k] = [-999] * len(data)
+            exp_info_df[k] = np.array([''] * len(data), dtype=str)
+        for k in ['zone', 'flag']:
+            exp_info_df[k] = np.array([-999] * len(data), dtype=int)
         for k in ['sat', 'fits_fwhm', 'star_fwhm',
                   'obs_mean_e1', 'obs_mean_e2', 'obs_mean_T',
                   'piff_mean_de1', 'piff_mean_de2', 'piff_mean_dT',
                   'piff_std_de1', 'piff_std_de2', 'piff_std_dT',
                  ]:
-            exp_info_df[k] = [-999.] * len(data)
+            exp_info_df[k] = np.array([-999.] * len(data), dtype=float)
         if args.get_psfex:
             exp_info_df['psfex_file'] = [''] * len(data)
             for k in ['psfex_mean_de1', 'psfex_mean_de2', 'psfex_mean_dT',
                       'psfex_std_de1', 'psfex_std_de2', 'psfex_std_dT',
                      ]:
-                exp_info_df[k] = [-999.] * len(data)
+                exp_info_df[k] = np.array([-999.] * len(data), dtype=float)
         for k in ['flag']:
-            exp_info_df[k] = [0] * len(data)
+            exp_info_df[k] = np.array([0] * len(data), dtype=int)
+        print('dtype = ',exp_info_df.dtypes)
 
         # Make the work and scratch directories for this exposure and clear it if necessary.
         wdir = os.path.join(work,str(exp))
@@ -1218,262 +1461,48 @@ def main():
 
         for k, row in exp_info_df.iterrows():
             key, expnum, ccdnum, band = row['key'], row['expnum'], row['ccdnum'], row['band']
-            magzp = row['magzp']
             if args.single_ccd and ccdnum != args.single_ccd: continue
             print('\nProcessing ', key, expnum, ccdnum, band)
-            path = row['path'].strip()
-            print('path = ',path)
             print(time.ctime())
 
-            # Use a well-defined seed so results are repeatable if we see a problem.
-            np.random.seed(((expnum+76876876) * (k+23424524) * 8675309) % 2**32)
-
-            # Store all information about the stars in a pandas data frame.
-            df = pandas.DataFrame()
-            flag = 0
-
-            keep_files = []
-
-            try:
-
-                # Download the files we need:
-                base_path, _, _, image_file_name = path.rsplit('/',3)
-                root, ext = image_file_name.rsplit('_',1)
-                print('root, ext = |%s| |%s|'%(root,ext))
-                image_file = wget(url_base, base_path + '/red/immask/', sdir, root + '_' + ext)
-                print('image_file = ',image_file)
-                row['root'] = root
-                row['image_file'] = image_file
-                print(time.ctime())
-
-                bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz')
-                print('bkg_file = ',bkg_file)
-                row['bkg_file'] = bkg_file
-                print(time.ctime())
-
-                # Unpack the image file if necessary
-                unpack_image_file = unpack_file(image_file)
-                if unpack_image_file is None:
-                    # This was our signal to skip this without blacklisting.  Just continue.
-                    flag |= ERROR_FLAG
-                    raise NoStarsException()
-                print('unpacked to ',unpack_image_file)
-                print(time.ctime())
-
-                # Subtract off the background right from the start
-                with fitsio.FITS(unpack_image_file, 'rw') as f:
-                    bkg = fitsio.read(bkg_file)
-                    #print('after read bkg')
-                    img = f[0].read()
-                    img -= bkg
-                    #print('after subtract bkg')
-                    f[0].write(img)
-                    #print('after write new img')
-                print('subtracted off background image')
-                print(time.ctime())
-
-                if args.get_psfex:
-                    psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf')
-                    print('psfex_file = ',psfex_file)
-                    row['psfex_file'] = psfex_file
-                    keep_files.append(psfex_file)
-                    print(time.ctime())
-
-                read_image_header(row, unpack_image_file)
-                #print('read image header.  row = ',row)
-                sat = row['sat']
-                fits_fwhm = row['fits_fwhm']
-
-                # Run Sextractor
-                cat_file = os.path.join(sdir, root + '_cat.fits')
-                # Unfortunately, the desdm catalog in the cat directory doesn't seem to be
-                # complete.  Looks like it only has stars maybe?  Which is nominally fine, but
-                # we're not sure if we trust their star selection.  So we run sextractor ourself.
-                if args.run_sextractor or not os.path.isfile(cat_file):
-                    # Also need the fwhm for doing the tape bumps.
-                    cat_file = run_sextractor(sdir, root, unpack_image_file, sat, fits_fwhm,
-                            args.noweight, args.sex_dir, args.sex_config, args.sex_params,
-                            args.sex_filter, args.sex_nnw)
-                    if cat_file is None:
-                        raise NoStarsException()
-                print('cat_file = ',cat_file)
-                row['cat_file'] = cat_file
-                print(time.ctime())
-
-                # Run findstars
-                star_file = os.path.join(sdir, root + '_stars.fits')
-                row['star_file'] = star_file
-                if args.run_findstars or not os.path.isfile(star_file):
-                    star_file = run_findstars(row, sdir, args.findstars_dir, args.findstars_config)
-                    if star_file is None:
-                        raise NoStarsException()
-
-                # Read the findstars catalog (need to do this even if star_file exists)
-                df = read_findstars(star_file, cat_file, magzp)
-                if df is None:
-                    print('     -- flag for findstars failure')
-                    flag |= FINDSTARS_FAILURE
-                    raise NoStarsException()
-                print(time.ctime())
-
-                # Cut the brighest magnitudes or other exclusions/reservations
-                nstars, ntot = remove_bad_stars(
-                        df, ccdnum, tbdata,
-                        args.mag_cut, args.nbright_stars, args.min_mag, args.max_mag,
-                        args.use_tapebumps, args.tapebump_extra, args.reserve, fits_fwhm)
-
-                # Check if there are few or many staras.
-                if nstars < FEW_STARS:
-                    print('     -- flag for too few stars: ',nstars)
-                    flag |= TOO_FEW_STARS_FLAG
-                if nstars <= 1:
-                    raise NoStarsException()
-                if nstars > MANY_STARS_FRAC * ntot:
-                    print('     -- flag for too many stars: %d/%d'%(nstars,ntot))
-                    flag |= TOO_MANY_STARS_FLAG
-
-                # Get the median fwhm of the given stars
-                # Returns min, max, mean, median.  We use median, which is index 3.
-                star_fwhm = get_fwhm(df)
-                print('   fwhm of stars = ',star_fwhm)
-                print('   cf. header fwhm = ',fits_fwhm * 0.26)
-                if star_fwhm[3] > HIGH_FWHM:
-                    print('     -- flag for too high fwhm')
-                    flag |= TOO_HIGH_FWHM_FLAG
-                if star_fwhm[3] > 1.5 * fits_fwhm * 0.26:
-                    print('     -- flag for too high fwhm compared to fwhm from fits header')
-                    flag |= TOO_HIGH_FWHM_FLAG
-                row['star_fwhm'] = star_fwhm[3]
-                fwhm = star_fwhm[3]
-                print(time.ctime())
-
-                # Get the pixmappy wcs for this ccd for correcting the shapes
-                dp = detpos[ccdnum]
-                wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0][0]
-                print('row in which_zone is ',wz)
-                #print('  ',which_zone[wz])
-                zone = which_zone['zone'][wz]
-                print('zone = ',zone)
-                row['zone'] = zone
-                pixmappy_file = os.path.join(pixmappy_dir, 'zone%03d.astro'%zone)
-                #pixmappy_file = '/astro/u/mjarvis/rmjarvis/DESWL/psf/zone029.astro.orig'
-                print('pixmappy_file = ',pixmappy_file)
-                wcs = pixmappy.GalSimWCS(pixmappy_file, exp=exp, ccdnum=ccdnum)
-                wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
-                print(time.ctime())
-
-                # Measure the shpes and sizes of the stars
-                measure_star_shapes(df, unpack_image_file, args.noweight, wcs,
-                                    args.use_ngmix, fwhm)
-
-                # Another check is that the spread in star sizes isn't too large
-                obs_T = df.loc[df['obs_flag']==0, 'obs_T']
-                if np.std(obs_T) > 0.15 * np.mean(obs_T):
-                    print('     -- flag for large size spread: %f > 0.15 * %f'%(
-                            np.std(obs_T), np.mean(obs_T)))
-                    flag |= LARGE_SIZE_SPREAD
-                print(time.ctime())
-
-                # Run piff
-                psf_file = os.path.join(wdir, root + '_piff.fits')
-                row['piff_file'] = psf_file
-                keep_files.append(psf_file)
-                if args.run_piff:
-                    success = run_piff(df, unpack_image_file, star_file, psf_file,
-                                       args.piff_exe, args.piff_config,
-                                       pixmappy_file, exp, ccdnum)
-                    if not success:
-                        flag |= PSF_FAILURE
-                print(time.ctime())
-
-                # Measure the psf shapes
-                if not (flag & PSF_FAILURE):
-                    measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
-                                        args.use_ngmix, fwhm)
-                    good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
-                    de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
-                    de2 = df.loc[good, 'piff_e2'] - df.loc[good, 'obs_e2']
-                    dT = df.loc[good, 'piff_T'] - df.loc[good, 'obs_T']
-                    print('de1 = ',np.min(de1),np.max(de1),np.mean(de1),np.std(de1))
-                    print('de2 = ',np.min(de2),np.max(de2),np.mean(de2),np.std(de2))
-                    print('dT = ',np.min(dT),np.max(dT),np.mean(dT),np.std(dT))
-                else:
-                    de1 = -999.
-                    de2 = -999.
-                    dT = -999.
-                print(time.ctime())
-
-                if args.plot_fs:
-                    fs_plot_file = os.path.join(wdir, root + '_fs.pdf')
-                    plot_fs(df, fs_plot_file)
-                    keep_files.append(fs_plot_file)
-                    print(time.ctime())
-
-                if args.get_psfex:
-                    measure_psfex_shapes(df, psfex_file, unpack_image_file, args.noweight, wcs,
-                                         args.use_ngmix, fwhm)
-                    xgood = (df['psfex_flag'] == 0) & (df['obs_flag'] == 0)
-                    xde1 = df.loc[xgood, 'psfex_e1'] - df.loc[xgood, 'obs_e1']
-                    xde2 = df.loc[xgood, 'psfex_e2'] - df.loc[xgood, 'obs_e2']
-                    xdT = df.loc[xgood, 'psfex_T'] - df.loc[xgood, 'obs_T']
-                    print('de1 = ',np.min(xde1),np.max(xde1),np.mean(xde1),np.std(xde1))
-                    print('de2 = ',np.min(xde2),np.max(xde2),np.mean(xde2),np.std(xde2))
-                    print('dT = ',np.min(xdT),np.max(xdT),np.mean(xdT),np.std(xdT))
-                    print(time.ctime())
-
-                if args.rm_files:
-                    print('removing temp files')
-                    remove_temp_files(sdir, root, keep_files)
-                    print(time.ctime())
-
-            except NoStarsException:
-                print('No stars.  Log this in the blacklist and continue.')
-                flag |= NO_STARS_FLAG
-            except Exception as e:
-                print('Caught exception: ',e)
-                traceback.print_exc()
-                print('Log this in the blacklist and continue.')
-                flag |= ERROR_FLAG
-            else:
-                row['obs_mean_e1'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e1'])
-                row['obs_mean_e2'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e2'])
-                row['obs_mean_T'] = np.mean(df.loc[df['obs_flag']==0, 'obs_T'])
-                row['obs_std_e1'] = np.std(df.loc[df['obs_flag']==0, 'obs_e1'])
-                row['obs_std_e2'] = np.std(df.loc[df['obs_flag']==0, 'obs_e2'])
-                row['obs_std_T'] = np.std(df.loc[df['obs_flag']==0, 'obs_T'])
-                row['piff_mean_de1'] = np.mean(de1)
-                row['piff_mean_de2'] = np.mean(de2)
-                row['piff_mean_dT'] = np.mean(dT)
-                row['piff_std_de1'] = np.std(de1)
-                row['piff_std_de2'] = np.std(de2)
-                row['piff_std_dT'] = np.std(dT)
-                if args.get_psfex:
-                    row['psfex_mean_de1'] = np.mean(xde1)
-                    row['psfex_mean_de2'] = np.mean(xde2)
-                    row['psfex_mean_dT'] = np.mean(xdT)
-                    row['psfex_std_de1'] = np.std(xde1)
-                    row['psfex_std_de2'] = np.std(xde2)
-                    row['psfex_std_dT'] = np.std(xdT)
-
-            row['flag'] = flag
-
-            print('all_obj = \n', df.describe())
-            stars = df.loc[df['star_flag'] == 1].copy()
-            print('stars = \n', stars.describe())
-            print('info = ', row)
             psf_cat_file = os.path.join(wdir, 'psf_cat_%d_%d.fits'%(exp,ccdnum))
-            with fitsio.FITS(psf_cat_file,'rw',clobber=True) as f:
-                f.write_table(df.to_records(index=False), extname='all_obj')
-                f.write_table(stars.to_records(index=False), extname='stars')
-                f.write_table(row.to_frame().to_records(index=False), extname='info')
-
-            print('Wrote chip-level psf information to ',psf_cat_file)
+            if not args.clear_output and os.path.exists(psf_cat_file):
+                print('%s already exists.  Reading the existing file.'%psf_cat_file)
+                with fitsio.FITS(psf_cat_file,'r') as f:
+                    all_obj = f['all_obj'].read()
+                    stars = f['stars'].read()
+                    info = f['info'].read()
+                all_obj = all_obj.astype(all_obj.dtype.newbyteorder('='))
+                stars = stars.astype(stars.dtype.newbyteorder('='))
+                info = info.astype(info.dtype.newbyteorder('='))
+                df = pandas.DataFrame(all_obj)
+                stars = pandas.DataFrame(stars)
+                row = pandas.DataFrame(info).iloc[0]
+                print('Read chip-level psf information from ',psf_cat_file)
+                print('df = \n',df.describe())
+                print('stars = \n',stars.describe())
+                print('row = ',row)
+            else:
+                df, row = run_single_ccd(row, args, wdir, sdir, tbdata, which_zone)
+                print('all_obj = \n', df.describe())
+                star_mask = (df['piff_flag'] & ~RESERVED) == 0
+                stars = df.loc[star_mask].copy()
+                print('stars = \n', stars.describe())
+                print('row = ', row)
+                # This construction keeps the dtypes of the columns in exp_info_df.
+                rowdf = exp_info_df.iloc[0:0].append(row)
+                with fitsio.FITS(psf_cat_file,'rw',clobber=True) as f:
+                    f.write_table(df.to_records(index=False), extname='all_obj')
+                    f.write_table(stars.to_records(index=False), extname='stars')
+                    f.write_table(rowdf.to_records(index=False), extname='info')
+                print('Wrote chip-level psf information to ',psf_cat_file)
             print(time.ctime())
 
             # row is a copy of the row in the original, so make sure to copy it back.
             exp_info_df.iloc[k] = row
 
             # Add this chip's stars to the exposure stars df
+            flag = row['flag']
             stars.loc[:, 'ccdnum'] = ccdnum
             stars.loc[:, 'obs_flag'] |= flag * BLACK_FLAG_FACTOR
             stars.loc[:, 'piff_flag'] |= flag * BLACK_FLAG_FACTOR

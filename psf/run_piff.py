@@ -57,7 +57,7 @@ FAILURE = 32
 RESERVED = 64
 NOT_STAR = 128
 BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure blacklist flag
-                        # blacklist flags go up to 64, 
+                        # blacklist flags go up to 64,
 
 # array to convert ccdnum to detpos
 detpos = [None,'S29','S30','S31','S25','S26','S27','S28','S20','S21','S22',
@@ -82,7 +82,7 @@ def ps():
 
 def parse_args():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Run PSFEx on a set of exposures')
 
     # Directory arguments
@@ -300,7 +300,7 @@ def read_image_header(row, img_file):
     row['tiling'] = tiling
     row['hex'] = hex
 
- 
+
 def run_sextractor(wdir, root, img_file, sat, fwhm, noweight,
                    sex_dir, sex_config, sex_params, sex_filter, sex_nnw):
     """Run sextractor, but only if the output file does not exist yet.
@@ -483,7 +483,7 @@ def get_fwhm(df):
     # get the brightest 10 stars that have flags=0 and take the median just in case some
     # strange magnitudes were selected
     use = df['use']
-    fwhm = 2.35482 * df[use]['sigma0']  # For Gaussian, fwhm = 2.35482 * sigma 
+    fwhm = 2.35482 * df[use]['sigma0']  # For Gaussian, fwhm = 2.35482 * sigma
     stats = ( np.min(fwhm), np.max(fwhm),
               np.mean(fwhm), np.median(fwhm) )
     return stats
@@ -562,7 +562,7 @@ def run_piff(df, img_file, cat_file, psf_file, piff_exe, piff_config,
              pixmappy, exp, ccdnum):
     """Run Piffify
 
-    Returns True if successful, False if there was a catastrophic failure and no output 
+    Returns True if successful, False if there was a catastrophic failure and no output
     file was written.
     """
     if not os.path.exists(piff_config) and '/' not in piff_config:
@@ -724,17 +724,21 @@ def make_ngmix_prior(T, pixel_scale):
 
 def ngmix_fit(im, wt, fwhm):
     flag = 0
+    dx, dy, g1, g2, flux = 0., 0., 0., 0., 0.
     T_guess = (fwhm / 2.35482)**2 * 2.
+    T = T_guess
     #print('fwhm = %s, T_guess = %s'%(fwhm, T_guess))
     try:
-        dx,dy,g1,g2,T,flux,hsm_flag = hsm(im)
-        print('hsm: ',g1,g2,T,flux,hsm_flag)
-        if hsm_flag != 0:
-            print('Bad hsm measurement.  Reverting to g=(0,0) and T=T_guess = %s'%(T_guess))
-            T = T_guess
-        if np.abs(np.log(T/T_guess)) > 0.5:
-            print('T = %s is not near T_guess = %s.  Reverting to T_guess'%(T,T_guess))
-            T = T_guess
+        #dx,dy,g1,g2,T,flux,hsm_flag = hsm(im)
+        #print('hsm: ',g1,g2,T,flux,hsm_flag)
+        #if hsm_flag != 0:
+            #print('hsm: ',g1,g2,T,flux,hsm_flag)
+            #print('Bad hsm measurement.  Reverting to g=(0,0) and T=T_guess = %s'%(T_guess))
+            #T = T_guess
+        #elif np.abs(np.log(T/T_guess)) > 0.5:
+            #print('hsm: ',g1,g2,T,flux,hsm_flag)
+            #print('T = %s is not near T_guess = %s.  Reverting to T_guess'%(T,T_guess))
+            #T = T_guess
         if galsim.__version__ >= '1.5.1':
             wcs = im.wcs.local(im.center)
         else:
@@ -762,7 +766,7 @@ def ngmix_fit(im, wt, fwhm):
         print(e)
         print(' *** Bad measurement (caught exception).  Mask this one.')
         flag |= BAD_MEASUREMENT
-        return dx,dy,g1,g2,T,flux,flag  # Use hsm values as a backup (but flagged as bad)
+        return dx,dy,g1,g2,T,flux,flag
 
     if ngmix_flag != 0:
         print(' *** Bad measurement (ngmix flag = %d).  Mask this one.'%ngmix_flag)
@@ -779,7 +783,7 @@ def ngmix_fit(im, wt, fwhm):
 
     g1, g2, T = gmix.get_g1g2T()
     flux = gmix.get_flux() / wcs.pixelArea()  # flux is in ADU.  Should ~ match sum of pixels
-    print('ngmix: ',g1,g2,T,flux,flag)
+    #print('ngmix: ',g1,g2,T,flux,flag)
     return dx, dy, g1, g2, T, flux, flag
 
 def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm):
@@ -822,8 +826,8 @@ def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm):
         x = df['x'].iloc[i]
         y = df['y'].iloc[i]
 
-        print('Measure shape for star at ',x,y)
-        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
+        #print('Measure shape for star at ',x,y)
+        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2,
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
 
@@ -845,7 +849,7 @@ def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm):
         df.loc[i, 'obs_flux'] = flux
         df.loc[i, 'obs_flag'] |= flag
     print('final obs_flag = ',df['obs_flag'][ind].values)
-    print('df[ind] = ',df.loc[ind].describe())
+    #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'obs')
 
     # Any stars that weren't measurable here, don't use for PSF fitting.
@@ -868,15 +872,15 @@ def flag_outliers(df, ind, prefix, nsig=4.):
     outlier = np.abs(df[prefix + '_e1'][ind] - mean_e1) > nsig*std_e1
     outlier |= np.abs(df[prefix + '_e2'][ind] - mean_e2) > nsig*std_e2
     outlier |= np.abs(df[prefix + '_T'][ind] - mean_T) > nsig*std_T
-    print('outlier = ',ind[outlier])
     print('n outliers = ',np.sum(outlier),len(ind[outlier]))
-    print('outlier x = ',df['x'][ind[outlier]])
-    print('outlier y = ',df['y'][ind[outlier]])
-    print('outlier e1 = ',df[prefix + '_e1'][ind[outlier]])
-    print('outlier e2 = ',df[prefix + '_e2'][ind[outlier]])
-    print('outlier T = ',df[prefix + '_T'][ind[outlier]])
-    df.loc[ind[outlier], prefix + '_flag'] |= OUTLIER
     if len(ind[outlier]) > 0:
+        print('outlier = ',ind[outlier])
+        print('outlier x = ',df['x'][ind[outlier]])
+        print('outlier y = ',df['y'][ind[outlier]])
+        print('outlier e1 = ',df[prefix + '_e1'][ind[outlier]])
+        print('outlier e2 = ',df[prefix + '_e2'][ind[outlier]])
+        print('outlier T = ',df[prefix + '_T'][ind[outlier]])
+        df.loc[ind[outlier], prefix + '_flag'] |= OUTLIER
         print('Repeat with the new subset')
         # Increase nsig by 20% so we don't just keep chipping away at the edge of a normal
         # distribution.
@@ -964,9 +968,9 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
     for i in ind:
         x = df['x'].iloc[i]
         y = df['y'].iloc[i]
-        print('Measure Piff model shape at ',x,y)
+        #print('Measure Piff model shape at ',x,y)
 
-        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
+        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2,
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
         im = full_image[b]
@@ -1001,7 +1005,7 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
         df.loc[i, 'piff_flux'] = flux
         df.loc[i, 'piff_flag'] |= flag
     print('final piff_flag = ',df['piff_flag'][ind].values)
-    print('df[ind] = ',df.loc[ind].describe())
+    #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'piff')
 
 
@@ -1049,11 +1053,11 @@ def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, f
     for i in ind:
         x = df['x'].iloc[i]
         y = df['y'].iloc[i]
-        print('Measure PSFEx model shape at ',x,y)
+        #print('Measure PSFEx model shape at ',x,y)
         image_pos = galsim.PositionD(x,y)
         psf_i = psf.getPSF(image_pos)
 
-        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2, 
+        b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2,
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
         im = full_image[b]
@@ -1077,11 +1081,12 @@ def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, f
         df.loc[i, 'psfex_flux'] = flux
         df.loc[i, 'psfex_flag'] |= flag
     print('final psfex_flag = ',df['psfex_flag'][ind].values)
-    print('df[ind] = ',df.loc[ind].describe())
+    #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'psfex')
 
 
 def main():
+    print(time.ctime())
     args = parse_args()
     if args.use_tapebumps:
         tbdata = read_tapebump_file(args.tapebump_file)
@@ -1108,7 +1113,7 @@ def main():
     except OSError:
         if not os.path.exists(scratch): raise
 
-    
+
     # The url to use up to just before OPS
     url_base = 'https://rmjarvis:%s@desar2.cosmology.illinois.edu/DESFiles/desarchive/'%ps()
 
@@ -1144,34 +1149,38 @@ def main():
 
         print('Start work on exp = ',exp)
         print('%d images for this exposure'%len(data))
+        print(time.ctime())
         if len(data) == 0:
             print("This exposure is not in Erin's file.  Skip it.")
             continue
 
         # Store all information about the exposure in a pandas data frame.
         # Copy over the information from Erin's file.
-        exp_df = pandas.DataFrame(data)
+        exp_info_df = pandas.DataFrame(data)
 
         if sys.version_info >= (3,):
             for str_key in ['key', 'band', 'path']:
-                exp_df[str_key] = exp_df[str_key].str.decode("utf-8")
+                exp_info_df[str_key] = exp_info_df[str_key].str.decode("utf-8")
         # Add some blank columns to be filled in below.
-        for k in ['root', 'image_file', 'bkg_file', 'psfex_file', 'cat_file', 'star_file',
+        for k in ['root', 'image_file', 'bkg_file', 'cat_file', 'star_file',
                   'piff_file']:
-            exp_df[k] = [''] * len(data)
-        for k in ['sat', 'fits_fwhm',
+            exp_info_df[k] = [''] * len(data)
+        for k in ['zone']:
+            exp_info_df[k] = [-999] * len(data)
+        for k in ['sat', 'fits_fwhm', 'star_fwhm',
                   'obs_mean_e1', 'obs_mean_e2', 'obs_mean_T',
                   'piff_mean_de1', 'piff_mean_de2', 'piff_mean_dT',
                   'piff_std_de1', 'piff_std_de2', 'piff_std_dT',
                  ]:
-            exp_df[k] = [-999.] * len(data)
+            exp_info_df[k] = [-999.] * len(data)
         if args.get_psfex:
+            exp_info_df['psfex_file'] = [''] * len(data)
             for k in ['psfex_mean_de1', 'psfex_mean_de2', 'psfex_mean_dT',
                       'psfex_std_de1', 'psfex_std_de2', 'psfex_std_dT',
                      ]:
-                exp_df[k] = [-999.] * len(data)
+                exp_info_df[k] = [-999.] * len(data)
         for k in ['flag']:
-            exp_df[k] = [0] * len(data)
+            exp_info_df[k] = [0] * len(data)
 
         # Make the work and scratch directories for this exposure and clear it if necessary.
         wdir = os.path.join(work,str(exp))
@@ -1204,15 +1213,17 @@ def main():
             if not os.path.exists(sdir): raise
         print('sdir = ',sdir)
 
-        exp_df.sort_values('ccdnum', inplace=True)
+        exp_info_df.sort_values('ccdnum', inplace=True)
+        exp_stars_df = pandas.DataFrame()
 
-        for k, row in exp_df.iterrows():
+        for k, row in exp_info_df.iterrows():
             key, expnum, ccdnum, band = row['key'], row['expnum'], row['ccdnum'], row['band']
             magzp = row['magzp']
             if args.single_ccd and ccdnum != args.single_ccd: continue
             print('\nProcessing ', key, expnum, ccdnum, band)
             path = row['path'].strip()
             print('path = ',path)
+            print(time.ctime())
 
             # Use a well-defined seed so results are repeatable if we see a problem.
             np.random.seed(((expnum+76876876) * (k+23424524) * 8675309) % 2**32)
@@ -1233,10 +1244,12 @@ def main():
                 print('image_file = ',image_file)
                 row['root'] = root
                 row['image_file'] = image_file
+                print(time.ctime())
 
                 bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz')
                 print('bkg_file = ',bkg_file)
                 row['bkg_file'] = bkg_file
+                print(time.ctime())
 
                 # Unpack the image file if necessary
                 unpack_image_file = unpack_file(image_file)
@@ -1245,7 +1258,8 @@ def main():
                     flag |= ERROR_FLAG
                     raise NoStarsException()
                 print('unpacked to ',unpack_image_file)
- 
+                print(time.ctime())
+
                 # Subtract off the background right from the start
                 with fitsio.FITS(unpack_image_file, 'rw') as f:
                     bkg = fitsio.read(bkg_file)
@@ -1256,12 +1270,14 @@ def main():
                     f[0].write(img)
                     #print('after write new img')
                 print('subtracted off background image')
+                print(time.ctime())
 
                 if args.get_psfex:
                     psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf')
                     print('psfex_file = ',psfex_file)
                     row['psfex_file'] = psfex_file
                     keep_files.append(psfex_file)
+                    print(time.ctime())
 
                 read_image_header(row, unpack_image_file)
                 #print('read image header.  row = ',row)
@@ -1282,6 +1298,7 @@ def main():
                         raise NoStarsException()
                 print('cat_file = ',cat_file)
                 row['cat_file'] = cat_file
+                print(time.ctime())
 
                 # Run findstars
                 star_file = os.path.join(sdir, root + '_stars.fits')
@@ -1297,6 +1314,7 @@ def main():
                     print('     -- flag for findstars failure')
                     flag |= FINDSTARS_FAILURE
                     raise NoStarsException()
+                print(time.ctime())
 
                 # Cut the brighest magnitudes or other exclusions/reservations
                 nstars, ntot = remove_bad_stars(
@@ -1316,7 +1334,7 @@ def main():
 
                 # Get the median fwhm of the given stars
                 # Returns min, max, mean, median.  We use median, which is index 3.
-                star_fwhm = get_fwhm(df) 
+                star_fwhm = get_fwhm(df)
                 print('   fwhm of stars = ',star_fwhm)
                 print('   cf. header fwhm = ',fits_fwhm * 0.26)
                 if star_fwhm[3] > HIGH_FWHM:
@@ -1327,6 +1345,7 @@ def main():
                     flag |= TOO_HIGH_FWHM_FLAG
                 row['star_fwhm'] = star_fwhm[3]
                 fwhm = star_fwhm[3]
+                print(time.ctime())
 
                 # Get the pixmappy wcs for this ccd for correcting the shapes
                 dp = detpos[ccdnum]
@@ -1335,11 +1354,13 @@ def main():
                 #print('  ',which_zone[wz])
                 zone = which_zone['zone'][wz]
                 print('zone = ',zone)
+                row['zone'] = zone
                 pixmappy_file = os.path.join(pixmappy_dir, 'zone%03d.astro'%zone)
                 #pixmappy_file = '/astro/u/mjarvis/rmjarvis/DESWL/psf/zone029.astro.orig'
                 print('pixmappy_file = ',pixmappy_file)
                 wcs = pixmappy.GalSimWCS(pixmappy_file, exp=exp, ccdnum=ccdnum)
                 wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
+                print(time.ctime())
 
                 # Measure the shpes and sizes of the stars
                 measure_star_shapes(df, unpack_image_file, args.noweight, wcs,
@@ -1351,9 +1372,11 @@ def main():
                     print('     -- flag for large size spread: %f > 0.15 * %f'%(
                             np.std(obs_T), np.mean(obs_T)))
                     flag |= LARGE_SIZE_SPREAD
+                print(time.ctime())
 
                 # Run piff
                 psf_file = os.path.join(wdir, root + '_piff.fits')
+                row['piff_file'] = psf_file
                 keep_files.append(psf_file)
                 if args.run_piff:
                     success = run_piff(df, unpack_image_file, star_file, psf_file,
@@ -1361,6 +1384,7 @@ def main():
                                        pixmappy_file, exp, ccdnum)
                     if not success:
                         flag |= PSF_FAILURE
+                print(time.ctime())
 
                 # Measure the psf shapes
                 if not (flag & PSF_FAILURE):
@@ -1377,11 +1401,13 @@ def main():
                     de1 = -999.
                     de2 = -999.
                     dT = -999.
+                print(time.ctime())
 
                 if args.plot_fs:
                     fs_plot_file = os.path.join(wdir, root + '_fs.pdf')
                     plot_fs(df, fs_plot_file)
                     keep_files.append(fs_plot_file)
+                    print(time.ctime())
 
                 if args.get_psfex:
                     measure_psfex_shapes(df, psfex_file, unpack_image_file, args.noweight, wcs,
@@ -1393,11 +1419,12 @@ def main():
                     print('de1 = ',np.min(xde1),np.max(xde1),np.mean(xde1),np.std(xde1))
                     print('de2 = ',np.min(xde2),np.max(xde2),np.mean(xde2),np.std(xde2))
                     print('dT = ',np.min(xdT),np.max(xdT),np.mean(xdT),np.std(xdT))
+                    print(time.ctime())
 
                 if args.rm_files:
                     print('removing temp files')
                     remove_temp_files(sdir, root, keep_files)
-
+                    print(time.ctime())
 
             except NoStarsException:
                 print('No stars.  Log this in the blacklist and continue.')
@@ -1408,10 +1435,6 @@ def main():
                 print('Log this in the blacklist and continue.')
                 flag |= ERROR_FLAG
             else:
-                print('df = \n',df.describe())
-                psf_info_file = os.path.join(wdir, 'psf_cat_%d_%d.fits'%(exp,ccdnum))
-                fitsio.write(psf_info_file, df.to_records(index=False), clobber=True)
-                print('Wrote psf information to ',psf_info_file)
                 row['obs_mean_e1'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e1'])
                 row['obs_mean_e2'] = np.mean(df.loc[df['obs_flag']==0, 'obs_e2'])
                 row['obs_mean_T'] = np.mean(df.loc[df['obs_flag']==0, 'obs_T'])
@@ -1433,23 +1456,52 @@ def main():
                     row['psfex_std_dT'] = np.std(xdT)
 
             row['flag'] = flag
+
+            print('all_obj = \n', df.describe())
+            stars = df.loc[df['star_flag'] == 1].copy()
+            print('stars = \n', stars.describe())
+            print('info = ', row)
+            psf_cat_file = os.path.join(wdir, 'psf_cat_%d_%d.fits'%(exp,ccdnum))
+            with fitsio.FITS(psf_cat_file,'rw',clobber=True) as f:
+                f.write_table(df.to_records(index=False), extname='all_obj')
+                f.write_table(stars.to_records(index=False), extname='stars')
+                f.write_table(row.to_frame().to_records(index=False), extname='info')
+
+            print('Wrote chip-level psf information to ',psf_cat_file)
+            print(time.ctime())
+
             # row is a copy of the row in the original, so make sure to copy it back.
-            exp_df.iloc[k] = row
+            exp_info_df.iloc[k] = row
+
+            # Add this chip's stars to the exposure stars df
+            stars.loc[:, 'ccdnum'] = ccdnum
+            stars.loc[:, 'obs_flag'] |= flag * BLACK_FLAG_FACTOR
+            stars.loc[:, 'piff_flag'] |= flag * BLACK_FLAG_FACTOR
+            if args.get_psfex:
+                stars.loc[:, 'psfex_flag'] |= flag * BLACK_FLAG_FACTOR
+            exp_stars_df = exp_stars_df.append(stars, ignore_index=True)
 
             if flag and args.blacklist:
                 log_blacklist(blacklist_file,exp,ccdnum,flag)
                 print('Logged flag %d in blacklist'%flag)
+            print(time.ctime())
 
             if args.single_ccd:
                 sys.exit()
 
         print('Done with exposure ',exp)
-        print('exp_df = \n',exp_df.describe())
-        exp_info_file = os.path.join(wdir, 'exp_info_%d.fits'%exp)
-        fitsio.write(exp_info_file, exp_df.to_records(index=False), clobber=True)
-        print('Wrote exposure information to ',exp_info_file)
+        print('exp_stars = \n',exp_stars_df.describe())
+        print('exp_info = \n',exp_info_df.describe())
+        exp_cat_file = os.path.join(wdir, 'exp_psf_cat_%d.fits'%exp)
+        with fitsio.FITS(exp_cat_file,'rw',clobber=True) as f:
+            f.write_table(exp_stars_df.to_records(index=False), extname='stars')
+            f.write_table(exp_info_df.to_records(index=False), extname='info')
+
+        print('Wrote exposure information to ',exp_cat_file)
+        print(time.ctime())
 
     print('\nFinished processing all exposures')
+    print(time.ctime())
 
 
 if __name__ == "__main__":

@@ -41,7 +41,7 @@ psf:
         type: PixelGrid
         scale: 0.26
         size: 17
-        interp: Lanczos(5)
+        #interp: Lanczos(5)
         start_sigma: 0.8  # The code is pretty robust to this being larger than the actual size
                           # of the PSF, but if it's much smaller, then there can be problems.
 

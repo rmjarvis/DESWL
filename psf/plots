@@ -3,7 +3,7 @@
 FILE=zone029.riz
 #TAG=y3a1-v16
 #FILE=ten_zones.riz
-TAG=y3a1-v19
+TAG=y3a1-v21
 
 ./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG
 

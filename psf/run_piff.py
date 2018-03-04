@@ -265,9 +265,14 @@ def read_image_header(row, img_file):
         telra = h['TELRA']
         teldec = h['TELDEC']
         telha = h['HA']
-        telra = galsim.Angle.from_hms(telra) / galsim.degrees
-        teldec = galsim.Angle.from_dms(teldec) / galsim.degrees
-        telha = galsim.Angle.from_hms(telha) / galsim.degrees
+        if galsim.__version__ >= '1.5.1':
+            telra = galsim.Angle.from_hms(telra) / galsim.degrees
+            teldec = galsim.Angle.from_dms(teldec) / galsim.degrees
+            telha = galsim.Angle.from_hms(telha) / galsim.degrees
+        else:
+            telra = galsim.HMS_Angle(telra) / galsim.degrees
+            teldec = galsim.DMS_Angle(teldec) / galsim.degrees
+            telha = galsim.HMS_Angle(telha) / galsim.degrees
 
         airmass = float(h.get('AIRMASS',-999))
         sky = float(h.get('SKYBRITE',-999))
@@ -655,8 +660,12 @@ def hsm(im, wt=None):
         print(' *** Bad measurement (hsm status).  Mask this one.')
         flag |= BAD_MEASUREMENT
 
-    dx = shape_data.moments_centroid.x - im.true_center.x
-    dy = shape_data.moments_centroid.y - im.true_center.y
+    if galsim.__version__ >= '1.5.1':
+        dx = shape_data.moments_centroid.x - im.true_center.x
+        dy = shape_data.moments_centroid.y - im.true_center.y
+    else:
+        dx = shape_data.moments_centroid.x - im.trueCenter().x
+        dy = shape_data.moments_centroid.y - im.trueCenter().y
     #print('dx, dy = ',dx,dy)
     if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
         print(' *** Centroid shifted by ',dx,dy,' in hsm.  Mask this one.')
@@ -677,7 +686,10 @@ def hsm(im, wt=None):
         s = shape_data.moments_sigma
         #print('simple shape = ',e1,e2,s)
 
-        jac = im.wcs.jacobian(im.true_center)
+        if galsim.__version__ >= '1.5.1':
+            jac = im.wcs.jacobian(im.true_center)
+        else:
+            jac = im.wcs.jacobian(im.trueCenter())
         M = np.matrix( [[ 1 + e1, e2 ], [ e2, 1 - e1 ]] ) * s*s
         J = jac.getMatrix()
         M = J * M * J.T
@@ -725,11 +737,17 @@ def ngmix_fit(im, wt, fwhm):
         if np.abs(np.log(T/T_guess)) > 0.5:
             print('T = %s is not near T_guess = %s.  Reverting to T_guess'%(T,T_guess))
             T = T_guess
-        wcs = im.wcs.local(im.center)
+        if galsim.__version__ >= '1.5.1':
+            wcs = im.wcs.local(im.center)
+        else:
+            wcs = im.wcs.local(im.center())
 
         prior = make_ngmix_prior(T, wcs.minLinearScale())
 
-        cen = im.true_center - im.origin
+        if galsim.__version__ >= '1.5.1':
+            cen = im.true_center - im.origin()
+        else:
+            cen = im.trueCenter() - im.origin()
         jac = ngmix.Jacobian(wcs=wcs, x=cen.x, y=cen.y)
         if wt is None:
             obs = ngmix.Observation(image=im.array, jacobian=jac)

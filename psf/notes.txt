@@ -33,7 +33,10 @@ y3a1-v14    Same as v10 but size=18, scale=0.26 (even size, but otherwise basica
 y3a1-v15    Same as v10 but size=19, scale=0.26 (back to odd size to make sure)
 y3a1-v16    Same as v10 but lanczos order 5
 y3a1-v17    Same as v12 but size=23
-y3a1-v18    Same as v10 but with new zone029 file (size=17, scale=0.26)
+y3a1-v18    Same as v10 but with new zone029 file (size=17, scale=0.26)  (high rho2, rho5)
+y3a1-v19    Same as v18 Piff commit 639f9f49 (branched from 4072b356)  (high rho2, rho5)
+y3a1-v20    Same as v18 Piff v0.2.0, galsim v1.5.0-alpha  (good)
+y3a1-v21    Same as v18 Piff v0.2.1, galsim v1.5.1  (good)
 
 
 v3 uses degree 2,2, FEW_STARS = 50

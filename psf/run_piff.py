@@ -613,8 +613,6 @@ def remove_temp_files(wdir, root, keep_files):
     for save in keep_files:
         if save in files:
             files.remove(save)
-        else:
-            print('WARNING: %s not found in %s'%(save,wdir))
 
     print('   Removing the following files from ',wdir)
     for f in files:

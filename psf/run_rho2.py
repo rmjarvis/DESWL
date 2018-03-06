@@ -79,6 +79,8 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
     n_reject_mean_dt = 0
     n_reject_mean_de1 = 0
     n_reject_mean_de2 = 0
+    n_reject_mean_e1 = 0
+    n_reject_mean_e2 = 0
     n_reject_std_dt = 0
     n_reject_std_de1 = 0
     n_reject_std_de2 = 0
@@ -156,46 +158,54 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
             T = data['obs_T']
             e1 = data['obs_e1']
             e2 = data['obs_e2']
-            dT = (data[prefix + '_T'] - data['obs_T'])
-            de1 = (data[prefix + '_e1'] - data['obs_e1'])
-            de2 = (data[prefix + '_e2'] - data['obs_e2'])
-            used = (flag == 0)
+            dT = data['obs_T'] - data[prefix + '_T']
+            de1 = data['obs_e1'] - data[prefix + '_e1']
+            de2 = data['obs_e2'] - data[prefix + '_e2']
+            used = flag == 0
             print(expnum, ccdnum, len(dT), band)
-            print('T = ',np.mean(T[used]),np.std(T[used]))
-            print('e1 = ',np.mean(e1[used]),np.std(e1[used]))
-            print('e2 = ',np.mean(e2[used]),np.std(e2[used]))
-            print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
-            print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
-            print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
+            #print('T = ',np.mean(T[used]),np.std(T[used]))
+            #print('e1 = ',np.mean(e1[used]),np.std(e1[used]))
+            #print('e2 = ',np.mean(e2[used]),np.std(e2[used]))
+            #print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
+            #print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
+            #print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
             rho2 = (e1 - 1j*e2) * (de1 + 1j*de2)
-            print('mean rho2 = ',np.mean(rho2))
+            #print('mean rho2 = ',np.mean(rho2))
             if abs(np.mean(dT[used]/T[used])) > 0.01:
                 print('mean dT/T = %f on ccd %d.'%(np.mean(dT[used]/T[used]),ccdnum))
-                #n_reject_mean_dt += 1
+                n_reject_mean_dt += 1
                 #continue
             if abs(np.mean(de1[used])) > 0.01:
                 print('mean de1 = %f on ccd %d.'%(np.mean(de1[used]),ccdnum))
-                #n_reject_mean_de1 += 1
+                n_reject_mean_de1 += 1
                 #continue
             if abs(np.mean(de2[used])) > 0.01:
                 print('mean de2 = %f on ccd %d.'%(np.mean(de2[used]),ccdnum))
-                #n_reject_mean_de2 += 1
+                n_reject_mean_de2 += 1
                 #continue
             if abs(np.std(dT[used]/T[used])) > 0.1:
                 print('std dT/T = %f on ccd %d.'%(np.std(dT[used]/T[used]),ccdnum))
-                #n_reject_std_dt += 1
+                n_reject_std_dt += 1
                 #continue
             if abs(np.std(de1[used])) > 0.1:
                 print('std de1 = %f on ccd %d.'%(np.std(de1[used]),ccdnum))
-                #n_reject_std_de1 += 1
+                n_reject_std_de1 += 1
                 #continue
             if abs(np.std(de2[used])) > 0.1:
                 print('std de2 = %f on ccd %d.'%(np.std(de2[used]),ccdnum))
-                #n_reject_std_de2 += 1
+                n_reject_std_de2 += 1
                 #continue
             if abs(np.mean(rho2)) > 5.e-4:
-                print('mean rho2 = %f on ccd %d.'%(np.mean(rho2),ccdnum))
-                #n_reject_rho2 += 1
+                print('mean rho2 = %s on ccd %d.'%(np.mean(rho2),ccdnum))
+                n_reject_rho2 += 1
+                #continue
+            if abs(np.mean(e1[used])) > 0.03:
+                print('mean e1 = %f on ccd %d.'%(np.mean(e1[used]),ccdnum))
+                n_reject_mean_e1 += 1
+                #continue
+            if abs(np.mean(e2[used])) > 0.03:
+                print('mean e2 = %f on ccd %d.'%(np.mean(e2[used]),ccdnum))
+                n_reject_mean_e2 += 1
                 #continue
 
             good = (abs(dT/T) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
@@ -230,13 +240,16 @@ def read_data(args, work, limit_bands=None, prefix='piff'):
             bands.add(band)
             #tilings.add(tiling)
 
-    print('\nFinished processing all exposures')
+    print('\nFinished processing %d exposures'%len(exp))
     print('bands = ',bands)
     #print('tilings = ',tilings)
 
+    print('Potential rejections: (not enabled):')
     print('n_reject_mean_dt = ',n_reject_mean_dt)
     print('n_reject_mean_de1 = ',n_reject_mean_de1)
     print('n_reject_mean_de2 = ',n_reject_mean_de2)
+    print('n_reject_mean_e1 = ',n_reject_mean_de1)
+    print('n_reject_mean_e2 = ',n_reject_mean_de2)
     print('n_reject_std_dt = ',n_reject_std_dt)
     print('n_reject_std_de1 = ',n_reject_std_de1)
     print('n_reject_std_de2 = ',n_reject_std_de2)

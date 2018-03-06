@@ -2,9 +2,9 @@
 
 #FILE=y1all
 #TAG=y1a1-v02
-FILE=zone029.riz
+#FILE=zone029.riz
 #TAG=y3a1-v16
-#FILE=ten_zones.riz
+FILE=ten_zones.riz
 TAG=y3a1-v21
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved"

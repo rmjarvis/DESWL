@@ -151,10 +151,10 @@ def get_data(exps, work,
             de1 = (data[prefix + '_e1'] - data['obs_e1'])
             de2 = (data[prefix + '_e2'] - data['obs_e2'])
             print(expnum, ccdnum, len(dT), band)
-            print('T = ',np.mean(T[used]),np.std(T[used]))
-            print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
-            print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
-            print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
+            #print('T = ',np.mean(T[used]),np.std(T[used]))
+            #print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
+            #print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
+            #print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
             if np.std(dT[used]/T[used]) > 0.03:
                 print('high std(dT)')
                 #continue

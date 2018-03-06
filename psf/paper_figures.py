@@ -995,7 +995,7 @@ def main():
         de2 = e2-p_e2
         dT = (T-p_T)/T
 
-        psf_resid(data['mag'], de1, de2, dT)
+        #psf_resid(data['mag'], de1, de2, dT)
 
         psf_whiskers(data['ccd'], data['x'], data['y'], e1, e2, T, de1, de2, dT)
 

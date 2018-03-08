@@ -2,11 +2,11 @@
 from __future__ import print_function
 import numpy as np
 import os
-from toFocal import toFocal
+from read_psf_cats import read_data
 
 def parse_args():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Make whisker plots')
 
     # Drectory arguments
@@ -31,173 +31,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-
-def read_data(args, work, limit_bands=None, prefix='piff'):
-    import fitsio
-
-    RESERVED = 64
-    BAD_CCDS = [2, 31, 61]
-
-    if args.file != '':
-        print('Read file ',args.file)
-        with open(args.file) as fin:
-            exps = [ line.strip() for line in fin if line[0] != '#' ]
-        print('File included %d exposures'%len(exps))
-    else:
-        exps = args.exps
-        print('Explicit listing of %d exposures'%len(exps))
-    exps = sorted(exps)
-
-    keys = ['ra', 'dec', 'x', 'y', 'mag', 'obs_e1', 'obs_e2', 'obs_T',
-            prefix+'_e1', prefix+'_e2', prefix+'_T']
-    all_data = { key : [] for key in keys }
-    all_keys = keys
-
-    all_data['exp'] = []
-    all_data['ccd'] = []
-    all_keys = all_keys + ['exp', 'ccd' ]
-
-    if 'x' in keys:
-        all_data['fov_x'] = []
-        all_data['fov_y'] = []
-        all_keys = all_keys + ['fov_x', 'fov_y']
-
-    inkeys = keys
-
-    all_bands = []  # This keeps track of the band for each record
-    #all_tilings = []  # This keeps track of the tiling for each record
-    bands = set()   # This is the set of all bands being used
-    #tilings = set()   # This is the set of all tilings being used
-
-    for exp in exps:
-
-        print('Start work on exp = ',exp)
-        expnum = int(exp)
-        print('expnum = ',expnum)
-        expinfo = fitsio.read(os.path.join(work, exp, 'exp_info_%d.fits'%expnum))
-
-        if expnum not in expinfo['expnum']:
-            print('expnum is not in expinfo!')
-            print('expinfo[expnum] = ',expinfo['expnum'])
-            print('Could not find information about this expnum.  Skipping ',run,exp)
-            continue
-        i = np.nonzero(expinfo['expnum'] == expnum)[0][0]
-        #print('i = ',i)
-        band = expinfo['band'][i]
-        #print('band[k] = ',band)
-        if (limit_bands is not None) and (band not in limit_bands):
-            print('Not doing band = %s.'%band)
-            continue
-
-        #tiling = int(expinfo['tiling'][k])
-        #print('tiling[k] = ',tiling)
-
-        #if tiling == 0:
-            # This shouldn't happen, but it did for a few exposures.  Just skip them, since this
-            # might indicate some kind of problem.
-            #print('tiling == 0.  Skip this exposure.')
-            #continue
-
-        #if tiling > args.max_tiling:
-            #print('tiling is > %d.  Skip this exposure.'%args.max_tiling)
-            #continue
-
-        for k in range(len(expinfo)):
-            ccdnum = expinfo[k]['ccdnum']
-            if expinfo[k]['flag'] != 0:
-                print('Skipping ccd %d because it is blacklisted: '%ccdnum, expinfo[k]['flag'])
-                continue
-            if ccdnum in BAD_CCDS:
-                print('Skipping ccd %d because it is BAD'%ccdnum)
-                continue
-
-            cat_file = os.path.join(work, exp, "psf_cat_%d_%d.fits"%(expnum,ccdnum))
-            #print('cat_file = ',cat_file)
-            try:
-                data = fitsio.read(cat_file)
-                flag = data[prefix+'_flag']
-            except (OSError, IOError):
-                print('Unable to open cat_file %s.  Skipping this file.'%cat_file)
-                continue
-
-            ntot = len(data)
-            nused = np.sum((flag & 1) != 0)
-            nreserved = np.sum((flag & RESERVED) != 0)
-            ngood = np.sum(flag == 0)
-            #print('nused = ',nused)
-            #print('nreserved = ',nreserved)
-            #print('ngood = ',ngood)
-
-            if args.use_reserved:
-                mask = (flag == RESERVED) | (flag == RESERVED+1)
-            else:
-                mask = (flag == 0)
-            #print('mask = ',mask)
-
-            T = data['obs_T']
-            dT = (data[prefix + '_T'] - data['obs_T'])
-            de1 = (data[prefix + '_e1'] - data['obs_e1'])
-            de2 = (data[prefix + '_e2'] - data['obs_e2'])
-            used = (flag == 0)
-            #if np.std(dT[used]/T[used]) > 0.03:
-                #continue
-            #if np.std(de1[used]) > 0.02:
-                #continue
-            #if np.std(de2[used]) > 0.02:
-                #continue
-            good = (abs(dT/data['obs_T']) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
-            mask = mask & good
- 
-            ngood = np.sum(mask)
-            #print('ngood = ',ngood,'/',len(data))
-            assert ngood == len(data[mask])
-            if ngood == 0:
-                print('All objects in ccd %d are flagged.'%ccdnum)
-                print('Probably due to astrometry flags. Skip this exposure.')
-                continue
-
-            for key, inkey in zip(keys, inkeys):
-                all_data[key].append(data[inkey][mask])
-
-            all_data['exp'].append([expnum] * ngood)
-            all_data['ccd'].append([ccdnum] * ngood)
-
-            if 'x' in keys:
-                # Convert to focal position.
-                x,y = toFocal(ccdnum, data['x'][mask], data['y'][mask])
-                # This comes back in units of mm.  Convert to arcsec.
-                # 1 pixel = 15e-3 mm = 0.263 arcsec
-                x *= 0.263/15e-3
-                y *= 0.263/15e-3
-                all_data['fov_x'].append(x)
-                all_data['fov_y'].append(y)
-
-            all_bands.extend( ([band] * ngood) )
-            #all_tilings.extend( ([tiling] * ngood) )
-            bands.add(band)
-            #tilings.add(tiling)
-
-    print('\nFinished processing all exposures')
-    print('bands = ',bands)
-    #print('tilings = ',tilings)
-
-    # Turn the data into a recarray
-    print('all_data.keys = ',all_data.keys())
-    formats = ['f8'] * len(all_keys) + ['a1', 'i2']
-    #names = all_keys + ['band', 'tiling']
-    names = all_keys + ['band']
-    data = np.recarray(shape = (len(all_bands),),
-                          formats = formats, names = names)
-    print('data.dtype = ',data.dtype)
-    for key in all_keys:
-        data[key] = np.concatenate(all_data[key])
-    data['band'] = all_bands
-    #data['tiling'] = all_tilings
-    print('made recarray')
-
-    tilings = None
-    return data, bands, tilings
 
 
 def get_ccdnums_from_file(file_names):
@@ -346,7 +179,7 @@ def get_ngmix_epoch_data(use_gold=True):
 
             # Write this to a json file for quicker load next time.
             with open(json_file,'w') as f:
-                json.dump( (band.tolist(), ccdnum.tolist(), x.tolist(), y.tolist(), 
+                json.dump( (band.tolist(), ccdnum.tolist(), x.tolist(), y.tolist(),
                             e1.tolist(), e2.tolist(), s.tolist(), w.tolist()), f)
 
         #band_list.append(np.array(band)
@@ -429,7 +262,7 @@ def get_im3shape_epoch_data(use_gold=True):
         print(i,'/',len(file_list))
         json_file = os.path.join(work, os.path.basename(file)[:-5] + ".json")
         print('json_file = ',json_file)
-        
+
         epoch_file = os.path.join(epoch_dir, os.path.basename(file))
         print('epoch_file = ',epoch_file)
 
@@ -477,9 +310,9 @@ def get_im3shape_epoch_data(use_gold=True):
                 print('num in fcat = ',np.sum(np.in1d(data['coadd_objects_id'], fcat['coadd_objects_id'][all_im])))
                 use1 = np.in1d(data['coadd_objects_id'], fcat['coadd_objects_id'][all_im])
             else:
-                use1 = ( (data['error_flag'] == 0) & 
+                use1 = ( (data['error_flag'] == 0) &
                          (data['info_flag'] == 0) &
-                         (data['snr'] > 15) & 
+                         (data['snr'] > 15) &
                          (data['mean_rgpp_rp'] > 1.2)
                        )
 
@@ -518,7 +351,7 @@ def get_im3shape_epoch_data(use_gold=True):
 
             # Write this to a json file for quicker load next time.
             with open(json_file,'w') as f:
-                json.dump( (ccdnum.tolist(), x.tolist(), y.tolist(), 
+                json.dump( (ccdnum.tolist(), x.tolist(), y.tolist(),
                             e1.tolist(), e2.tolist(), s.tolist(), w.tolist()), f)
 
         ccd_list.append(np.array(ccdnum,dtype=np.int16))
@@ -567,13 +400,13 @@ def psf_resid(m, de1, de2, dT, key=None):
     print('bin_de2 = ',bin_de2)
     bin_dT = [dT[index == i].mean() for i in range(1, len(mag_bins))]
     print('bin_dT = ',bin_dT)
-    bin_de1_err = [ np.sqrt(de1[index == i].var() / len(de1[index == i])) 
+    bin_de1_err = [ np.sqrt(de1[index == i].var() / len(de1[index == i]))
                     for i in range(1, len(mag_bins)) ]
     print('bin_de1_err = ',bin_de1_err)
-    bin_de2_err = [ np.sqrt(de2[index == i].var() / len(de2[index == i])) 
+    bin_de2_err = [ np.sqrt(de2[index == i].var() / len(de2[index == i]))
                     for i in range(1, len(mag_bins)) ]
     print('bin_de2_err = ',bin_de2_err)
-    bin_dT_err = [ np.sqrt(dT[index == i].var() / len(dT[index == i])) 
+    bin_dT_err = [ np.sqrt(dT[index == i].var() / len(dT[index == i]))
                     for i in range(1, len(mag_bins)) ]
     print('bin_dT_err = ',bin_dT_err)
 
@@ -751,7 +584,7 @@ def make_psf_whiskers(x, y, e1, e2, T, de1, de2, dT):
     fig.tight_layout()
     plt.savefig('both_psf_whiskers.eps')
 
-def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=None, ref=0.01, 
+def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=None, ref=0.01,
                   ref_name='$e$', alt_ref=None):
 
     import matplotlib
@@ -820,7 +653,7 @@ def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=Non
 
 def psf_whiskers(ccd, x, y, e1, e2, T, de1, de2, dT):
     psf_binned_data = bin_by_fov(ccd, x, y, e1, e2, T, nwhisk=4)
-    make_whiskers(*psf_binned_data, filename='psf_whiskers.eps', scale=3, title='PSF', 
+    make_whiskers(*psf_binned_data, filename='psf_whiskers.eps', scale=3, title='PSF',
                   ref=0.01, alt_ref=0.03)
     resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, dT, nwhisk=4)
     make_whiskers(*resid_binned_data, filename='resid_whiskers.eps', scale=0.3, title='PSF residual',
@@ -983,7 +816,20 @@ def main():
 
 
     if True:
-        data, bands, tilings = read_data(args, work, limit_bands=args.bands, prefix=prefix)
+        if args.file != '':
+            print('Read file ',args.file)
+            with open(args.file) as fin:
+                exps = [ line.strip() for line in fin if line[0] != '#' ]
+            print('File included %d exposures'%len(exps))
+        else:
+            exps = args.exps
+            print('Explicit listing of %d exposures'%len(exps))
+        exps = sorted(exps)
+
+        keys = ['ra', 'dec', 'x', 'y', 'mag', 'obs_e1', 'obs_e2', 'obs_T',
+                prefix+'_e1', prefix+'_e2', prefix+'_T']
+        data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
+                                         use_reserved=args.use_reserved)
         e1 = data['obs_e1']
         e2 = data['obs_e2']
         T = data['obs_T']

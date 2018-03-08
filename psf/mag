@@ -6,7 +6,7 @@ FILE=ten_zones.riz
 #FILE=zone007.z
 TAG=y3a1-v21
 
-./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved"
-#./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"
+./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"
+#./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --use_psfex"
 ./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag_pf --cmd="./paper_figures.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"

@@ -5,8 +5,8 @@ function run {
     echo "exp = $exp"
 
     command=/direct/astro+u/mjarvis/rmjarvis/DESWL/psf/run_piff.py
-    echo ${command} --mag_cut=1 --max_mag=21 --work=$work --tag=$tag --rm_files=1 --reserve=0.2 --use_ngmix --exps $exp --scratch=$TMPDIR --blacklist=0 --clear_output=0
-    ${command} --mag_cut=1 --max_mag=21 --work=$work --tag=$tag --rm_files=1 --reserve=0.2 --use_ngmix --exps $exp --scratch=$TMPDIR --blacklist=0 --clear_output=0
+    echo ${command} --mag_cut=1 --max_mag=21 --work=$work --tag=$tag --rm_files=1 --reserve=0.2 --use_ngmix --exps $exp --scratch=$TMPDIR --blacklist=0 --clear_output=0 --get_psfex
+    ${command} --mag_cut=1 --max_mag=21 --work=$work --tag=$tag --rm_files=1 --reserve=0.2 --use_ngmix --exps $exp --scratch=$TMPDIR --blacklist=0 --clear_output=0 --get_psfex
     status=$?
 
     echo "time: $SECONDS"

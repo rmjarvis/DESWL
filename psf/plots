@@ -2,9 +2,9 @@
 
 #FILE=zone029.riz
 #TAG=y3a1-v16
-FILE=ten_zones.riz
-#FILE=zone007.z
-TAG=y3a1-v21
+#FILE=ten_zones.riz
+FILE=zone001.z
+TAG=y3a1-v23
 
 #./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --file=$FILE --use_reserved
 ./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG

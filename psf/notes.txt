@@ -37,8 +37,8 @@ y3a1-v18    Same as v10 but with new zone029 file (size=17, scale=0.26)  (high r
 y3a1-v19    Same as v18 Piff commit 639f9f49 (branched from 4072b356)  (high rho2, rho5)
 y3a1-v20    Same as v18 Piff v0.2.0, galsim v1.5.0-alpha  (good)
 y3a1-v21    Same as v18 Piff v0.2.1, galsim v1.5.1  (good)
-y3a1-v22    Same as v22 using Condor
-y3a1-v23    Same as v21 mag_cut=2
+y3a1-v22    Same as v21 using Condor ten_zones.riz
+y3a1-v23    Same as v22 using Condor all Y3 (with PSFEx)
 
 
 v3 uses degree 2,2, FEW_STARS = 50

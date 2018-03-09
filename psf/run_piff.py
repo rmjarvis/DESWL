@@ -635,7 +635,7 @@ def wget(url_base, path, wdir, file):
         # Sometimes this fails with an "http protocol error, bad status line".
         # Maybe from too many requests at once or something.  So we retry up to 5 times.
         nattempts = 5
-        cmd = 'wget %s -O %s'%(url, full_file)
+        cmd = 'wget -q %s -O %s'%(url, full_file)
         for attempt in range(1,nattempts+1):
             print('%s  (attempt %d)'%(cmd, attempt))
             run_with_timeout(cmd, 300)
@@ -1484,8 +1484,9 @@ def main():
                 print('row = ',row)
             else:
                 df, row = run_single_ccd(row, args, wdir, sdir, tbdata, which_zone)
+                if len(df) == 0: continue
                 print('all_obj = \n', df.describe())
-                star_mask = (df['piff_flag'] & ~RESERVED) == 0
+                star_mask = df['star_flag'] == 1
                 stars = df.loc[star_mask].copy()
                 print('stars = \n', stars.describe())
                 print('row = ', row)

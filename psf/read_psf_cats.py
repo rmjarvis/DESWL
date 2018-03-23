@@ -39,7 +39,7 @@ def old_read_ccd_data(expcat, work, expnum):
     return all_data, ccdnums
 
 
-def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=False):
+def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=False, frac=1.):
 
     RESERVED = 64
     NOT_STAR = 128
@@ -72,7 +72,7 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
 
     nrows = 0
 
-    for exp in exps:
+    for exp in sorted(exps):
 
         expnum = int(exp)
         old = False
@@ -145,7 +145,7 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
         nused = np.sum((flag & 1) != 0)
         nreserved = np.sum((flag & RESERVED) != 0)
         ngood = np.sum(flag == 0)
-        print('flag = ',flag)
+        #print('flag = ',flag)
         print('ntot = ',ntot)
         print('nused = ',nused)
         print('nreserved = ',nreserved)
@@ -156,12 +156,12 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
         if use_reserved:
             mask &= (flag & RESERVED) != 0
         used = (flag & ~RESERVED) == 0
-        print('flag = ',flag)
-        print('mask = ',mask)
-        print('used = ',used)
-        print('flag where flag == RESERVED: ',flag[flag==RESERVED+1])
-        print('mask where flag == RESERVED: ',mask[flag==RESERVED+1])
-        print('used where flag == RESERVED: ',mask[flag==RESERVED+1])
+        #print('flag = ',flag)
+        #print('mask = ',mask)
+        #print('used = ',used)
+        #print('flag where flag == RESERVED: ',flag[flag==RESERVED+1])
+        #print('mask where flag == RESERVED: ',mask[flag==RESERVED+1])
+        #print('used where flag == RESERVED: ',mask[flag==RESERVED+1])
         print('nmask = ',np.sum(mask))
         print('nused = ',np.sum(used))
 
@@ -172,16 +172,16 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
         de1 = data['obs_e1'] - data[prefix + '_e1']
         de2 = data['obs_e2'] - data[prefix + '_e2']
         print(expnum, len(dT), band)
-        print('T = ',np.mean(T[used]),np.std(T[used]))
-        print('e1 = ',np.mean(e1[used]),np.std(e1[used]))
-        print('e2 = ',np.mean(e2[used]),np.std(e2[used]))
-        print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
-        print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
-        print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
+        #print('T = ',np.mean(T[used]),np.std(T[used]))
+        #print('e1 = ',np.mean(e1[used]),np.std(e1[used]))
+        #print('e2 = ',np.mean(e2[used]),np.std(e2[used]))
+        #print('dT/T = ',np.mean(dT[used]/T[used]),np.std(dT[used]/T[used]))
+        #print('de1 = ',np.mean(de1[used]),np.std(de1[used]))
+        #print('de2 = ',np.mean(de2[used]),np.std(de2[used]))
         rho1 = (de1 - 1j*de2) * (de1 + 1j*de2)
-        print('mean rho1 = ',np.mean(rho1[used]))
+        #print('mean rho1 = ',np.mean(rho1[used]))
         rho2 = (e1 - 1j*e2) * (de1 + 1j*de2)
-        print('mean rho2 = ',np.mean(rho2[used]))
+        #print('mean rho2 = ',np.mean(rho2[used]))
         if abs(np.mean(dT[used]/T[used])) > 0.01:
             print('mean dT/T = %f.'%(np.mean(dT[used]/T[used])))
             n_reject_mean_dt += 1
@@ -226,8 +226,14 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
         # Filter out egregiously bad values.  Just in case.
         good = (abs(dT/T) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
         mask = mask & good
+        #print('mask = ',len(mask),np.sum(mask),mask)
+        mask = np.where(mask)[0]
+        #print('mask = ',len(mask),mask)
+        if frac != 1.:
+            mask = np.random.choice(mask, int(frac * len(mask)), replace=False)
+        #print('mask = ',len(mask),mask)
 
-        ngood = np.sum(mask)
+        ngood = len(mask)
         print('ngood = ',ngood,'/',len(data))
         assert ngood == len(data[mask])
         if ngood == 0:

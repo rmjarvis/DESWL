@@ -1,7 +1,4 @@
 #! /usr/bin/env python
-# Compute rho statistics on PSFEx outputs.
-# This involves creating catalogs of shapes based on the PSFEx files, and then using
-# TreeCorr to compute the correlation functions.
 
 from __future__ import print_function
 import matplotlib
@@ -24,14 +21,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run PSFEx on a set of runs/exposures')
 
     # Drectory arguments
-    parser.add_argument('--work', default='./',
+    parser.add_argument('--work', default='/astro/u/mjarvis/work/y3_piff',
                         help='location of work directory')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
 
     # Exposure inputs
     parser.add_argument('--file', default='',
-                        help='list of run/exposures (in lieu of separate exps, runs)')
+                        help='list of exposures (in lieu of exps)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
 
@@ -42,6 +39,8 @@ def parse_args():
                         help='Use PSFEx rather than Piff model')
     parser.add_argument('--bands', default='grizY', type=str,
                         help='Limit to the given bands')
+    parser.add_argument('--frac', default=1., type=float,
+                        help='Choose a random fraction of the input stars')
 
     args = parser.parse_args()
     return args
@@ -418,7 +417,7 @@ def main():
             prefix+'_e1', prefix+'_e2', prefix+'_T', prefix+'_flag']
 
     data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
-                                     use_reserved=args.use_reserved)
+                                     use_reserved=args.use_reserved, frac=args.frac)
 
     for bands in ['r', 'i', 'z', 'riz']:
         this_data = data[np.in1d(data['band'], list(bands))]

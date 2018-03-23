@@ -28,6 +28,8 @@ def parse_args():
                         help='Limit to the given bands')
     parser.add_argument('--use_psfex', default=False, action='store_const', const=True,
                         help='Use PSFEx rather than Piff model')
+    parser.add_argument('--frac', default=1., type=float,
+                        help='Choose a random fraction of the input stars')
 
     args = parser.parse_args()
     return args
@@ -829,7 +831,7 @@ def main():
         keys = ['ra', 'dec', 'x', 'y', 'mag', 'obs_e1', 'obs_e2', 'obs_T',
                 prefix+'_e1', prefix+'_e2', prefix+'_T']
         data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
-                                         use_reserved=args.use_reserved)
+                                         use_reserved=args.use_reserved, frac=args.frac)
         e1 = data['obs_e1']
         e2 = data['obs_e2']
         T = data['obs_T']

@@ -1,216 +1,151 @@
 #! /usr/bin/env python
-# Verify that all PSFEx files were either made or blacklisted
+# Verify that all PSF files were either made or blacklisted
 # Typical usage:
 #    python verify.py --tag=y1a1-v02 --file=y1all
 
-redo_exp = set()
- 
+import os
+import sys
+import glob
+import logging
+import fitsio
+import pandas
+
+# flag values for blacklist
+NO_STARS_FLAG = 1
+TOO_FEW_STARS_FLAG = 2
+TOO_MANY_STARS_FLAG = 4
+TOO_HIGH_FWHM_FLAG = 8
+FINDSTARS_FAILURE = 16
+PSF_FAILURE = 32
+ERROR_FLAG = 64
+LARGE_SIZE_SPREAD = 128
+
 def parse_args():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Build PSF catalogs for a set of runs/exposures')
+    parser = argparse.ArgumentParser(description='Verify PSF catalogs for a set of exposures')
 
     # Drectory arguments
+    parser.add_argument('--work', default='/astro/u/mjarvis/work/y3_piff',
+                        help='location of work directory')
     parser.add_argument('--tag', default=None,
                         help='A version tag to add to the directory name')
-    parser.add_argument('--output_dir', default=None,
-                        help='location of output directory (default: $DATADIR/EXTRA/red/{run}/psfex-rerun/{exp}/)')
-    parser.add_argument('--input_dir', default=None,
-                        help='location of input directory (default: $DATADIR/OPS/red/{run}/red/{exp}/)')
 
     # Exposure inputs
-    parser.add_argument('--exp_match', default='*_[0-9][0-9].fits.fz',
-                        help='regexp to search for files in exp_dir')
     parser.add_argument('--file', default='',
-                        help='list of run/exposures (in lieu of separate exps, runs)')
+                        help='list of exposures (in lieu of separate exps)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
-    parser.add_argument('--runs', default='', nargs='+',
-                        help='list of runs')
+
+    # Options
+    parser.add_argument('--blacklist', default=1, type=int,
+                        help='add failed CCDs to the blacklist')
 
     args = parser.parse_args()
     return args
 
 
-def parse_file_name(file_name):
-    """Parse the PSFEx file name to get the root name and the chip number
-    """
-    import os
-
-    dir, base_file = os.path.split(file_name)
-    if os.path.splitext(base_file)[1] == '.fz':
-        base_file=os.path.splitext(base_file)[0]
-    if os.path.splitext(base_file)[1] != '.fits':
-        raise ValueError("Invalid file name "+file)
-    root = os.path.splitext(base_file)[0]
-
-    ccdnum = int(root.split('_')[-1])
-    return dir, root, ccdnum
-
-
-def read_blacklists(tag):
-    """Read the psfex blacklist file and the other blacklists.
-
-    Returns a dict indexed by the tuple (expnum, ccdnum) with the bitmask value.
-    """
-    d = {}  # The dict will be indexed by (expnum, ccdnum)
-    print 'reading blacklists'
-
-    if False:
-        import astropy.io.fits as pyfits
-        # First read Eli's astrometry flags
-        # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L498
-        eli_file = '/astro/u/astrodat/data/DES/EXTRA/astrorerun/sva1_astrom_run1.0.1_stats_flagged_sheldon.fit'
-        with pyfits.open(eli_file) as pyf:
-            data = pyf[1].data
-            for expnum, ccdnum, flag in zip(data['EXPNUM'],data['CCDNUM'],data['ASTROM_FLAG']):
-                key = (int(expnum), int(ccdnum))
-                d[key] = int(flag)
-        print 'after astrom, len(d) = ',len(d)
-
-    # Then Alex and Steve's blacklists
-    # cf. https://github.com/esheldon/deswl/blob/master/deswl/desmeds/genfiles.py#L588)
-    ghost_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/ghost-scatter-y1-uniq.txt'
-    streak_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/streak-y1-uniq.txt'
-    noise_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/noise-y1-uniq.txt'
-    with open(ghost_file) as f:
-        for line in f:
-            expnum, ccdnum = line.split()
-            key = (int(expnum), int(ccdnum))
-            if key in d:
-                d[key] |= (1 << 10)
-            else:
-                d[key] = (1 << 10)
-    with open(noise_file) as f:
-        for line in f:
-            expnum, ccdnum = line.split()
-            key = (int(expnum), int(ccdnum))
-            if key in d:
-                d[key] |= (1 << 11)
-            else:
-                d[key] = (1 << 11)
-    with open(streak_file) as f:
-        for line in f:
-            expnum, ccdnum = line.split()
-            key = (int(expnum), int(ccdnum))
-            if key in d:
-                d[key] |= (1 << 13)
-            else:
-                d[key] = (1 << 13)
-    print 'after ghost, streak, len(d) = ',len(d)
-
-    # And finally the PSFEx blacklist file.
-    psfex_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psfex'
-    if tag:
-        psfex_file += '-' + tag
-    psfex_file += '.txt'
-    with open(psfex_file) as f:
-        for line in f:
-            run, exp, ccdnum, flag = line.split()
-            expnum = exp[6:]
-            key = (int(expnum), int(ccdnum))
-            flag = int(flag)
-            if key in d:
-                d[key] |= (flag << 15)
-            else:
-                d[key] = (flag << 15)
-    print 'after psfex, len(d) = ',len(d)
-
-    return d
-
-
 def main():
-    import os
-    import glob
+
+    logging.basicConfig(format="%(message)s", level=logging.INFO, stream=sys.stdout)
+    logger = logging.getLogger('verify')
 
     args = parse_args()
 
-    datadir = '/astro/u/astrodat/data/DES'
+    blacklist_file = '/astro/u/astrodat/data/DES/EXTRA/blacklists/psf'
+    if args.tag:
+        blacklist_file += '-' + args.tag
+    blacklist_file += '.txt'
 
-    print 'Reading blacklist files for tag = %s'%args.tag
-    flag_dict = read_blacklists(args.tag)
+    work = os.path.expanduser(args.work)
+    if work.endswith('y3_piff') and args.tag:
+        work += '/' + args.tag
 
     if args.file != '':
-        print 'Read file ',args.file
+        logger.info('Read file %s',args.file)
         with open(args.file) as fin:
-            data = [ line.split() for line in fin ]
-        runs, exps = zip(*data)
+            exps = { line.strip() for line in fin if line[0] != '#' }
+        logger.info('File includes %d exposures',len(exps))
+    elif args.exps is not None:
+        exps = set(args.exps)
+        logger.info('Explicit listing of %d exposures',len(exps))
     else:
-        runs = args.runs
-        exps = args.exps
+        raise RuntimeError("Either file or exps is required")
 
-    for run,exp in zip(runs,exps):
+    redo_exp = set()
+    blacklist = set()
+ 
+    for exp in sorted(exps):
+        expnum = int(exp)
 
-        print 'Verifying exposure ',exp
+        expname = os.path.join(work, exp, 'exp_psf_cat_%d.fits'%expnum)
+        if not os.path.exists(expname):
+            logger.warning('%s does not exist.  Add %s to the redo set',expname, exp)
+            redo_exp.add(exp)
+            # Make sure we actually redo everything in this exp by removing the psf_cat files.
+            for psf_cat_file in glob.glob(os.path.join(work, exp, 'psf_cat_*.fits')):
+                os.remove(psf_cat_file)
+            continue
+
+        logger.info("Reading %s",expname)
         try:
-            expnum = int(exp[6:])
-        except:
-            expnum = 0
+            expcat = fitsio.read(expname, ext='info')
+        except Exception as e:
+            logger.warning("Caught %s",e)
+            logger.warning("Add %s to the redo set",exp)
+            redo_exp.add(exp)
+            continue
 
-        # The input directory from the main DESDM reduction location.
-        if args.input_dir is None:
-            input_dir = os.path.join(datadir,'OPS/red/%s/red/%s/'%(run,exp))
-        else:
-            input_dir = args.input_dir
-        print 'input_dir = ',input_dir
+        for row in expcat:
+            ccdnum = row['ccdnum']
+            flag = row['flag']
+            psf_cat_file = os.path.join(work, exp, 'psf_cat_%d_%d.fits'%(expnum,ccdnum))
 
-        # This is where the PSFEx files should be.
-        if args.output_dir is None:
-            if args.tag:
-                tag_str = args.tag + "/"
-            else:
-                tag_str = ""
-            extra_dir = os.path.join(datadir,'EXTRA/red/%s/psfex-rerun/%s%s/'%(run,tag_str,exp))
-        else:
-            extra_dir = args.output_dir
+            if flag != 0:
+                logger.info('  add (%s, %s) to blacklist, flag = %s',exp,ccdnum,flag)
+                blacklist.add( (exp, ccdnum, flag) )
+                if flag & ERROR_FLAG != 0:
+                    logger.info('  ERROR_FLAG.  Redo this ccd (%s, %s)',exp,ccdnum)
+                    redo_exp.add(exp)
+                    if os.path.exists(psf_cat_file):
+                        os.remove(psf_cat_file)
+                continue
 
-        # Get the file names in that directory.
-        print '%s/%s'%(input_dir,args.exp_match)
-        files = sorted(glob.glob('%s/%s'%(input_dir,args.exp_match)))
+            if not os.path.exists(psf_cat_file):
+                logger.info('  %d: %s does not exist.  Add to the redo set',ccdnum,psf_cat_file)
+                blacklist.add( (exp, ccdnum, PSF_FAILURE) )
+                redo_exp.add(exp)
+                continue
 
-        for file_name in files:
-            #print '\nChecking ', file_name
+            # Check that the Piff file exists
+            piff_file_name = row['piff_file']
+            if not os.path.exists(piff_file_name):
+                logger.info('   %d: Piff file %s does not exist.',ccdnum,piff_file_name)
+                blacklist.add( (exp, ccdnum, PSF_FAILURE) )
+                redo_exp.add(exp)
+                os.remove(psf_cat_file)
+                continue
 
-            try:
-                desdm_dir, root, ccdnum = parse_file_name(file_name)
-            except:
-                #print '   Unable to parse file_name %s.  Skipping this file.'%file_name
-                #continue
-                base_file = os.path.split(file_name)[1]
-                if os.path.splitext(base_file)[1] == '.fz':
-                    base_file=os.path.splitext(base_file)[0]
-                root = os.path.splitext(base_file)[0]
-                ccdnum = 0
-
-            key = (expnum, ccdnum)
-            if key in flag_dict:
-                black_flag = flag_dict[key]
-                #print '   blacklist flag = ',black_flag
-                if black_flag & (113 << 15):
-                    #print '   Catastrophic flag.  Skipping this file.'
-                    continue
-            else:
-                black_flag = 0
-
-            # Check that the .psf file exists
-            psfex_file_name = os.path.join(extra_dir, root + '_psfcat.psf')
-
-            if not os.path.exists(psfex_file_name):
-                print '   PSFEx file %s does not exist.'%psfex_file_name
-                if black_flag:
-                    print '   In blacklist, but not catastrophic.'
-                else:
-                    redo_exp.add( (run,exp) )
-
-    print '\nFinished verifying all exposures'
+    logger.info('\nFinished verifying all exposures')
     if len(redo_exp) > 0:
-        print '%s exposures have missing PSFEx files'%len(redo_exp)
+        logger.info('%s exposures have missing Piff files',len(redo_exp))
         with open('redo_exp', 'w') as fout:
-            for run, exp in redo_exp:
-                fout.write('%s  %s\n'%(run, exp))
-        print 'Wrote list of %d exposures to redo to redo_exp.'%len(redo_exp)
+            for exp in redo_exp:
+                fout.write('%s\n'%exp)
+        logger.info('Wrote list of %d exposures to redo to redo_exp.',len(redo_exp))
     else:
-        print 'All PSFEx files verified.'
+        logger.info('All PSF files verified.')
+
+    if args.blacklist:
+        logger.info('Logging blacklisted chips to %s',blacklist_file)
+        if os.path.exists(blacklist_file):
+            logger.info("Removing existing blacklist file")
+            os.remove(blacklist_file)
+        with open(blacklist_file,'w') as f:
+            logger.info("Writing %d entries into blacklist file",len(blacklist))
+            for exp, ccd, flag in blacklist:
+                f.write("%s %s %s\n"%(exp,ccd,flag))
+
 
 if __name__ == "__main__":
     main()

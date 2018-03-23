@@ -40,6 +40,8 @@ top_txt="""
 command: |
     cd /astro/u/mjarvis/rmjarvis/DESWL/psf
     source /astro/u/mjarvis/.bashrc
+    export OMP_NUM_THREADS={cores_per_job}
+    export MKL_NUM_THREADS={cores_per_job}
     {cmd}
 
 job_name: {name}

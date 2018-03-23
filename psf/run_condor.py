@@ -1,22 +1,18 @@
 #!/usr/bin/env python
 # Program to loop over exposures and run a given command
 #
-# The njobs argument will bundle the exposures into batches to make a total
-# of njobs jobs to submit to wq.
-# 
-# The file argument expects a file containing a list of run,expnum such as:
+# The file argument expects a file containing a list of expnum such as:
 #     
-#    20130711064512_20121202 DECam_00157539
+#    232382
+#    232383
+#    232395
+#    240551
+#    241144
+#    241146
 # 
 # The command argument is the name of exectuation that is expected 
-# to take a --exps and --runs to specify input directories
+# to take a --exps arcument to specify which exposure(s) to run.
 # 
-# I only have two scripts that do this currently run_psfex.py and run_findstars.py
-# To run them you can do something like
-#    ./run_wq_exp.py --njobs 10 --file test_exp --cmd="./run_psfex.py --exp_match \"*_[0-9][0-9].fits.fz\" --use_findstars 1 --mag_cut 3.0"
-
-# 
-# See https://github.com/esheldon/wq for information about using wq.
 
 from __future__ import print_function
 
@@ -67,7 +63,8 @@ requirements = (cpu_experiment == "phenix")
 
 job_txt="""
 +job_name = {name}
-Arguments = {tag} {exp} /gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag} /gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag}/test_piff_{exp}.log
+Arguments = {tag} {exp} /gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag} /gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag}/logs/{name}.log
+Output = /gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag}/output/{name}.out
 Queue
 
 """
@@ -102,6 +99,10 @@ print('nexp = ',nexp)
 nbatch = len(exps) // 1000 + 1
 print('nbatch = ',nbatch)
 
+output_dir = '/gpfs/mnt/gpfs01/astro/workarea/mjarvis/y3_piff/{tag}/output/'.format(tag=args.tag)
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
 for batch_num in range(nbatch):
     k0 = nexp * batch_num // nbatch
     k1 = nexp * (batch_num+1) // nbatch
@@ -120,7 +121,9 @@ for batch_num in range(nbatch):
 
 print('To submit all jobs, do')
 print()
-print('    condor_submit %s/run_piff*.condor'%submit_dir)
+for batch_num in range(nbatch):
+    condor_file = os.path.join(submit_dir, 'run_piff_%d.condor'%batch_num)
+    print('    condor_submit %s'%condor_file)
 print()
 print("Or, use Erin's incremental submitter")
 print()

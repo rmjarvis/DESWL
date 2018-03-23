@@ -21,17 +21,19 @@ def parse_args():
 
     # Exposure inputs
     parser.add_argument('--file', default='',
-                        help='list of exposures (in lieu of separate exps, runs)')
+                        help='list of exposures (in lieu of separate exps)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
 
     # Options
     parser.add_argument('--use_reserved', default=False, action='store_const', const=True,
                         help='just use the objects with the RESERVED flag')
-    parser.add_argument('--bands', default='grizY', type=str,
-                        help='Limit to the given bands')
     parser.add_argument('--use_psfex', default=False, action='store_const', const=True,
                         help='Use PSFEx rather than Piff model')
+    parser.add_argument('--bands', default='grizY', type=str,
+                        help='Limit to the given bands')
+    parser.add_argument('--frac', default=1., type=float,
+                        help='Choose a random fraction of the input stars')
 
     args = parser.parse_args()
     return args
@@ -392,7 +394,7 @@ def main():
             prefix+'_e1', prefix+'_e2', prefix+'_T']
 
     data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
-                                     use_reserved=args.use_reserved)
+                                     use_reserved=args.use_reserved, frac=args.frac)
 
     print('all bands = ',bands)
     #print('all tilings = ',tilings)

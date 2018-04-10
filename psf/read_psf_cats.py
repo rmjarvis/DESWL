@@ -33,7 +33,7 @@ def old_read_ccd_data(expcat, work, expnum):
 
     #print('all_data = ',all_data)
     all_data = np.concatenate(all_data)
-    ccdnums = np.array(ccdnums)
+    ccdnums = np.array(ccdnums, dtype=int)
     #print('all_data => ',all_data)
     #print('ccdnums = ',ccdnums)
     return all_data, ccdnums
@@ -71,6 +71,8 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
     n_reject_rho2 = 0
 
     nrows = 0
+    n_good_obj = 0
+    n_bad_obj = 0
 
     for exp in sorted(exps):
 
@@ -138,14 +140,13 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
             data, ccdnums = old_read_ccd_data(expcat[mask], work, expnum)
         else:
             data = fitsio.read(expname, ext='stars')
-            ccdnums = data['ccdnum']
+            ccdnums = data['ccdnum'].astype(int)
 
-        flag = data[prefix+'_flag']
+        flag = data[prefix+'_flag'].astype(int)
         ntot = len(data)
         nused = np.sum((flag & 1) != 0)
         nreserved = np.sum((flag & RESERVED) != 0)
         ngood = np.sum(flag == 0)
-        #print('flag = ',flag)
         print('ntot = ',ntot)
         print('nused = ',nused)
         print('nreserved = ',nreserved)
@@ -225,7 +226,12 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
 
         # Filter out egregiously bad values.  Just in case.
         good = (abs(dT/T) < 0.1) & (abs(de1) < 0.1) & (abs(de2) < 0.1)
+        n1 = np.sum(mask)
         mask = mask & good
+        n2 = np.sum(mask)
+        print('"good" filter removed %d/%d objects'%(n1-n2,n1))
+        n_good_obj += n2
+        n_bad_obj += n1-n2
         #print('mask = ',len(mask),np.sum(mask),mask)
         mask = np.where(mask)[0]
         #print('mask = ',len(mask),mask)
@@ -266,7 +272,9 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
     print('\nFinished processing %d exposures'%len(exps))
     print('bands = ',bands)
     print('tilings = ',tilings)
-    print('total good stars = ',nrows)
+    print('total "good" stars = ',n_good_obj)
+    print('total "bad" stars = ',n_bad_obj)
+    print('total good stars selected = ',nrows)
 
     print('Potential rejections: (not enabled):')
     print('n_reject_mean_dt = ',n_reject_mean_dt)

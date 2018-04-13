@@ -1,1 +1,1 @@
-python run_piff.py --work=~/work/y3_piff/y3a1-v21b --tag=y3a1=v21 --rm_files=0 --reserve=0.2 --blacklist=0 --mag_cut=1 --max_mag=21 --plot_fs --single_ccd=5 --exps=233459 --use_ngmix
+python run_piff.py --work=~/work/y3_piff/y3a1-v24 --tag=y3a1=v24 --rm_files=0 --reserve=0.2 --blacklist=0 --mag_cut=1 --max_mag=21 --plot_fs --single_ccd=62 --exps=262573 --use_ngmix --clear_output=1

@@ -1,10 +1,11 @@
 #!/bin/bash
 
-#FILE=zone029.riz
+#FILE=zone033.riz
 #TAG=y3a1-v16
 #FILE=ten_zones.riz
 FILE=ally3.riz
-TAG=y3a1-v23
+#FILE=zones03.riz
+TAG=y3a1-v24
 
 #./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --file=$FILE --use_reserved
 ./plot_rho.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG

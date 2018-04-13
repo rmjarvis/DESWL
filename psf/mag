@@ -5,7 +5,8 @@
 #FILE=ten_zones.riz
 FILE=ally3.riz
 #FILE=zone008.z
-TAG=y3a1-v23
+#FILE=zones03.riz
+TAG=y3a1-v24
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --frac=0.1"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=mag --cmd="./plot_mag.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved"

@@ -87,9 +87,18 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
         for cat in [ ecat, decat, dtcat ]:
             cat.name = tag + ":"  + cat.name
 
-    min_sep = 0.5
-    bin_size = 0.2
-    bin_slop = 0.1
+    bin_config = dict(
+        sep_units = 'arcmin',
+        bin_slop = 0.1,
+
+        min_sep = 0.5,
+        max_sep = max_sep,
+        bin_size = 0.2,
+
+        #min_sep = 2.5,
+        #max_sep = 250,
+        #nbins = 20,
+    )
 
     results = []
     for (cat1, cat2) in [ (decat, decat),
@@ -99,8 +108,7 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
                           (ecat, dtcat) ]:
         print('Doing correlation of %s vs %s'%(cat1.name, cat2.name))
 
-        rho = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
-                                     bin_size=bin_size, bin_slop=bin_slop, verbose=2)
+        rho = treecorr.GGCorrelation(bin_config, verbose=2)
 
         if cat1 is cat2:
             rho.process(cat1)
@@ -113,8 +121,7 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     if alt_tt:
         print('Doing alt correlation of %s vs %s'%(dtcat.name, dtcat.name))
 
-        rho = treecorr.KKCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
-                                     bin_size=bin_size, bin_slop=bin_slop, verbose=2)
+        rho = treecorr.KKCorrelation(bin_config, verbose=2)
         rho.process(dtcat)
         results.append(rho)
 
@@ -153,9 +160,18 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
             for cat, tag in zip(catlist, tags):
                 cat.name = tag + ":"  + cat.name
 
-    min_sep = 0.5
-    bin_size = 0.2
-    bin_slop = 0.1
+    bin_config = dict(
+        sep_units = 'arcmin',
+        bin_slop = 0.1,
+
+        min_sep = 0.5,
+        max_sep = max_sep,
+        bin_size = 0.2,
+
+        #min_sep = 2.5,
+        #max_sep = 250,
+        #nbins = 20,
+    )
 
     results = []
     for (catlist1, catlist2) in [ (decats, decats),
@@ -167,8 +183,7 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
         catnames1 = [ cat.name for cat in catlist1 ]
         catnames2 = [ cat.name for cat in catlist2 ]
         print('Doing correlation of %s vs %s'%(catnames1, catnames2))
-        rho = treecorr.GGCorrelation(min_sep=min_sep, max_sep=max_sep, sep_units='arcmin',
-                                     bin_size=bin_size, bin_slop=bin_slop, verbose=2)
+        rho = treecorr.GGCorrelation(bin_config, verbose=2)
         # Avoid all auto correlations:
         for i in range(ntilings):
             for j in range(ntilings):

@@ -38,7 +38,8 @@ y3a1-v19    Same as v18 Piff commit 639f9f49 (branched from 4072b356)  (high rho
 y3a1-v20    Same as v18 Piff v0.2.0, galsim v1.5.0-alpha  (good)
 y3a1-v21    Same as v18 Piff v0.2.1, galsim v1.5.1  (good)
 y3a1-v22    Same as v21 using Condor ten_zones.riz
-y3a1-v23    Same as v22 using Condor all Y3 (with PSFEx)
+y3a1-v23    Same as v22 using Condor all Y3 (with PSFEx)  (new canonical result)
+y3a1-v24    Same as v23 but scale=0.30, size=15, also new PSF_BAD_SOLUTION
 
 
 v3 uses degree 2,2, FEW_STARS = 50

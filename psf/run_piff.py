@@ -47,6 +47,7 @@ FINDSTARS_FAILURE = 16
 PSF_FAILURE = 32
 ERROR_FLAG = 64
 LARGE_SIZE_SPREAD = 128
+PIFF_BAD_SOLUTION = 256
 
 # flag values for psf catalog
 
@@ -139,7 +140,7 @@ def parse_args():
 
 
     # Options
-    parser.add_argument('--clear_output', default=1, type=int,
+    parser.add_argument('--clear_output', default=0, type=int,
                         help='should the output directory be cleared before writing new files?')
     parser.add_argument('--rm_files', default=1, type=int,
                         help='remove unpacked files after finished')
@@ -543,6 +544,7 @@ def plot_fs(df, filename, logger):
               ['Detected Object', 'Candidate Star', 'PSF Star', 'Modest Star'],
               loc='upper left', frameon=True)
 
+    plt.xlim(right= np.max(mag[mag < 30]))
     plt.tight_layout()
     plt.savefig(filename)
     logger.info('Wrote fs plot to %s',filename)
@@ -738,8 +740,8 @@ def ngmix_fit(im, wt, fwhm, logger):
     T = T_guess
     #print('fwhm = %s, T_guess = %s'%(fwhm, T_guess))
     try:
-        #dx,dy,g1,g2,T,flux,hsm_flag = hsm(im, None, logger)
-        #print('hsm: ',g1,g2,T,flux,hsm_flag)
+        #hsm_dx,hsm_dy,hsm_g1,hsm_g2,hsm_T,hsm_flux,hsm_flag = hsm(im, None, logger)
+        #logger.info('hsm: %s, %s, %s, %s, %s, %s, %s',hsm_dx,hsm_dy,hsm_g1,hsm_g2,hsm_T,hsm_flux,hsm_flag)
         #if hsm_flag != 0:
             #print('hsm: ',g1,g2,T,flux,hsm_flag)
             #print('Bad hsm measurement.  Reverting to g=(0,0) and T=T_guess = %s'%(T_guess))
@@ -792,7 +794,7 @@ def ngmix_fit(im, wt, fwhm, logger):
 
     g1, g2, T = gmix.get_g1g2T()
     flux = gmix.get_flux() / wcs.pixelArea()  # flux is in ADU.  Should ~ match sum of pixels
-    #print('ngmix: ',g1,g2,T,flux,flag)
+    #logger.info('ngmix: %s %s %s %s %s %s %s',dx,dy,g1,g2,T,flux,flag)
     return dx, dy, g1, g2, T, flux, flag
 
 def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm, logger):
@@ -966,7 +968,7 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
     except Exception as e:
         logger.info('Caught %s',e)
         df.loc[ind, 'piff_flag'] = FAILURE
-        return
+        return PSF_FAILURE
 
     full_image = galsim.fits.read(image_file, hdu=0)
 
@@ -978,6 +980,8 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
         full_weight.array[full_weight.array < 0] = 0.
 
     stamp_size = 48
+
+    nbad = 0
 
     for i in ind:
         x = df['x'].iloc[i]
@@ -993,7 +997,7 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
         else:
             wt = full_weight[b]
 
-        im = psf.draw(x=x, y=y, image=im)
+        im = psf.draw(x=int(x+0.5), y=int(y+0.5), image=im)
         #print('raw piff draw: sum = ',im.array.sum())
         #print('obs_flux = ',df['obs_flux'].iloc[i])
         im *= df['obs_flux'].iloc[i]
@@ -1014,6 +1018,7 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
         if np.any(np.isnan([dx,dy,e1,e2,T,flux])):
             logger.info(' *** NaN detected (%f,%f,%f,%f,%f,%f).',dx,dy,e1,e2,T,flux)
             flag |= BAD_MEASUREMENT
+            nbad += 1
         else:
             df.loc[i, 'piff_dx'] = dx
             df.loc[i, 'piff_dy'] = dy
@@ -1025,6 +1030,13 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
     logger.info('final piff_flag = %s',df['piff_flag'][ind].values)
     #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'piff', 4., logger)
+
+    logger.info('nbad = %d/%d',nbad,len(ind))
+    logger.info('chisq = %f, dof = %f',psf.chisq,psf.dof)
+    if nbad > len(ind)/3 or psf.chisq > 1.5*psf.dof:
+        return PIFF_BAD_SOLUTION
+    else:
+        return 0
 
 
 def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, fwhm, logger):
@@ -1259,7 +1271,7 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         psf_file = os.path.join(wdir, root + '_piff.fits')
         row['piff_file'] = psf_file
         keep_files.append(psf_file)
-        if args.run_piff and flag == 0:
+        if args.run_piff and (flag & NO_STARS_FLAG) == 0:
             success = run_piff(df, unpack_image_file, star_file, psf_file,
                                args.piff_exe, args.piff_config,
                                pixmappy_file, expnum, ccdnum, logger)
@@ -1267,9 +1279,10 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
                 flag |= PSF_FAILURE
 
         # Measure the psf shapes
-        if flag == 0:
-            measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
-                                args.use_ngmix, fwhm, logger)
+        if args.run_piff and (flag & (NO_STARS_FLAG | PSF_FAILURE) == 0):
+            piff_flag = measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
+                                            args.use_ngmix, fwhm, logger)
+            flag |= piff_flag
             good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
             de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
             de2 = df.loc[good, 'piff_e2'] - df.loc[good, 'obs_e2']

@@ -32,8 +32,8 @@ pandas.options.display.max_columns = 200
 # Define the parameters for the blacklist
 
 # How many stars are too few or too many?
-FEW_STARS = 20
-MANY_STARS_FRAC = 0.5
+FEW_STARS = 25
+MANY_STARS_FRAC = 0.3
 # How high is a high FWHM?  3.6 arcsec / 0.26 arcsec/pixel = 13.8 pixels
 #HIGH_FWHM = 13.8
 HIGH_FWHM = 3.6  # (We switched to measuring this in arcsec)
@@ -48,6 +48,7 @@ PSF_FAILURE = 32
 ERROR_FLAG = 64
 LARGE_SIZE_SPREAD = 128
 PIFF_BAD_SOLUTION = 256
+OUTLIER_SIZE = 512
 
 # flag values for psf catalog
 
@@ -144,6 +145,8 @@ def parse_args():
                         help='should the output directory be cleared before writing new files?')
     parser.add_argument('--rm_files', default=1, type=int,
                         help='remove unpacked files after finished')
+    parser.add_argument('--use_existing', default=0, type=int,
+                        help='use previously downloaded files if they exist')
     parser.add_argument('--blacklist', default=1, type=int,
                         help='add failed CCDs to the blacklist')
     parser.add_argument('--run_piff', default=1, type=int,
@@ -641,7 +644,7 @@ def wget(url_base, path, wdir, file, logger):
         # Sometimes this fails with an "http protocol error, bad status line".
         # Maybe from too many requests at once or something.  So we retry up to 5 times.
         nattempts = 5
-        cmd = 'wget -q %s -O %s'%(url, full_file)
+        cmd = 'wget -q --no-check-certificate %s -O %s'%(url, full_file)
         for attempt in range(1,nattempts+1):
             logger.info('%s  (attempt %d)',cmd, attempt)
             run_with_timeout(cmd, 300)
@@ -926,7 +929,7 @@ def find_index(x1, y1, x2, y2, logger):
     return index
 
 
-def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm, logger):
+def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm, row, logger):
     """Measure shapes of the Piff solution at each location.
     """
     logger.info('Read in Piff file: %s',psf_file)
@@ -983,6 +986,7 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
 
     nbad = 0
 
+    good_bounds = galsim.BoundsD()
     for i in ind:
         x = df['x'].iloc[i]
         y = df['y'].iloc[i]
@@ -1026,10 +1030,19 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
             df.loc[i, 'piff_e2'] = e2
             df.loc[i, 'piff_T'] = T
             df.loc[i, 'piff_flux'] = flux
+            good_bounds += galsim.PositionD(x,y)
+
         df.loc[i, 'piff_flag'] |= flag
     logger.info('final piff_flag = %s',df['piff_flag'][ind].values)
     #print('df[ind] = ',df.loc[ind].describe())
     flag_outliers(df, ind, 'piff', 4., logger)
+
+    row['piff_xmin'] = good_bounds.xmin
+    row['piff_xmax'] = good_bounds.xmax
+    row['piff_ymin'] = good_bounds.ymin
+    row['piff_ymax'] = good_bounds.ymax
+    row['piff_chisq'] = psf.chisq
+    row['piff_dof'] = psf.dof
 
     logger.info('nbad = %d/%d',nbad,len(ind))
     logger.info('chisq = %f, dof = %f',psf.chisq,psf.dof)
@@ -1132,7 +1145,7 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
     np.random.seed(((expnum+76876876) * (ccdnum+23424524) * 8675309) % 2**32)
 
     # Store all information about the stars in a pandas data frame.
-    df = pandas.DataFrame()
+    df = None
     flag = 0
 
     keep_files = []
@@ -1143,12 +1156,17 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         base_path, _, _, image_file_name = path.rsplit('/',3)
         root, ext = image_file_name.rsplit('_',1)
         logger.info('root, ext = |%s| |%s|',root,ext)
-        image_file = wget(url_base, base_path + '/red/immask/', sdir, root + '_' + ext, logger)
+
+        image_file = os.path.join(sdir, root + '_' + ext)
+        if not (args.use_existing and os.path.exists(image_file)):
+            image_file = wget(url_base, base_path + '/red/immask/', sdir, root + '_' + ext, logger)
         logger.info('image_file = %s',image_file)
         row['root'] = root
         row['image_file'] = image_file
 
-        bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz', logger)
+        bkg_file = os.path.join(sdir, root + '_bkg.fits.fz')
+        if not (args.use_existing and os.path.exists(bkg_file)):
+            bkg_file = wget(url_base, base_path + '/red/bkg/', sdir, root + '_bkg.fits.fz', logger)
         logger.info('bkg_file = %s',bkg_file)
         row['bkg_file'] = bkg_file
 
@@ -1171,7 +1189,9 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         logger.info('subtracted off background image')
 
         if args.get_psfex:
-            psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf', logger)
+            psfex_file = os.path.join(sdir, root + '_psfexcat.psf')
+            if not (args.use_existing and os.path.exists(psfex_File)):
+                psfex_file = wget(url_base, base_path + '/psf/', wdir, root + '_psfexcat.psf', logger)
             logger.info('psfex_file = %s',psfex_file)
             row['psfex_file'] = psfex_file
             keep_files.append(psfex_file)
@@ -1228,6 +1248,10 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         if nstars > MANY_STARS_FRAC * ntot:
             logger.info('     -- flag for too many stars: %d/%d',nstars,ntot)
             flag |= TOO_MANY_STARS_FLAG
+        row['ntot'] = ntot
+        row['nstars'] = df['star_flag'].sum()
+        row['nstars_piff'] = nstars
+        row['nreserve'] = np.sum(df['reserve'])
 
         # Get the median fwhm of the given stars
         # Returns min, max, mean, median.  We use median, which is index 3.
@@ -1281,9 +1305,20 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         # Measure the psf shapes
         if args.run_piff and (flag & (NO_STARS_FLAG | PSF_FAILURE) == 0):
             piff_flag = measure_piff_shapes(df, psf_file, unpack_image_file, args.noweight, wcs,
-                                            args.use_ngmix, fwhm, logger)
+                                            args.use_ngmix, fwhm, row, logger)
             flag |= piff_flag
             good = (df['piff_flag'] == 0) & (df['obs_flag'] == 0)
+            ngood = np.sum(good)
+            row['ngood'] = ngood
+            logger.info('Number of detected objects = %s',row['ntot'])
+            logger.info('Number of stars = %s',row['nstars'])
+            logger.info('Number of stars given to Piff = %s',row['nstars_piff'])
+            logger.info('Number of good stars = %s',row['ngood'])
+            logger.info('Number of reserve stars = %s',row['nreserve'])
+            if ngood < FEW_STARS:
+                logger.info('     -- flag for too few good stars: %s',ngood)
+                flag |= TOO_FEW_STARS_FLAG
+
             de1 = df.loc[good, 'piff_e1'] - df.loc[good, 'obs_e1']
             de2 = df.loc[good, 'piff_e2'] - df.loc[good, 'obs_e2']
             dT = df.loc[good, 'piff_T'] - df.loc[good, 'obs_T']
@@ -1354,7 +1389,7 @@ def add_stream_handler(logger, level):
     sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(level)
     sh.setFormatter(formatter)
-    logger.addHandler(sh) 
+    logger.addHandler(sh)
     logger.setLevel(level)  # Not sure if both this and sh.setLevel are required...
 
 def add_file_handler(logger, level, sdir, root):
@@ -1382,6 +1417,31 @@ def remove_file_handler(logger, sdir, wdir):
                     logger.info('Moved logfile to %s',final_log_file)
                 else:
                     logger.removeHandler(h)
+
+def check_T_outliers(df, logger):
+    logger.info('Finished processing all CCDs in this exposure.')
+    logger.info('flags = %s',df['flag'].values)
+    logger.info('mean T = %s',df['obs_mean_T'].values)
+
+    while np.sum(df['flag'] == 0) > 1:
+        mask = df['flag'] == 0
+        logger.info('ngood = %d',np.sum(mask))
+        T = df['obs_mean_T'][mask]
+        meanT = T.mean()
+        stdT = T.std()
+        logger.info('mean T = %s,  std T = %s', meanT, stdT)
+
+        i = (T-meanT).abs().idxmax()
+        nsig = abs(T[i] - meanT) / stdT
+        logger.info('max diff at i=%d.  T=%s,  delta = %f sigma', i, T[i], nsig)
+
+        if nsig < 3:
+            break
+        else:
+            df.loc[i, 'flag'] = OUTLIER_SIZE
+
+    logger.info('Done: flags = %s',df['flag'].values)
+
 
 def main():
 
@@ -1468,7 +1528,7 @@ def main():
         logger.info('wdir = %s',wdir)
 
         sdir = os.path.join(scratch,str(exp))
-        if args.clear_output or (args.rm_files and sdir != wdir):
+        if (args.clear_output or (args.rm_files and sdir != wdir)) and not args.use_existing:
             if os.path.exists(sdir):
                 for f in os.listdir(sdir):
                     try:
@@ -1492,12 +1552,14 @@ def main():
         for k in ['root', 'image_file', 'bkg_file', 'cat_file', 'star_file',
                   'piff_file']:
             exp_info_df[k] = np.array([''] * len(data), dtype=str)
-        for k in ['zone', 'flag']:
+        for k in ['zone', 'flag', 'ntot', 'nstars', 'nstars_piff', 'nreserve', 'ngood']:
             exp_info_df[k] = np.array([-999] * len(data), dtype=int)
         for k in ['sat', 'fits_fwhm', 'star_fwhm',
                   'obs_mean_e1', 'obs_mean_e2', 'obs_mean_T',
                   'piff_mean_de1', 'piff_mean_de2', 'piff_mean_dT',
                   'piff_std_de1', 'piff_std_de2', 'piff_std_dT',
+                  'piff_chisq', 'piff_dof',
+                  'piff_xmin', 'piff_xmax', 'piff_ymin', 'piff_ymax',
                  ]:
             exp_info_df[k] = np.array([-999.] * len(data), dtype=float)
         if args.get_psfex:
@@ -1541,18 +1603,24 @@ def main():
                 logger.info('row = %s',row)
             else:
                 df, row = run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger)
-                logger.info('all_obj = \n%s', df.describe())
-                star_mask = df['star_flag'] == 1
-                stars = df.loc[star_mask].copy()
-                logger.info('stars = \n%s', stars.describe())
+
                 logger.info('row = %s', row)
                 # This construction keeps the dtypes of the columns in exp_info_df.
                 rowdf = exp_info_df.iloc[0:0].append(row)
-                with fitsio.FITS(psf_cat_file,'rw',clobber=True) as f:
-                    f.write_table(df.to_records(index=False), extname='all_obj')
-                    f.write_table(stars.to_records(index=False), extname='stars')
-                    f.write_table(rowdf.to_records(index=False), extname='info')
-                logger.info('Wrote chip-level psf information to %s',psf_cat_file)
+
+                if df is None:
+                    logger.info('Catastrophic error for %s, %s', expnum, ccdnum)
+                    stars = []
+                else:
+                    logger.info('all_obj = \n%s', df.describe())
+                    star_mask = df['star_flag'] == 1
+                    stars = df.loc[star_mask].copy()
+                    logger.info('stars = \n%s', stars.describe())
+                    with fitsio.FITS(psf_cat_file,'rw',clobber=True) as f:
+                        f.write_table(df.to_records(index=False), extname='all_obj')
+                        f.write_table(stars.to_records(index=False), extname='stars')
+                        f.write_table(rowdf.to_records(index=False), extname='info')
+                    logger.info('Wrote chip-level psf information to %s',psf_cat_file)
 
             # Do this immediately after writing the psf_cat file, so it usually exists in the
             # wdir directory if the psf_cat file exists. (If job times out and is restarted, any
@@ -1572,7 +1640,7 @@ def main():
                     stars.loc[:, 'piff_flag'] |= flag * BLACK_FLAG_FACTOR
                 if 'psfex_flag' in stars:
                     stars.loc[:, 'psfex_flag'] |= flag * BLACK_FLAG_FACTOR
-            exp_stars_df = exp_stars_df.append(stars, ignore_index=True)
+                exp_stars_df = exp_stars_df.append(stars, ignore_index=True)
 
             if flag and args.blacklist:
                 log_blacklist(blacklist_file,exp,ccdnum,flag, logger)
@@ -1581,7 +1649,13 @@ def main():
             if args.single_ccd:
                 sys.exit()
 
+        if len(exp_stars_df) == 0:
+            logger.error('All CCDs failed for exposure %s',exp)
+            continue
+
+        check_T_outliers(exp_info_df, logger)
         logger.info('Done with exposure %s',exp)
+
         logger.info('exp_stars = \n%s',exp_stars_df.describe())
         logger.info('exp_info = \n%s',exp_info_df.describe())
         exp_cat_file = os.path.join(wdir, 'exp_psf_cat_%d.fits'%exp)

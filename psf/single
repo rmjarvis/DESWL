@@ -1,1 +1,1 @@
-python run_piff.py --work=~/work/y3_piff/y3a1-v24 --tag=y3a1=v24 --rm_files=0 --reserve=0.2 --blacklist=0 --mag_cut=1 --max_mag=21 --plot_fs --single_ccd=62 --exps=262573 --use_ngmix --clear_output=1
+python run_piff.py --work=~/work/y3_piff/y3a1-v24 --tag=y3a1=v24 --rm_files=0 --reserve=0.2 --blacklist=0 --mag_cut=1 --max_mag=21 --plot_fs --use_ngmix --clear_output=1 --findstars_config=/astro/u/mjarvis/rmjarvis/DESWL/psf/y3_old.config --use_existing=1 --exps=363879 --single_ccd=7

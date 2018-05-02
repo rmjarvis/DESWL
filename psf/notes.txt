@@ -1,7 +1,3 @@
-TODO:
-Fix reserved in psf_cat files.  The reserved stars seem not to have made it in.
-Get other kinds of blacklisting to put in as flags in expinfo
-airmass, tiling, etc. still not in exposure_info catalogs.
 
 make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
@@ -39,7 +35,14 @@ y3a1-v20    Same as v18 Piff v0.2.0, galsim v1.5.0-alpha  (good)
 y3a1-v21    Same as v18 Piff v0.2.1, galsim v1.5.1  (good)
 y3a1-v22    Same as v21 using Condor ten_zones.riz
 y3a1-v23    Same as v22 using Condor all Y3 (with PSFEx)  (new canonical result)
-y3a1-v24    Same as v23 but scale=0.30, size=15, also new PSF_BAD_SOLUTION
+y3a1-v24    Same as v23 but scale=0.30, size=15, also new PSF_BAD_SOLUTION (GalSim 1.6)
+y3a1-v25    Same as v23 but scale=0.30, size=15, also new PSF_BAD_SOLUTION (GalSim 1.5.1)
+y3a1-v26    Same as v25 but size=17(15), startn1=0.10(0.15), TOO_FEW=25(20), mag_cut=1.2(1.0).
+
+
+
+=============
+Old notes
 
 
 v3 uses degree 2,2, FEW_STARS = 50

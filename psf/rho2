@@ -5,9 +5,9 @@
 #FILE=zone029.riz
 #TAG=y3a1-v16
 #FILE=ten_zones.riz
-FILE=ally3.riz
-#FILE=zones03.riz
-TAG=y3a1-v24
+#FILE=ally3.riz
+FILE=zones03.riz
+TAG=y3a1-v26
 
 ./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG"

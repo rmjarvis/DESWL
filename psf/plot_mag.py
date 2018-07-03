@@ -9,7 +9,7 @@ import glob
 import galsim
 import json
 import numpy as np
-from read_psf_cats import read_data
+from read_psf_cats import read_data, band_combinations
 
 plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
 
@@ -419,7 +419,8 @@ def main():
     data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
                                      use_reserved=args.use_reserved, frac=args.frac)
 
-    for bands in ['r', 'i', 'z', 'riz']:
+    use_bands = band_combinations(args.bands)
+    for bands in use_bands:
         this_data = data[np.in1d(data['band'], list(bands))]
         if len(this_data) == 0:
             print('No files with bands ',bands)

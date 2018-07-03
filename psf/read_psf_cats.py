@@ -306,3 +306,22 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
     print('made recarray')
 
     return data, bands, tilings
+
+def band_combinations(bands, single=True, combo=True):
+
+    if single:
+        use_bands = [ b for b in bands ]
+    else:
+        use_bands = []
+
+    if combo:
+        if 'r' in bands and 'i' in bands and 'z' in bands:
+            use_bands.append('riz')
+        #if 'g' in bands and 'r' in bands and 'i' in bands and 'z' in bands:
+            #use_bands.append('griz')
+
+    print('use_bands = ',use_bands)
+    return use_bands
+
+
+

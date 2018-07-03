@@ -744,7 +744,7 @@ def plot_overall_rho(work):
 
     print 'Plot overall rho stats'
 
-    base_keys = ['griz', 'riz', 'ri', 'g', 'r', 'i', 'z']
+    base_keys = ['riz', 'g', 'r', 'i', 'z', 'Y']
     #base_keys = ['ri', 'r', 'i']
     #base_keys = ['ri']
     #base_keys = ['r']
@@ -762,7 +762,7 @@ def plot_overall_rho(work):
     for key in keys:
         stat_file = os.path.join(work, "rho_" + key + ".json")
         if not os.path.isfile(stat_file):
-            print 'File not found: ',stat_file
+            print 'File not found: ',stat_file,' (skipping)'
             continue
 
         # Read the json file 

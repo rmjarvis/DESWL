@@ -6,7 +6,7 @@
 from __future__ import print_function
 import os
 import numpy as np
-from read_psf_cats import read_data
+from read_psf_cats import read_data, band_combinations
 
 def parse_args():
     import argparse
@@ -34,12 +34,14 @@ def parse_args():
                         help='Limit to the given bands')
     parser.add_argument('--frac', default=1., type=float,
                         help='Choose a random fraction of the input stars')
+    parser.add_argument('--lucas', default=False, action='store_const', const=True,
+                        help='Use 20 bins in [2.5, 250] arcmin (for Lucus)')
 
     args = parser.parse_args()
     return args
 
 
-def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='piff'):
+def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='piff', lucas=False):
     """Compute the rho statistics
     """
     import treecorr
@@ -50,6 +52,16 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     p_e1 = data[prefix+'_e1']
     p_e2 = data[prefix+'_e2']
     p_T = data[prefix+'_T']
+    m = data['mag']
+
+    mlt20 = True
+    if mlt20:
+        e1 = e1[m<20]
+        e2 = e2[m<20]
+        T = T[m<20]
+        p_e1 = p_e1[m<20]
+        p_e2 = p_e2[m<20]
+        p_T = p_T[m<20]
 
     de1 = e1-p_e1
     de2 = e2-p_e2
@@ -63,6 +75,9 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     if use_xy:
         x = data['fov_x']
         y = data['fov_y']
+        if mlt20:
+            x = x[m<20]
+            y = y[m<20]
         print('x = ',x)
         print('y = ',y)
 
@@ -73,6 +88,9 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     else:
         ra = data['ra']
         dec = data['dec']
+        if mlt20:
+            ra = ra[m<20]
+            dec = dec[m<20]
         print('ra = ',ra)
         print('dec = ',dec)
 
@@ -94,11 +112,13 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
         min_sep = 0.5,
         max_sep = max_sep,
         bin_size = 0.2,
-
-        #min_sep = 2.5,
-        #max_sep = 250,
-        #nbins = 20,
     )
+
+    if lucas:
+        bin_config['min_sep'] = 2.5
+        bin_config['max_sep'] = 250.
+        bin_config['nbins'] = 20
+        del bin_config['bin_size']
 
     results = []
     for (cat1, cat2) in [ (decat, decat),
@@ -128,7 +148,7 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     return results
 
 
-def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
+def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False):
     """Compute the rho statistics
     """
     import treecorr
@@ -167,11 +187,13 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff'):
         min_sep = 0.5,
         max_sep = max_sep,
         bin_size = 0.2,
-
-        #min_sep = 2.5,
-        #max_sep = 250,
-        #nbins = 20,
     )
+
+    if lucas:
+        bin_config['min_sep'] = 2.5
+        bin_config['max_sep'] = 250.
+        bin_config['nbins'] = 20
+        del bin_config['bin_size']
 
     results = []
     for (catlist1, catlist2) in [ (decats, decats),
@@ -241,37 +263,20 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
     print('Done writing ',stat_file)
 
 
-def band_combinations(bands, single=True, combo=True):
-
-    if single:
-        use_bands = [ [b] for b in bands ]
-    else:
-        use_bands = []
-
-    if combo:
-        if 'r' in bands and 'i' in bands:
-            use_bands.append(['r', 'i'])
-        if 'r' in bands and 'i' in bands and 'z' in bands:
-            use_bands.append(['r', 'i', 'z'])
-        if 'g' in bands and 'r' in bands and 'i' in bands and 'z' in bands:
-            use_bands.append(['g', 'r', 'i', 'z'])
-
-    print('use_bands = ',use_bands)
-    print('tags = ',[ ''.join(band) for band in use_bands ])
-    return use_bands
-
-
-def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', alt_tt=False):
+def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', alt_tt=False,
+                       lucas=False):
     print('Start CANONICAL: ',prefix,name)
     # Measure the canonical rho stats using all pairs:
     use_bands = band_combinations(bands)
     for band in use_bands:
         print('band ',band)
+        if len(band) > 1: band = list(band)
         mask = np.in1d(data['band'],band)
         print('sum(mask) = ',np.sum(mask))
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
-        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt)
+        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt,
+                            lucas=lucas)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
@@ -406,7 +411,7 @@ def main():
     exps = sorted(exps)
 
     keys = ['ra', 'dec', 'x', 'y', 'obs_e1', 'obs_e2', 'obs_T',
-            prefix+'_e1', prefix+'_e2', prefix+'_T']
+            prefix+'_e1', prefix+'_e2', prefix+'_T', 'mag']
 
     data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
                                      use_reserved=args.use_reserved, frac=args.frac)
@@ -414,8 +419,8 @@ def main():
     print('all bands = ',bands)
     #print('all tilings = ',tilings)
 
-    out_file_name = os.path.join(work, "psf_%s.fits"%args.tag)
-    write_data(data, out_file_name)
+    #out_file_name = os.path.join(work, "psf_%s.fits"%args.tag)
+    #write_data(data, out_file_name)
 
     for band in bands:
         print('n for band %s = '%band, np.sum(data['band'] == band))
@@ -438,7 +443,7 @@ def main():
 
     #bands = ['r', 'i']
 
-    do_canonical_stats(data, bands, tilings, work, alt_tt=False, prefix=prefix)
+    do_canonical_stats(data, bands, tilings, work, alt_tt=False, prefix=prefix, lucas=args.lucas)
 
     #do_cross_tiling_stats(data, bands, tilings, work, prefix=prefix)
 

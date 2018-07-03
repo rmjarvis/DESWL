@@ -9,6 +9,9 @@ import glob
 import logging
 import fitsio
 import pandas
+import numpy as np
+import numpy.lib.recfunctions as nprec
+import galsim
 
 # flag values for blacklist
 NO_STARS_FLAG = 1
@@ -74,6 +77,8 @@ def main():
 
     redo_exp = set()
     blacklist = set()
+
+    all_expcat = []
  
     for exp in sorted(exps):
         expnum = int(exp)
@@ -90,11 +95,17 @@ def main():
         logger.info("Reading %s",expname)
         try:
             expcat = fitsio.read(expname, ext='info')
+            starcat = fitsio.read(expname, ext='stars')
         except Exception as e:
             logger.warning("Caught %s",e)
             logger.warning("Add %s to the redo set",exp)
             redo_exp.add(exp)
             continue
+        deg = galsim.degrees
+        ra = np.mean([ (ra * deg).wrap(0 * deg) for ra in starcat['ra'] ]) / deg
+        dec = np.mean(starcat['dec'])
+        expcat_with_radec = nprec.append_fields(expcat, ('ra', 'dec'), (ra, dec), usemask=False)
+        all_expcat.append(expcat_with_radec)
 
         for row in expcat:
             ccdnum = row['ccdnum']
@@ -130,11 +141,15 @@ def main():
     if len(redo_exp) > 0:
         logger.info('%s exposures have missing Piff files',len(redo_exp))
         with open('redo_exp', 'w') as fout:
-            for exp in redo_exp:
+            for exp in sorted(redo_exp):
                 fout.write('%s\n'%exp)
         logger.info('Wrote list of %d exposures to redo to redo_exp.',len(redo_exp))
     else:
         logger.info('All PSF files verified.')
+        all_expcat = np.concatenate(all_expcat)
+        all_expname = os.path.join(work, '%s_info.fits'%args.tag)
+        fitsio.write(all_expname, all_expcat, clobber=True)
+        logger.info('Wrote info file to %s',all_expname)
 
     if args.blacklist:
         logger.info('Logging blacklisted chips to %s',blacklist_file)
@@ -143,7 +158,7 @@ def main():
             os.remove(blacklist_file)
         with open(blacklist_file,'w') as f:
             logger.info("Writing %d entries into blacklist file",len(blacklist))
-            for exp, ccd, flag in blacklist:
+            for exp, ccd, flag in sorted(blacklist):
                 f.write("%s %s %s\n"%(exp,ccd,flag))
 
 

@@ -1,7 +1,11 @@
 #!/bin/bash
 
-FILE=ally3.riz
+#FILE=ally3.riz
+#FILE=ally3.grizY
 #FILE=redo_exp
-TAG=y3a1-v23
+FILE=zones03.riz
+TAG=y3a1-v30
 
-./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --tag=verify --cmd="python verify.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"
+#./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --tag=verify --cmd="python verify.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"
+./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --tag=verify --cmd="python verify.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --blacklist=0"
+#python verify.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --blacklist=0

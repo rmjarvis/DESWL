@@ -37,6 +37,7 @@ MANY_STARS_FRAC = 0.3
 # How high is a high FWHM?  3.6 arcsec / 0.26 arcsec/pixel = 13.8 pixels
 #HIGH_FWHM = 13.8
 HIGH_FWHM = 3.6  # (We switched to measuring this in arcsec)
+NSIG_T_OUTLIER = 4   # How many sigma for a chip to be an outlier in <T>.
 
 # flag values for blacklist
 NO_STARS_FLAG = 1
@@ -63,6 +64,8 @@ RESERVED = 64
 NOT_STAR = 128
 BLACK_FLAG_FACTOR = 512 # blacklist flags are this times the original exposure blacklist flag
                         # blacklist flags go up to 64,
+
+rng = galsim.BaseDeviate(1234)
 
 # array to convert ccdnum to detpos
 detpos = [None,'S29','S30','S31','S25','S26','S27','S28','S20','S21','S22',
@@ -513,8 +516,9 @@ def plot_fs(df, filename, logger):
     # 1 = star candidate
     # 2 = final star
     flag = df['star_flag'].copy()
-    flag[df['piff_flag']==0] = 2
-    flag[df['piff_flag']==RESERVED] = 2  # Also count the reserve stars as psf stars
+    if 'piff_flag' in df:
+        flag[df['piff_flag']==0] = 2
+        flag[df['piff_flag']==RESERVED] = 2  # Also count the reserve stars as psf stars
     logger.info('num detections: %s',np.sum(flag == 0))
     logger.info('num candidates: %s',np.sum(flag == 1))
     logger.info('num final psf stars: %s',np.sum(flag == 2))
@@ -736,7 +740,7 @@ def make_ngmix_prior(T, pixel_scale):
     return prior
 
 
-def ngmix_fit(im, wt, fwhm, logger):
+def ngmix_fit(im, wt, fwhm, x, y, logger):
     flag = 0
     dx, dy, g1, g2, flux = 0., 0., 0., 0., 0.
     T_guess = (fwhm / 2.35482)**2 * 2.
@@ -764,7 +768,7 @@ def ngmix_fit(im, wt, fwhm, logger):
             cen = im.true_center - im.origin
         else:
             cen = im.trueCenter() - im.origin()
-        jac = ngmix.Jacobian(wcs=wcs, x=cen.x, y=cen.y)
+        jac = ngmix.Jacobian(wcs=wcs, x=cen.x + x - int(x+0.5), y=cen.y + y - int(y+0.5))
         if wt is None:
             obs = ngmix.Observation(image=im.array, jacobian=jac)
         else:
@@ -844,17 +848,18 @@ def measure_star_shapes(df, image_file, noweight, wcs, use_ngmix, fwhm, logger):
         b = galsim.BoundsI(int(x)-stamp_size/2, int(x)+stamp_size/2,
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
-
         im = full_image[b]
+
         if noweight:
             wt = None
         else:
             wt = full_weight[b]
 
         if use_ngmix:
-            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, logger)
+            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, x, y, logger)
         else:
             dx, dy, e1, e2, T, flux, flag = hsm(im, wt, logger)
+        #logger.info('ngmix measurement: (%f,%f,%f,%f,%f,%f).',dx,dy,e1,e2,T,flux)
         if np.any(np.isnan([dx,dy,e1,e2,T,flux])):
             logger.info(' *** NaN detected (%f,%f,%f,%f,%f,%f).',dx,dy,e1,e2,T,flux)
             flag |= BAD_MEASUREMENT
@@ -877,6 +882,8 @@ def flag_outliers(df, ind, prefix, nsig, logger):
     logger.info('ind = %s',ind)
     mask = df[prefix + '_flag'][ind] == 0
     ind = ind[mask]
+    if len(ind) == 0:
+        return
     logger.info('ind => %s',ind)
     mean_e1 = np.mean(df[prefix + '_e1'][ind])
     mean_e2 = np.mean(df[prefix + '_e2'][ind])
@@ -996,19 +1003,20 @@ def measure_piff_shapes(df, psf_file, image_file, noweight, wcs, use_ngmix, fwhm
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
         im = full_image[b]
+
+        im = psf.draw(x=x, y=y, image=im)
+        im *= df['obs_flux'].iloc[i]
+
         if noweight:
             wt = None
         else:
             wt = full_weight[b]
-
-        im = psf.draw(x=int(x+0.5), y=int(y+0.5), image=im)
-        #print('raw piff draw: sum = ',im.array.sum())
-        #print('obs_flux = ',df['obs_flux'].iloc[i])
-        im *= df['obs_flux'].iloc[i]
-        #print('sum => ',im.array.sum())
+            var = wt.copy()
+            var.invertSelf()
+            im.addNoise(galsim.VariableGaussianNoise(rng, var))
 
         if use_ngmix:
-            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, logger)
+            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, x, y, logger)
         else:
             dx, dy, e1, e2, T, flux, flag = hsm(im, wt, logger)
 
@@ -1104,16 +1112,20 @@ def measure_psfex_shapes(df, psfex_file, image_file, noweight, wcs, use_ngmix, f
                            int(y)-stamp_size/2, int(y)+stamp_size/2)
         b = b & full_image.bounds
         im = full_image[b]
-        if noweight:
-            wt = None
-        else:
-            wt = full_weight[b]
 
         im = psf_i.drawImage(image=im, method='no_pixel')
         im *= df['obs_flux'].iloc[i]
 
+        if noweight:
+            wt = None
+        else:
+            wt = full_weight[b]
+            var = wt.copy()
+            var.invertSelf()
+            im.addNoise(galsim.VariableGaussianNoise(rng, var))
+
         if use_ngmix:
-            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, logger)
+            dx, dy, e1, e2, T, flux, flag = ngmix_fit(im, wt, fwhm, x, y, logger)
         else:
             dx, dy, e1, e2, T, flux, flag = hsm(im, wt, logger)
         if np.any(np.isnan([dx,dy,e1,e2,T,flux])):
@@ -1277,7 +1289,7 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         row['zone'] = zone
         pixmappy_file = os.path.join(args.pixmappy_dir, 'zone%03d.astro'%zone)
         logger.info('pixmappy_file = %s',pixmappy_file)
-        wcs = pixmappy.GalSimWCS(pixmappy_file, exp=expnum, ccdnum=ccdnum)
+        wcs = pixmappy.GalSimWCS(pixmappy_file, exp=expnum, ccdnum=ccdnum, default_color=0)
         wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
 
         # Measure the shpes and sizes of the stars
@@ -1286,7 +1298,7 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
 
         # Another check is that the spread in star sizes isn't too large
         obs_T = df.loc[df['obs_flag']==0, 'obs_T']
-        if np.std(obs_T) > 0.15 * np.mean(obs_T):
+        if np.std(obs_T) > 0.2 * np.mean(obs_T):
             logger.info('     -- flag for large size spread: %f > 0.15 * %f',
                         np.std(obs_T), np.mean(obs_T))
             flag |= LARGE_SIZE_SPREAD
@@ -1330,6 +1342,15 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
             de2 = -999.
             dT = -999.
 
+        # After Piff rejects outliers, the spread should be even smaller.  Don't go too small
+        # thought, since some chips do have a mild spread in sizes across CCD.
+        if args.run_piff and flag == 0:
+            obs_T = df.loc[df['piff_flag']==0, 'obs_T']
+            if np.std(obs_T) > 0.15 * np.mean(obs_T):
+                logger.info('     -- flag for large size spread: %f > 0.15 * %f',
+                            np.std(obs_T), np.mean(obs_T))
+                flag |= LARGE_SIZE_SPREAD
+
         if args.plot_fs:
             fs_plot_file = os.path.join(wdir, root + '_fs.pdf')
             plot_fs(df, fs_plot_file, logger)
@@ -1366,13 +1387,26 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         row['obs_std_e1'] = np.std(df.loc[df['obs_flag']==0, 'obs_e1'])
         row['obs_std_e2'] = np.std(df.loc[df['obs_flag']==0, 'obs_e2'])
         row['obs_std_T'] = np.std(df.loc[df['obs_flag']==0, 'obs_T'])
-        row['piff_mean_de1'] = np.mean(de1)
-        row['piff_mean_de2'] = np.mean(de2)
-        row['piff_mean_dT'] = np.mean(dT)
-        row['piff_std_de1'] = np.std(de1)
-        row['piff_std_de2'] = np.std(de2)
-        row['piff_std_dT'] = np.std(dT)
+        if args.run_piff and (flag & (NO_STARS_FLAG | PSF_FAILURE) == 0):
+            row['piff_mean_e1'] = np.mean(df.loc[df['piff_flag']==0, 'piff_e1'])
+            row['piff_mean_e2'] = np.mean(df.loc[df['piff_flag']==0, 'piff_e2'])
+            row['piff_mean_T'] = np.mean(df.loc[df['piff_flag']==0, 'piff_T'])
+            row['piff_std_e1'] = np.std(df.loc[df['piff_flag']==0, 'piff_e1'])
+            row['piff_std_e2'] = np.std(df.loc[df['piff_flag']==0, 'piff_e2'])
+            row['piff_std_T'] = np.std(df.loc[df['piff_flag']==0, 'piff_T'])
+            row['piff_mean_de1'] = np.mean(de1)
+            row['piff_mean_de2'] = np.mean(de2)
+            row['piff_mean_dT'] = np.mean(dT)
+            row['piff_std_de1'] = np.std(de1)
+            row['piff_std_de2'] = np.std(de2)
+            row['piff_std_dT'] = np.std(dT)
         if args.get_psfex:
+            row['psfex_mean_e1'] = np.mean(df.loc[df['psfex_flag']==0, 'psfex_e1'])
+            row['psfex_mean_e2'] = np.mean(df.loc[df['psfex_flag']==0, 'psfex_e2'])
+            row['psfex_mean_T'] = np.mean(df.loc[df['psfex_flag']==0, 'psfex_T'])
+            row['psfex_std_e1'] = np.std(df.loc[df['psfex_flag']==0, 'psfex_e1'])
+            row['psfex_std_e2'] = np.std(df.loc[df['psfex_flag']==0, 'psfex_e2'])
+            row['psfex_std_T'] = np.std(df.loc[df['psfex_flag']==0, 'psfex_T'])
             row['psfex_mean_de1'] = np.mean(xde1)
             row['psfex_mean_de2'] = np.mean(xde2)
             row['psfex_mean_dT'] = np.mean(xdT)
@@ -1426,7 +1460,7 @@ def check_T_outliers(df, logger):
     while np.sum(df['flag'] == 0) > 1:
         mask = df['flag'] == 0
         logger.info('ngood = %d',np.sum(mask))
-        T = df['obs_mean_T'][mask]
+        T = df['piff_mean_T'][mask]  # Use piff_mean_T so we have removed Piff outliers.
         meanT = T.mean()
         stdT = T.std()
         logger.info('mean T = %s,  std T = %s', meanT, stdT)
@@ -1435,7 +1469,7 @@ def check_T_outliers(df, logger):
         nsig = abs(T[i] - meanT) / stdT
         logger.info('max diff at i=%d.  T=%s,  delta = %f sigma', i, T[i], nsig)
 
-        if nsig < 3:
+        if nsig < NSIG_T_OUTLIER:
             break
         else:
             df.loc[i, 'flag'] = OUTLIER_SIZE
@@ -1549,13 +1583,17 @@ def main():
             for str_key in ['key', 'band', 'path']:
                 exp_info_df[str_key] = exp_info_df[str_key].str.decode("utf-8")
         # Add some blank columns to be filled in below.
-        for k in ['root', 'image_file', 'bkg_file', 'cat_file', 'star_file',
-                  'piff_file']:
+        for k in ['root', 'date', 'time', 'fits_filter',
+                  'image_file', 'bkg_file', 'cat_file', 'star_file', 'piff_file']:
             exp_info_df[k] = np.array([''] * len(data), dtype=str)
-        for k in ['zone', 'flag', 'ntot', 'nstars', 'nstars_piff', 'nreserve', 'ngood']:
+        for k in ['zone', 'fits_ccdnum', 'tiling', 'hex',
+                  'flag', 'ntot', 'nstars', 'nstars_piff', 'nreserve', 'ngood',]:
             exp_info_df[k] = np.array([-999] * len(data), dtype=int)
         for k in ['sat', 'fits_fwhm', 'star_fwhm',
+                  'telra', 'teldec', 'telha', 'airmass', 'sky', 'sigsky',
                   'obs_mean_e1', 'obs_mean_e2', 'obs_mean_T',
+                  'piff_mean_e1', 'piff_mean_e2', 'piff_mean_T',
+                  'piff_std_e1', 'piff_std_e2', 'piff_std_T',
                   'piff_mean_de1', 'piff_mean_de2', 'piff_mean_dT',
                   'piff_std_de1', 'piff_std_de2', 'piff_std_dT',
                   'piff_chisq', 'piff_dof',
@@ -1564,7 +1602,9 @@ def main():
             exp_info_df[k] = np.array([-999.] * len(data), dtype=float)
         if args.get_psfex:
             exp_info_df['psfex_file'] = [''] * len(data)
-            for k in ['psfex_mean_de1', 'psfex_mean_de2', 'psfex_mean_dT',
+            for k in ['psfex_mean_e1', 'psfex_mean_e2', 'psfex_mean_T',
+                      'psfex_std_e1', 'psfex_std_e2', 'psfex_std_T',
+                      'psfex_mean_de1', 'psfex_mean_de2', 'psfex_mean_dT',
                       'psfex_std_de1', 'psfex_std_de2', 'psfex_std_dT',
                      ]:
                 exp_info_df[k] = np.array([-999.] * len(data), dtype=float)
@@ -1584,24 +1624,31 @@ def main():
             logger.info('\nProcessing %s %s %s %s', key, expnum, ccdnum, band)
             logger.info('Logging for this ccd being written to %s',log_file)
 
+            done = False
             psf_cat_file = os.path.join(wdir, 'psf_cat_%d_%d.fits'%(exp,ccdnum))
             if not args.clear_output and os.path.exists(psf_cat_file):
                 logger.info('%s already exists.  Reading the existing file.',psf_cat_file)
-                with fitsio.FITS(psf_cat_file,'r') as f:
-                    all_obj = f['all_obj'].read()
-                    stars = f['stars'].read()
-                    info = f['info'].read()
-                all_obj = all_obj.astype(all_obj.dtype.newbyteorder('='))
-                stars = stars.astype(stars.dtype.newbyteorder('='))
-                info = info.astype(info.dtype.newbyteorder('='))
-                df = pandas.DataFrame(all_obj)
-                stars = pandas.DataFrame(stars)
-                row = pandas.DataFrame(info).iloc[0]
-                logger.info('Read chip-level psf information from %s',psf_cat_file)
-                logger.info('df = \n%s',df.describe())
-                logger.info('stars = \n%s',stars.describe())
-                logger.info('row = %s',row)
-            else:
+                try:
+                    with fitsio.FITS(psf_cat_file,'r') as f:
+                        all_obj = f['all_obj'].read()
+                        stars = f['stars'].read()
+                        info = f['info'].read()
+                    all_obj = all_obj.astype(all_obj.dtype.newbyteorder('='))
+                    stars = stars.astype(stars.dtype.newbyteorder('='))
+                    info = info.astype(info.dtype.newbyteorder('='))
+                    df = pandas.DataFrame(all_obj)
+                    stars = pandas.DataFrame(stars)
+                    row = pandas.DataFrame(info).iloc[0]
+                    logger.info('Read chip-level psf information from %s',psf_cat_file)
+                    logger.info('df = \n%s',df.describe())
+                    logger.info('stars = \n%s',stars.describe())
+                    logger.info('row = %s',row)
+                    done = True
+                except Exception as e:
+                    logger.error("Caught %r",e)
+                    # Leave done = False
+
+            if not done:
                 df, row = run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger)
 
                 logger.info('row = %s', row)

@@ -40,6 +40,7 @@ top_txt="""
 command: |
     cd /astro/u/mjarvis/rmjarvis/DESWL/psf
     source /astro/u/mjarvis/.bashrc
+    conda activate py2.7
     export OMP_NUM_THREADS={cores_per_job}
     export MKL_NUM_THREADS={cores_per_job}
     {cmd}

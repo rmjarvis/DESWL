@@ -144,7 +144,7 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=No
                    loc='upper right', fontsize=24)
         #plt.ylim( [1.e-9, 5.e-6] )
         #plt.ylim( [1.e-9, 2.e-5] )
-        plt.ylim( [5.e-9, 5.e-6] )
+        plt.ylim( [1.e-10, 1.e-5] )
     elif True:
         plt.legend([rho1_line, sv_req],
                    [r'$\rho_1(\theta)$', r'Requirement'],
@@ -218,7 +218,7 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None):
                    [r'$\rho_2(\theta)$', r'$\rho_5(\theta)$'],
                    loc='upper right', fontsize=24)
         #plt.ylim( [1.e-7, 5.e-4] )
-        plt.ylim( [5.e-8, 1.e-5] )
+        plt.ylim( [1.e-8, 1.e-5] )
     elif True: # For paper
         plt.legend([rho2_line, sv_req],
                    [r'$\rho_2(\theta)$', r'Requirement'],
@@ -230,6 +230,27 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None):
                     r'Requirements for $d\sigma_8/\sigma_8 < 0.03$'],
                    loc='upper right')
         plt.ylim( [1.e-7, 3.e-4] )
+    plt.tick_params(axis='both', which='major', labelsize=24)
+    plt.xlim( [0.5,300.] )
+    plt.xlabel(r'$\theta$ (arcmin)', fontsize=24)
+    plt.ylabel(r'$\rho(\theta)$', fontsize=24)
+    plt.xscale('log')
+    plt.yscale('log', nonposy='clip')
+    plt.tight_layout()
+
+
+def pretty_rho0(meanr, rho, sig, sqrtn):
+    import matplotlib.patches as mp
+    plt.plot(meanr, rho, color='blue')
+    plt.plot(meanr, -rho, color='blue', ls=':')
+    plt.errorbar(meanr[rho>0], rho[rho>0], yerr=sig[rho>0]/sqrtn, color='blue', ls='', marker='o')
+    plt.errorbar(meanr[rho<0], -rho[rho<0], yerr=sig[rho<0]/sqrtn, color='blue', ls='', marker='o')
+    rho0_line = plt.errorbar(-meanr, rho, yerr=sig, color='blue', marker='o')
+    if True:
+        plt.legend([rho0_line],
+                   [r'$\rho_0(\theta)$'],
+                   loc='upper right', fontsize=24)
+        plt.ylim( [1.e-6, 1.e-3] )
     plt.tick_params(axis='both', which='major', labelsize=24)
     plt.xlim( [0.5,300.] )
     plt.xlabel(r'$\theta$ (arcmin)', fontsize=24)
@@ -773,6 +794,7 @@ def plot_overall_rho(work):
         if len(stats) == 1:  # I used to save a list of length 1 that in turn was a list
             stats = stats[0]
 
+        print('len(stats) = ',len(stats))
         ( meanlogr,
           rho1p,
           rho1p_im,
@@ -821,41 +843,56 @@ def plot_overall_rho(work):
 
         print 'meanr = ',meanr
 
-        if True:
-            cols = numpy.array((meanr,
-                                rho1p, rho1m, sig_rho1,
-                                rho2p, rho2m, sig_rho2,
-                                rho3p, rho3m, sig_rho3,
-                                rho4p, rho4m, sig_rho4,
-                                rho5p, rho5m, sig_rho5))
-            outfile = 'rho_' + key + '.dat'
-            numpy.savetxt(outfile, cols, fmt='%.6e',
-                          header='meanr  '+
-                                 'rho1  rho1_xim  sig_rho1  '+
-                                 'rho2  rho2_xim  sig_rho2  '+
-                                 'rho3  rho3_xim  sig_rho3  '+
-                                 'rho4  rho4_xim  sig_rho4  '+
-                                 'rho5  rho5_xim  sig_rho5  ')
-            print 'wrote',outfile
+        cols = [meanr,
+                rho1p, rho1m, sig_rho1,
+                rho2p, rho2m, sig_rho2,
+                rho3p, rho3m, sig_rho3,
+                rho4p, rho4m, sig_rho4,
+                rho5p, rho5m, sig_rho5]
+        header = ('meanr  '+
+                  'rho1  rho1_xim  sig_rho1  '+
+                  'rho2  rho2_xim  sig_rho2  '+
+                  'rho3  rho3_xim  sig_rho3  '+
+                  'rho4  rho4_xim  sig_rho4  '+
+                  'rho5  rho5_xim  sig_rho5  ')
+
+        if len(stats) > 26:
+            ( rho0p,
+              rho0p_im,
+              rho0m,
+              rho0m_im,
+              var0,
+            ) = stats[26:31]
+            rho0p = numpy.array(rho0p)
+            rho0m = numpy.array(rho0m)
+            sig_rho0 = numpy.sqrt(var0)
+            cols += [rho0p, rho0m, sig_rho0]
+            header += 'rho0  rho0_xim  sig_rho0  '
+
+        outfile = 'rho_' + key + '.dat'
+        numpy.savetxt(outfile, numpy.array(cols), fmt='%.6e', header=header)
+        print 'wrote',outfile
  
         plt.clf()
         pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, sig_rho3, rho4p, sig_rho4)
-        #plt.savefig('rho1_' + key + '.png')
         plt.savefig('rho1_' + key + '.pdf')
 
         plt.clf()
         pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p, sig_rho5)
-        #plt.savefig('rho2_' + key + '.png')
         plt.savefig('rho2_' + key + '.pdf')
 
         if len(stats) > 26:
-            corr_tt, var_corr_tt = stats[26:28]
+            plt.clf()
+            pretty_rho0(meanr, rho0p, sig_rho0, sqrtn)
+            plt.savefig('rho0_' + key + '.pdf')
+
+        if len(stats) > 31:
+            corr_tt, var_corr_tt = stats[31:33]
             corr_tt = numpy.array(corr_tt)
             sig_corr_tt = numpy.sqrt(var_corr_tt)
 
             plt.clf()
             plot_corr_tt(meanr, corr_tt, sig_corr_tt)
-            #plt.savefig('rho2_' + key + '.png')
             plt.savefig('corrtt_' + key + '.pdf')
 
 

@@ -36,12 +36,21 @@ def parse_args():
                         help='Choose a random fraction of the input stars')
     parser.add_argument('--lucas', default=False, action='store_const', const=True,
                         help='Use 20 bins in [2.5, 250] arcmin (for Lucus)')
+    parser.add_argument('--write_data', default=False, action='store_const', const=True,
+                        help='Write out a psf_tag.fits file with the catalog info')
+    parser.add_argument('--subtract_mean', default=False, action='store_const', const=True,
+                        help='Do mean-subtracted rho stats')
+    parser.add_argument('--do_rho0', default=False, action='store_const', const=True,
+                        help='Calculate rho0 as well')
+    parser.add_argument('--max_mag', default=20, 
+                        help='Maximum star magnitude to use for rho stats')
 
     args = parser.parse_args()
     return args
 
 
-def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='piff', lucas=False):
+def measure_rho(data, max_sep, max_mag, tag=None, use_xy=False, prefix='piff',
+                alt_tt=False, lucas=False, subtract_mean=False, do_rho0=False):
     """Compute the rho statistics
     """
     import treecorr
@@ -54,55 +63,63 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
     p_T = data[prefix+'_T']
     m = data['mag']
 
-    mlt20 = True
-    if mlt20:
-        e1 = e1[m<20]
-        e2 = e2[m<20]
-        T = T[m<20]
-        p_e1 = p_e1[m<20]
-        p_e2 = p_e2[m<20]
-        p_T = p_T[m<20]
+    if max_mag > 0:
+        e1 = e1[m<max_mag]
+        e2 = e2[m<max_mag]
+        T = T[m<max_mag]
+        p_e1 = p_e1[m<max_mag]
+        p_e2 = p_e2[m<max_mag]
+        p_T = p_T[m<max_mag]
 
-    de1 = e1-p_e1
-    de2 = e2-p_e2
+    q1 = e1-p_e1
+    q2 = e2-p_e2
     dt = (T-p_T)/T
+    w1 = e1 * dt
+    w2 = e2 * dt
     print('mean e = ',np.mean(e1),np.mean(e2))
     print('mean T = ',np.mean(T))
-    print('mean de = ',np.mean(de1),np.mean(de2))
+    print('mean de = ',np.mean(q1),np.mean(q2))
     print('mean dT = ',np.mean(T-p_T))
     print('mean dT/T = ',np.mean(dt))
+    if subtract_mean:
+        e1 -= np.mean(e1)
+        e2 -= np.mean(e2)
+        q1 -= np.mean(q1)
+        q2 -= np.mean(q2)
+        w1 -= np.mean(w1)
+        w2 -= np.mean(w2)
+        dt -= np.mean(dt)
 
     if use_xy:
         x = data['fov_x']
         y = data['fov_y']
-        if mlt20:
-            x = x[m<20]
-            y = y[m<20]
+        if max_mag > 0:
+            x = x[m<max_mag]
+            y = y[m<max_mag]
         print('x = ',x)
         print('y = ',y)
 
         ecat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=e1, g2=e2)
-        decat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=de1, g2=de2)
-        dtcat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec',
-                                 k=dt, g1=dt*e1, g2=dt*e2)
+        qcat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=q1, g2=q2)
+        wcat = treecorr.Catalog(x=x, y=y, x_units='arcsec', y_units='arcsec', g1=w1, g2=w2, k=dt)
     else:
         ra = data['ra']
         dec = data['dec']
-        if mlt20:
-            ra = ra[m<20]
-            dec = dec[m<20]
+        if max_mag > 0:
+            ra = ra[m<max_mag]
+            dec = dec[m<max_mag]
         print('ra = ',ra)
         print('dec = ',dec)
 
         ecat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=e1, g2=e2)
-        decat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=de1, g2=de2)
-        dtcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg',
-                                 k=dt, g1=dt*e1, g2=dt*e2)
+        qcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=q1, g2=q2)
+        wcat = treecorr.Catalog(ra=ra, dec=dec, ra_units='deg', dec_units='deg', g1=w1, g2=w2, k=dt)
+
     ecat.name = 'ecat'
-    decat.name = 'decat'
-    dtcat.name = 'dtcat'
+    qcat.name = 'qcat'
+    wcat.name = 'wcat'
     if tag is not None:
-        for cat in [ ecat, decat, dtcat ]:
+        for cat in [ ecat, qcat, wcat ]:
             cat.name = tag + ":"  + cat.name
 
     bin_config = dict(
@@ -120,12 +137,15 @@ def measure_rho(data, max_sep, tag=None, use_xy=False, alt_tt=False, prefix='pif
         bin_config['nbins'] = 20
         del bin_config['bin_size']
 
+    pairs = [ (qcat, qcat),
+              (ecat, qcat),
+              (wcat, wcat),
+              (qcat, wcat),
+              (ecat, wcat) ]
+    if do_rho0:
+        pairs.append( (ecat, ecat) )
     results = []
-    for (cat1, cat2) in [ (decat, decat),
-                          (ecat, decat),
-                          (dtcat, dtcat),
-                          (decat, dtcat),
-                          (ecat, dtcat) ]:
+    for (cat1, cat2) in pairs:
         print('Doing correlation of %s vs %s'%(cat1.name, cat2.name))
 
         rho = treecorr.GGCorrelation(bin_config, verbose=2)
@@ -156,27 +176,27 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False)
     ntilings = len(tile_data)
     print('len(tile_data) = ',ntilings)
 
-    de1 = [ d['obs_e1']-d[prefix+'_e1'] for d in tile_data ]
-    de2 = [ d['obs_e2']-d[prefix+'_e2'] for d in tile_data ]
+    q1 = [ d['obs_e1']-d[prefix+'_e1'] for d in tile_data ]
+    q2 = [ d['obs_e2']-d[prefix+'_e2'] for d in tile_data ]
     dt = [ (d['obs_T']-d[prefix+'_T'])/d['obs_T'] for d in tile_data ]
     for k in range(len(tile_data)):
         print('k = ',k)
-        print('mean de = ',np.mean(de1[k]),np.mean(de2[k]))
+        print('mean q = ',np.mean(q1[k]),np.mean(q2[k]))
         print('mean dt = ',np.mean(dt[k]))
 
     ecats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg',
                                g1=d['obs_e1'], g2=d['obs_e2'])
               for d in tile_data ]
     for cat in ecats: cat.name = 'ecat'
-    decats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg',
-                                g1=de1[k], g2=de2[k]) for k,d in enumerate(tile_data) ]
-    for cat in decats: cat.name = 'decat'
+    qcats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg',
+                                g1=q1[k], g2=q2[k]) for k,d in enumerate(tile_data) ]
+    for cat in qcats: cat.name = 'qcat'
     dtcats = [ treecorr.Catalog(ra=d['ra'], dec=d['dec'], ra_units='deg', dec_units='deg',
                                 k=dt[k], g1=d['obs_e1']*dt[k], g2=d['obs_e2']*dt[k])
                for k,d in enumerate(tile_data) ]
     for cat in dtcats: cat.name = 'dtcat'
     if tags is not None:
-        for catlist in [ ecats, decats, dtcats]:
+        for catlist in [ ecats, qcats, dtcats]:
             for cat, tag in zip(catlist, tags):
                 cat.name = tag + ":"  + cat.name
 
@@ -196,10 +216,10 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False)
         del bin_config['bin_size']
 
     results = []
-    for (catlist1, catlist2) in [ (decats, decats),
-                                  (ecats, decats),
+    for (catlist1, catlist2) in [ (qcats, qcats),
+                                  (ecats, qcats),
                                   (dtcats, dtcats),
-                                  (decats, dtcats),
+                                  (qcats, dtcats),
                                   (ecats, dtcats) ]:
 
         catnames1 = [ cat.name for cat in catlist1 ]
@@ -220,7 +240,7 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False)
 
     return results
 
-def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
+def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, rho0=None, corr_tt=None):
     import json
 
     stats = [
@@ -251,6 +271,14 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
         rho5.xim_im.tolist(),
         rho5.varxi.tolist(),
     ]
+    if rho0 is not None:
+        stats.extend([
+            rho0.xip.tolist(),
+            rho0.xip_im.tolist(),
+            rho0.xim.tolist(),
+            rho0.xim_im.tolist(),
+            rho0.varxi.tolist(),
+        ])
     if corr_tt is not None:
         stats.extend([
             corr_tt.xi.tolist(),
@@ -263,8 +291,8 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, corr_tt=None):
     print('Done writing ',stat_file)
 
 
-def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', alt_tt=False,
-                       lucas=False):
+def do_canonical_stats(data, bands, tilings, work, max_mag, prefix='piff', name='all',
+                       alt_tt=False, lucas=False, subtract_mean=False, do_rho0=False):
     print('Start CANONICAL: ',prefix,name)
     # Measure the canonical rho stats using all pairs:
     use_bands = band_combinations(bands)
@@ -275,8 +303,9 @@ def do_canonical_stats(data, bands, tilings, work, prefix='piff', name='all', al
         print('sum(mask) = ',np.sum(mask))
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
-        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, alt_tt=alt_tt,
-                            lucas=lucas)
+        stats = measure_rho(data[mask], max_sep=300, max_mag=max_mag, tag=tag, prefix=prefix,
+                            alt_tt=alt_tt, lucas=lucas, subtract_mean=subtract_mean,
+                            do_rho0=do_rho0)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
@@ -333,7 +362,7 @@ def do_odd_even_stats(data, bands, tilings, work, prefix='piff', name='oddeven')
         write_stats(stat_file,*stats)
 
 
-def do_fov_stats(data, bands, tilings, work, prefix='piff', name='fov'):
+def do_fov_stats(data, bands, tilings, work, max_mag, prefix='piff', name='fov'):
     print('Start FOV: ',prefix,name)
     # Measure the rho stats using the field-of-view positions.
     use_bands = band_combinations(bands)
@@ -343,7 +372,8 @@ def do_fov_stats(data, bands, tilings, work, prefix='piff', name='fov'):
         print('sum(mask) = ',np.sum(mask))
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
-        stats = measure_rho(data[mask], max_sep=300, tag=tag, prefix=prefix, use_xy=True)
+        stats = measure_rho(data[mask], max_sep=300, max_mag=max_mag, tag=tag, prefix=prefix,
+                            use_xy=True)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
 
@@ -374,10 +404,18 @@ def set_args(**kwargs):
         setattr(args, key, kwargs[key])
     return args
 
-def write_data(data, file_name):
+def write_data_file(data, file_name):
     import fitsio
     print("Writing data to ",file_name)
     fitsio.write(file_name, data, clobber=True)
+
+def read_data_file(file_name):
+    import fitsio
+    print("Reading data from",file_name)
+    data = fitsio.read(file_name)
+    bands = np.unique(data['band'])
+    tilings = np.unique(data['tiling'])
+    return data, bands, tilings
 
 def main():
 
@@ -413,19 +451,28 @@ def main():
     keys = ['ra', 'dec', 'x', 'y', 'obs_e1', 'obs_e2', 'obs_T',
             prefix+'_e1', prefix+'_e2', prefix+'_T', 'mag']
 
-    data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
-                                     use_reserved=args.use_reserved, frac=args.frac)
+    out_file_name = os.path.join(work, "psf_%s_%s.fits"%(args.tag, args.bands))
+    if not args.write_data:
+        try:
+            data, bands, tilings = read_data_file(out_file_name)
+        except Exception as e:
+            print('Caught: ',e)
+            data = None
+    if data is None:
+        data, bands, tilings = read_data(exps, work, keys,
+                                         limit_bands=args.bands, prefix=prefix,
+                                         use_reserved=args.use_reserved, frac=args.frac)
+    if args.write_data:
+        write_data_file(data, out_file_name)
 
     print('all bands = ',bands)
-    #print('all tilings = ',tilings)
+    print('all tilings = ',tilings)
 
-    #out_file_name = os.path.join(work, "psf_%s.fits"%args.tag)
-    #write_data(data, out_file_name)
 
     for band in bands:
         print('n for band %s = '%band, np.sum(data['band'] == band))
-    #for til in tilings:
-        #print('n for tiling %d = '%til, np.sum(data['tiling'] == til))
+    for til in tilings:
+        print('n for tiling %d = '%til, np.sum(data['tiling'] == til))
 
     gdata = np.where(data['band'] == 'g')[0]
     rdata = np.where(data['band'] == 'r')[0]
@@ -443,7 +490,9 @@ def main():
 
     #bands = ['r', 'i']
 
-    do_canonical_stats(data, bands, tilings, work, alt_tt=False, prefix=prefix, lucas=args.lucas)
+    do_canonical_stats(data, bands, tilings, work,
+                       max_mag=args.max_mag, prefix=prefix, lucas=args.lucas,
+                       subtract_mean=args.subtract_mean, do_rho0=args.do_rho0)
 
     #do_cross_tiling_stats(data, bands, tilings, work, prefix=prefix)
 
@@ -451,7 +500,7 @@ def main():
 
     #do_odd_even_stats(data, bands, tilings, work, prefix=prefix)
 
-    #do_fov_stats(data, bands, tilings, work, prefix=prefix)
+    #do_fov_stats(data, bands, tilings, work, max_mag=args.max_mag, prefix=prefix)
 
 
 if __name__ == "__main__":

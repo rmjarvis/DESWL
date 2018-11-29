@@ -790,16 +790,16 @@ def ngmix_fit(im, wt, fwhm, x, y, logger):
         logger.info(' *** Bad measurement (ngmix flag = %d).  Mask this one.',ngmix_flag)
         flag |= BAD_MEASUREMENT
 
-    if abs(g1) > 0.5 or abs(g2) > 0.5:
-        logger.info(' *** Bad shape measurement (%f,%f).  Mask this one.',g1,g2)
-        flag |= BAD_MEASUREMENT
-
     dx, dy = gmix.get_cen()
     if dx**2 + dy**2 > MAX_CENTROID_SHIFT**2:
         logger.info(' *** Centroid shifted by %f,%f in ngmix.  Mask this one.',dx,dy)
         flag |= CENTROID_SHIFT
 
     g1, g2, T = gmix.get_g1g2T()
+    if abs(g1) > 0.5 or abs(g2) > 0.5:
+        logger.info(' *** Bad shape measurement (%f,%f).  Mask this one.',g1,g2)
+        flag |= BAD_MEASUREMENT
+
     flux = gmix.get_flux() / wcs.pixelArea()  # flux is in ADU.  Should ~ match sum of pixels
     #logger.info('ngmix: %s %s %s %s %s %s %s',dx,dy,g1,g2,T,flux,flag)
     return dx, dy, g1, g2, T, flux, flag

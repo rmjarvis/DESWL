@@ -92,3 +92,10 @@ for i,ext in enumerate(ccdid):
 def toFocal(ccd,x,y):
     return x*15e-6*1000+xc[ccd],y*15e-6*1000+yc[ccd]
 
+def toFocalArcmin(ccd,x,y):
+    u,v = toFocal(ccd,x,y)
+    # u,v are in mm.  Each pixel is 15 microns and 0.263 arcsec.
+    # conversion is (1 pixel / 15e-3) (0.263 arcsec / pixel) (1 arcmin / 60 arcsec)
+    factor = 0.263 / 15.e-3 / 60.
+    return u * factor, v * factor
+

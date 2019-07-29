@@ -2,7 +2,7 @@
 make_explist pulls out the relevant exposures from the meds files
 setup_output runs run_psfex.py, only setting up the directory structure
 go runs run_psfex.py, runs findstars and psfex
-- Use verify.py to verify that all files were either made or blacklisted.
+ver runs verify.py to verify that all files were either made or blacklisted.
 relink runs run_psfex.py, skipping the findstars and psfex steps and just relinks files
 sync_to_nersc copies the psfex files and blacklist over to nersc
 exp runs build_exp_catalog.py, builds the catalog of information about exposures
@@ -41,7 +41,7 @@ y3a1-v26    Same as v25 but size=17(15), startn1=0.10(0.15), TOO_FEW=25(20), mag
 y3a1-v27    Same as v26 but flag LARGE_SIZE_SPREAD and OUTLIER_SIZE from Piff set, not obs.
 y3a1-v28    Same as v27 but draw(x,y) rather than int(x+0.5), int(y+0.5)
 y3a1-v29    Same as v28 but add noise to drawn Piff image.
-y3a1-v30    Same as v29 but GalSim v2.0, Piff v0.3.0
+y3a1-v30    Same as v29 but GalSim v2.1, Piff v0.3.0
 
 
 

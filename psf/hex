@@ -1,0 +1,7 @@
+#!/bin/bash
+
+FILE=ally3.z
+#FILE=zone033.i
+TAG=y3a1-v29
+
+./run_wq_exp.py --njobs=1 --cores_per_job=2 --file=$FILE --tag=hex --cmd="./focal_diff.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG --frac=0.1"

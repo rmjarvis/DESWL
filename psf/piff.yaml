@@ -30,7 +30,6 @@ input:
         file_name: 'zone029.astro.orig'
         exp: 226650
         ccdnum: 13
-        #default_color: 0
 
 output:
     #dir: '/astro/u/mjarvis/work/y3_piff/y3a1-v01/226650'
@@ -42,13 +41,9 @@ psf:
         type: PixelGrid
         scale: 0.30
         size: 17
-        #interp: Lanczos(5)
-        start_sigma: 0.8  # The code is pretty robust to this being larger than the actual size
-                          # of the PSF, but if it's much smaller, then there can be problems.
 
     interp:
         type: BasisPolynomial
-        #type: Polynomial
         order: 3
 
     outliers:

@@ -3,7 +3,12 @@
 #FILE=ally3.riz
 #FILE=ally3.grizY
 #FILE=redo_exp
-FILE=zones03.riz
+#FILE=zones03.riz
+#FILE=zone033.riz
+#TAG=y3a1-v29
+#FILE=ally3.grizY
+#FILE=y3v02a_grizY
+FILE=zones01.riz
 TAG=y3a1-v30
 
 #./run_wq_exp.py --njobs=1 --cores_per_job=1 --file=$FILE --tag=verify --cmd="python verify.py --file=$FILE --tag=$TAG --work=~/work/y3_piff/$TAG"

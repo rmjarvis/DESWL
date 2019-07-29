@@ -10,8 +10,12 @@ import logging
 import fitsio
 import pandas
 import numpy as np
-import numpy.lib.recfunctions as nprec
+from numpy.lib import recfunctions
 import galsim
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 # flag values for blacklist
 NO_STARS_FLAG = 1
@@ -104,7 +108,7 @@ def main():
         deg = galsim.degrees
         ra = np.mean([ (ra * deg).wrap(0 * deg) for ra in starcat['ra'] ]) / deg
         dec = np.mean(starcat['dec'])
-        expcat_with_radec = nprec.append_fields(expcat, ('ra', 'dec'), (ra, dec), usemask=False)
+        expcat_with_radec = recfunctions.append_fields(expcat, ('ra', 'dec'), (ra, dec), usemask=False)
         all_expcat.append(expcat_with_radec)
 
         for row in expcat:
@@ -146,10 +150,22 @@ def main():
         logger.info('Wrote list of %d exposures to redo to redo_exp.',len(redo_exp))
     else:
         logger.info('All PSF files verified.')
-        all_expcat = np.concatenate(all_expcat)
+        with open('redo_exp', 'w') as fout:
+            pass
+        logger.info('Cleared redo_exp file to indicate this.')
+        # Write to a pickle file just in case the stack_arrays thing fails.
+        # We used to use concatenate, but that started failing, which wastes a lot of time to redo.
+        # Now stack_arrays works, but who knows if numpy will change their API without notice.
+        pkl_file = os.path.join(work, '%s_info.pkl'%args.tag)
+        with open(pkl_file, 'wb') as out:
+            pickle.dump(all_expcat, out)
+        logger.info('Wrote pre-concatenated data to %s',pkl_file)
+        all_expcat = recfunctions.stack_arrays(all_expcat, autoconvert=True, usemask=False)
         all_expname = os.path.join(work, '%s_info.fits'%args.tag)
         fitsio.write(all_expname, all_expcat, clobber=True)
         logger.info('Wrote info file to %s',all_expname)
+        os.remove(pkl_file)
+        logger.info('Removed %s',pkl_file)
 
     if args.blacklist:
         logger.info('Logging blacklisted chips to %s',blacklist_file)

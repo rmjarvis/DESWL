@@ -77,10 +77,15 @@ def measure_rho(data, max_sep, max_mag, tag=None, use_xy=False, prefix='piff',
     w1 = e1 * dt
     w2 = e2 * dt
     print('mean e = ',np.mean(e1),np.mean(e2))
+    print('std e = ',np.std(e1),np.std(e2))
     print('mean T = ',np.mean(T))
+    print('std T = ',np.std(T))
     print('mean de = ',np.mean(q1),np.mean(q2))
+    print('std de = ',np.std(q1),np.std(q2))
     print('mean dT = ',np.mean(T-p_T))
+    print('std dT = ',np.std(T-p_T))
     print('mean dT/T = ',np.mean(dt))
+    print('std dT/T = ',np.std(dt))
     if subtract_mean:
         e1 -= np.mean(e1)
         e2 -= np.mean(e2)
@@ -249,27 +254,32 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, rho0=None, corr_tt=None
         rho1.xip_im.tolist(),
         rho1.xim.tolist(),
         rho1.xim_im.tolist(),
-        rho1.varxi.tolist(),
+        rho1.varxip.tolist(),
+        rho1.varxim.tolist(),
         rho2.xip.tolist(),
         rho2.xip_im.tolist(),
         rho2.xim.tolist(),
         rho2.xim_im.tolist(),
-        rho2.varxi.tolist(),
+        rho2.varxip.tolist(),
+        rho2.varxim.tolist(),
         rho3.xip.tolist(),
         rho3.xip_im.tolist(),
         rho3.xim.tolist(),
         rho3.xim_im.tolist(),
-        rho3.varxi.tolist(),
+        rho3.varxip.tolist(),
+        rho3.varxim.tolist(),
         rho4.xip.tolist(),
         rho4.xip_im.tolist(),
         rho4.xim.tolist(),
         rho4.xim_im.tolist(),
-        rho4.varxi.tolist(),
+        rho4.varxip.tolist(),
+        rho4.varxim.tolist(),
         rho5.xip.tolist(),
         rho5.xip_im.tolist(),
         rho5.xim.tolist(),
         rho5.xim_im.tolist(),
-        rho5.varxi.tolist(),
+        rho5.varxip.tolist(),
+        rho5.varxim.tolist(),
     ]
     if rho0 is not None:
         stats.extend([
@@ -277,7 +287,8 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, rho0=None, corr_tt=None
             rho0.xip_im.tolist(),
             rho0.xim.tolist(),
             rho0.xim_im.tolist(),
-            rho0.varxi.tolist(),
+            rho0.varxip.tolist(),
+            rho0.varxim.tolist(),
         ])
     if corr_tt is not None:
         stats.extend([

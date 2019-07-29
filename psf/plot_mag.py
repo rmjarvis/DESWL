@@ -13,8 +13,6 @@ from read_psf_cats import read_data, band_combinations
 
 plt.style.use('/astro/u/mjarvis/.config/matplotlib/stylelib/supermongo.mplstyle')
 
-RESERVED = 64
-
 def parse_args():
     import argparse
 
@@ -381,12 +379,14 @@ def make_hist(dT, T, de1, de2, bands):
 
     fig, ax = plt.subplots(1,4, sharey=True)
 
-    ax[0].hist(dT/T, bins=nbins, histtype='step', range=range, fill=True)
-    ax[0].set_xlabel('dT/T')
-    ax[1].hist(de1, bins=nbins, histtype='step', range=range, fill=True)
-    ax[1].set_xlabel('de1')
-    ax[2].hist(de2, bins=nbins, histtype='step', range=range, fill=True)
-    ax[2].set_xlabel('de2')
+    ax[0].hist(dT, bins=nbins, histtype='step', range=range, fill=True)
+    ax[0].set_xlabel('dT (arcsec)')
+    ax[1].hist(dT/T, bins=nbins, histtype='step', range=range, fill=True)
+    ax[1].set_xlabel('dT/T')
+    ax[2].hist(de1, bins=nbins, histtype='step', range=range, fill=True)
+    ax[2].set_xlabel('de1')
+    ax[3].hist(de2, bins=nbins, histtype='step', range=range, fill=True)
+    ax[3].set_xlabel('de2')
 
     fig.set_size_inches(15.0,7.0)
     plt.tight_layout()
@@ -425,8 +425,18 @@ def main():
         if len(this_data) == 0:
             print('No files with bands ',bands)
             continue
+        print('bands = ',bands)
+        print('unique flags = ',np.unique(this_data[prefix+'_flag']))
 
-        used = this_data[prefix+'_flag'] & ~RESERVED == 0
+
+        if args.use_reserved:
+            RESERVED = 65
+            used = this_data[prefix+'_flag'] & ~RESERVED == 0
+        else:
+            used = this_data[prefix+'_flag'] == 0
+
+        print('used = ',used)
+        print('unique used = ',np.unique(used))
 
         #airmass = this_data['airmass']
         #sky = this_data['sky']

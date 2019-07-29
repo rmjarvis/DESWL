@@ -142,6 +142,9 @@ def read_data(exps, work, keys, limit_bands=None, prefix='piff', use_reserved=Fa
             data = fitsio.read(expname, ext='stars')
             ccdnums = data['ccdnum'].astype(int)
 
+        if prefix+'_flag' not in data.dtype.names:
+            print('all ccds are bad.  skip this exposure')
+            continue
         flag = data[prefix+'_flag'].astype(int)
         ntot = len(data)
         nused = np.sum((flag & 1) != 0)

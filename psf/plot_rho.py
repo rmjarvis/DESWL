@@ -384,27 +384,33 @@ def plot_single_rho(args,work):
               rho1_xip_im,
               rho1_xim,
               rho1_xim_im,
-              rho1_varxi,
+              rho1_varxip,
+              rho1_varxim,
               rho2_xip,
               rho2_xip_im,
               rho2_xim,
               rho2_xim_im,
-              rho2_varxi,
+              rho2_varxip,
+              rho2_varxim,
               rho3_xi,
-              rho3_varxi,
+              rho3_varxip,
+              rho3_varxim,
               drho1_meanlogr,
               drho1_xip,
               drho1_xip_im,
               drho1_xim,
               drho1_xim_im,
-              drho1_varxi,
+              drho1_varxip,
+              drho1_varxim,
               drho2_xip,
               drho2_xip_im,
               drho2_xim,
               drho2_xim_im,
-              drho2_varxi,
+              drho2_varxip,
+              drho2_varxim,
               drho3_xi,
-              drho3_varxi,
+              drho3_varxip,
+              drho3_varxim,
             ) = stats[-1]
             exp_meanlogr[iexp,:] = rho1_meanlogr
             exp_rho1p[iexp,:] = rho1_xip
@@ -412,18 +418,18 @@ def plot_single_rho(args,work):
             exp_rho2p[iexp,:] = rho2_xip
             exp_rho2m[iexp,:] = rho2_xim
             exp_rho3[iexp,:] = rho3_xi
-            exp_var1[iexp,:] = rho1_varxi
-            exp_var2[iexp,:] = rho2_varxi
-            exp_var3[iexp,:] = rho3_varxi
+            exp_var1[iexp,:] = rho1_varxip
+            exp_var2[iexp,:] = rho2_varxip
+            exp_var3[iexp,:] = rho3_varxip
             desdm_meanlogr[iexp,:] = drho1_meanlogr
             desdm_rho1p[iexp,:] = drho1_xip
             desdm_rho1m[iexp,:] = drho1_xim
             desdm_rho2p[iexp,:] = drho2_xip
             desdm_rho2m[iexp,:] = drho2_xim
             desdm_rho3[iexp,:] = drho3_xi
-            desdm_var1[iexp,:] = drho1_varxi
-            desdm_var2[iexp,:] = drho2_varxi
-            desdm_var3[iexp,:] = drho3_varxi
+            desdm_var1[iexp,:] = drho1_varxip
+            desdm_var2[iexp,:] = drho2_varxip
+            desdm_var3[iexp,:] = drho3_varxip
             iexp += 1
  
             for s in stats[:-1]:
@@ -765,8 +771,8 @@ def plot_overall_rho(work):
 
     print 'Plot overall rho stats'
 
-    base_keys = ['riz', 'g', 'r', 'i', 'z', 'Y']
-    #base_keys = ['ri', 'r', 'i']
+    #base_keys = ['riz', 'g', 'r', 'i', 'z', 'Y']
+    base_keys = ['riz', 'r', 'i', 'z']
     #base_keys = ['ri']
     #base_keys = ['r']
 
@@ -800,28 +806,33 @@ def plot_overall_rho(work):
           rho1p_im,
           rho1m,
           rho1m_im,
-          var1,
+          var1p,
+          var1m,
           rho2p,
           rho2p_im,
           rho2m,
           rho2m_im,
-          var2,
+          var2p,
+          var2m,
           rho3p,
           rho3p_im,
           rho3m,
           rho3m_im,
-          var3,
+          var3p,
+          var3m,
           rho4p,
           rho4p_im,
           rho4m,
           rho4m_im,
-          var4,
+          var4p,
+          var4m,
           rho5p,
           rho5p_im,
           rho5m,
           rho5m_im,
-          var5,
-        ) = stats[:26]
+          var5p,
+          var5m,
+        ) = stats[:31]
 
         meanr = numpy.exp(meanlogr)
         rho1p = numpy.array(rho1p)
@@ -834,11 +845,11 @@ def plot_overall_rho(work):
         rho4m = numpy.array(rho4m)
         rho5p = numpy.array(rho5p)
         rho5m = numpy.array(rho5m)
-        sig_rho1 = numpy.sqrt(var1)
-        sig_rho2 = numpy.sqrt(var2)
-        sig_rho3 = numpy.sqrt(var3)
-        sig_rho4 = numpy.sqrt(var4)
-        sig_rho5 = numpy.sqrt(var5)
+        sig_rho1 = numpy.sqrt(var1p)
+        sig_rho2 = numpy.sqrt(var2p)
+        sig_rho3 = numpy.sqrt(var3p)
+        sig_rho4 = numpy.sqrt(var4p)
+        sig_rho5 = numpy.sqrt(var5p)
         sqrtn = 1
 
         print 'meanr = ',meanr
@@ -856,16 +867,17 @@ def plot_overall_rho(work):
                   'rho4  rho4_xim  sig_rho4  '+
                   'rho5  rho5_xim  sig_rho5  ')
 
-        if len(stats) > 26:
+        if len(stats) > 31:
             ( rho0p,
               rho0p_im,
               rho0m,
               rho0m_im,
-              var0,
-            ) = stats[26:31]
+              var0p,
+              var0m,
+            ) = stats[31:37]
             rho0p = numpy.array(rho0p)
             rho0m = numpy.array(rho0m)
-            sig_rho0 = numpy.sqrt(var0)
+            sig_rho0 = numpy.sqrt(var0p)
             cols += [rho0p, rho0m, sig_rho0]
             header += 'rho0  rho0_xim  sig_rho0  '
 
@@ -881,13 +893,13 @@ def plot_overall_rho(work):
         pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p, sig_rho5)
         plt.savefig('rho2_' + key + '.pdf')
 
-        if len(stats) > 26:
+        if len(stats) > 31:
             plt.clf()
             pretty_rho0(meanr, rho0p, sig_rho0, sqrtn)
             plt.savefig('rho0_' + key + '.pdf')
 
-        if len(stats) > 31:
-            corr_tt, var_corr_tt = stats[31:33]
+        if len(stats) > 37:
+            corr_tt, var_corr_tt = stats[37:39]
             corr_tt = numpy.array(corr_tt)
             sig_corr_tt = numpy.sqrt(var_corr_tt)
 

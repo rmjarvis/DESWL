@@ -50,6 +50,7 @@ ERROR_FLAG = 64
 LARGE_SIZE_SPREAD = 128
 PIFF_BAD_SOLUTION = 256
 OUTLIER_SIZE = 512
+NO_PIXMAPPY = 1024
 
 # flag values for psf catalog
 
@@ -1281,7 +1282,13 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
 
         # Get the pixmappy wcs for this ccd for correcting the shapes
         dp = detpos[ccdnum]
-        wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0][0]
+        wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0]
+        if len(wz) == 0:
+            logger.info('     -- Exposure not in which_zone file.  No Pixmappy solution.')
+            flag |= NO_PIXMAPPY
+            raise CatastrophicFailure()
+        else:
+            wz = wz[0]
         logger.info('row in which_zone is %s',wz)
         #print('  ',which_zone[wz])
         zone = which_zone['zone'][wz]

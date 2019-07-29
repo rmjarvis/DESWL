@@ -462,13 +462,20 @@ def main():
     keys = ['ra', 'dec', 'x', 'y', 'obs_e1', 'obs_e2', 'obs_T',
             prefix+'_e1', prefix+'_e2', prefix+'_T', 'mag']
 
-    out_file_name = os.path.join(work, "psf_%s_%s.fits"%(args.tag, args.bands))
+    if args.use_reserved:
+        all_stars = ''
+    else:
+        all_stars = '_all'
+        keys += ['obs_flag', prefix+'_flag']
+
+    out_file_name = os.path.join(work, "psf_%s_%s%s.fits"%(args.tag, args.bands, all_stars))
+
+    data = None
     if not args.write_data:
         try:
             data, bands, tilings = read_data_file(out_file_name)
         except Exception as e:
             print('Caught: ',e)
-            data = None
     if data is None:
         data, bands, tilings = read_data(exps, work, keys,
                                          limit_bands=args.bands, prefix=prefix,
@@ -478,7 +485,6 @@ def main():
 
     print('all bands = ',bands)
     print('all tilings = ',tilings)
-
 
     for band in bands:
         print('n for band %s = '%band, np.sum(data['band'] == band))

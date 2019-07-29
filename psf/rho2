@@ -10,7 +10,8 @@
 FILE=ally3.Y
 TAG=y3a1-v29
 
-./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --subtract_mean --bands=riz --do_rho0 --max_mag=21"
+#./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --bands=riz --do_rho0"
+./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --write_data --bands=Y"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --subtract_mean --bands=riz --do_rho0 --max_mag=25"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_psfex --use_reserved --do_rho0"

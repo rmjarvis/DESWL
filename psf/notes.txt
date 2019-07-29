@@ -9,6 +9,7 @@ exp runs build_exp_catalog.py, builds the catalog of information about exposures
 cats runs build_psf_cats.py, builds catalogs of PSF information for each exposure
 rho runs run_rho.py, computes the rho statistics for each exposure/ccd
 rho2 runs run_rho2.py, computes the rho statistics for the full data and each filter
+  -- Note: rho2 also makes the big files with all psf measurements psf_*_tag_bands.fits
 plots runs plot_rho.py, makes plots
 mag runs plot_mag.py, makes other plots
 

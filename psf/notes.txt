@@ -43,6 +43,7 @@ y3a1-v27    Same as v26 but flag LARGE_SIZE_SPREAD and OUTLIER_SIZE from Piff se
 y3a1-v28    Same as v27 but draw(x,y) rather than int(x+0.5), int(y+0.5)
 y3a1-v29    Same as v28 but add noise to drawn Piff image.
 y3a1-v30    Same as v29 but GalSim v2.1, Piff v0.3.0
+y3a1-v31    Same as v30 but trying out Y6 astrometry solution
 
 
 

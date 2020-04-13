@@ -29,6 +29,8 @@ def parse_args():
                         help='list of exposures (in lieu of exps)')
     parser.add_argument('--exps', default='', nargs='+',
                         help='list of exposures to run')
+    parser.add_argument('--use_dat', default=False, action='store_const', const=True,
+                        help='Use the saved dat file, rather than recalculate')
 
     # Options
     parser.add_argument('--use_reserved', default=False, action='store_const', const=True,
@@ -75,7 +77,7 @@ def add_to_list(band, vlist, value):
     vlist[band].append(value)
 
 
-def bin_by_mag(m, dT, de1, de2, min_mused, bands):
+def bin_by_mag(m, dT, de1, de2, min_mused):
 
     import numpy as np
     import matplotlib.pyplot as plt
@@ -121,25 +123,49 @@ def bin_by_mag(m, dT, de1, de2, min_mused, bands):
     print('bin_de1 = ',bin_de1)
     print('bin_de2 = ',bin_de2)
     print('bin_dT = ',bin_dT)
+    return mag_bins[:-1], bin_dT, bin_dT_err, bin_de1, bin_de1_err, bin_de2, bin_de2_err
+
+def write_bins(data, outfile):
+    cols = np.array(data)
+    np.savetxt(outfile, cols, fmt='%.6e',
+               header='mag_bins  '+
+                      'dT  sig_dT '+
+                      'de1  sig_de1 '+
+                      'de2  sig_de2 ')
+    print('wrote',outfile)
+
+def read_bins(infile):
+    print('read',infile)
+    data = np.loadtxt(infile)
+    return data
+
+def plot_bins(data, outfile, min_mused=None):
+    mag_bins, bin_dT, bin_dT_err, bin_de1, bin_de1_err, bin_de2, bin_de2_err = data
 
     fig, axes = plt.subplots(2,1, sharex=True)
 
+    min_mag = 13.5
+    max_mag = 21
+    #min_mused = 15
+ 
     ax = axes[0]
     ax.set_ylim(-0.002,0.012)
     ax.plot([min_mag,max_mag], [0,0], color='black')
-    ax.plot([min_mused,min_mused],[-1,1], color='Grey')
-    ax.fill( [min_mag,min_mag,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
-    t_line = ax.errorbar(mag_bins[:-1], bin_dT, yerr=bin_dT_err, color='green', fmt='o')
+    if min_mused is not None:
+        ax.plot([min_mused,min_mused],[-1,1], color='Grey')
+        ax.fill( [min_mag,min_mag,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
+    t_line = ax.errorbar(mag_bins, bin_dT, yerr=bin_dT_err, color='green', fmt='o')
     ax.legend([t_line], [r'$\delta T$'])
     ax.set_ylabel(r'$T_{\rm PSF} - T_{\rm model} ({\rm arcsec}^2)$')
 
     ax = axes[1]
     ax.set_ylim(-3.e-4,6.5e-4)
     ax.plot([min_mag,max_mag], [0,0], color='black')
-    ax.plot([min_mused,min_mused],[-1,1], color='Grey')
-    ax.fill( [min_mag,min_mag,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
-    e1_line = ax.errorbar(mag_bins[:-1], bin_de1, yerr=bin_de1_err, color='red', fmt='o')
-    e2_line = ax.errorbar(mag_bins[:-1], bin_de2, yerr=bin_de2_err, color='blue', fmt='o')
+    if min_mused is not None:
+        ax.plot([min_mused,min_mused],[-1,1], color='Grey')
+        ax.fill( [min_mag,min_mag,min_mused,min_mused], [-1,1,1,-1], fill=False, hatch='/', color='Grey')
+    e1_line = ax.errorbar(mag_bins, bin_de1, yerr=bin_de1_err, color='red', fmt='o')
+    e2_line = ax.errorbar(mag_bins, bin_de2, yerr=bin_de2_err, color='blue', fmt='o')
     ax.legend([e1_line, e2_line], [r'$\delta e_1$', r'$\delta e_2$'])
     ax.set_ylabel(r'$e_{\rm PSF} - e_{\rm model}$')
 
@@ -148,20 +174,7 @@ def bin_by_mag(m, dT, de1, de2, min_mused, bands):
 
     fig.set_size_inches(7.0,10.0)
     plt.tight_layout()
-    plt.savefig('dpsf_mag_' + bands + '.pdf')
-
-    if True:
-        cols = np.array((mag_bins[:-1],
-                         bin_dT, bin_dT_err,
-                         bin_de1, bin_de1_err,
-                         bin_de2, bin_de2_err))
-        outfile = 'dpsf_mag_' + bands + '.dat'
-        np.savetxt(outfile, cols, fmt='%.6e',
-                   header='mag_bins  '+
-                          'dT  sig_dT '+
-                          'de1  sig_de1 '+
-                          'de2  sig_de2 ')
-        print('wrote',outfile)
+    plt.savefig(outfile)
 
 
 def bin_by_chip_pos(x, dT, de1, de2, bands, xy):
@@ -416,88 +429,102 @@ def main():
     keys = ['ra', 'dec', 'x', 'y', 'mag', 'obs_e1', 'obs_e2', 'obs_T', 'obs_flag',
             prefix+'_e1', prefix+'_e2', prefix+'_T', prefix+'_flag']
 
-    data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
-                                     use_reserved=args.use_reserved, frac=args.frac)
+    if not args.use_dat:
+        data, bands, tilings = read_data(exps, work, keys, limit_bands=args.bands, prefix=prefix,
+                                         use_reserved=args.use_reserved, frac=args.frac)
 
     use_bands = band_combinations(args.bands)
     for bands in use_bands:
-        this_data = data[np.in1d(data['band'], list(bands))]
-        if len(this_data) == 0:
-            print('No files with bands ',bands)
-            continue
-        print('bands = ',bands)
-        print('unique flags = ',np.unique(this_data[prefix+'_flag']))
+        if not args.use_dat:
+            this_data = data[np.in1d(data['band'], list(bands))]
+            if len(this_data) == 0:
+                print('No files with bands ',bands)
+                continue
+            print('bands = ',bands)
+            print('unique flags = ',np.unique(this_data[prefix+'_flag']))
 
+            if args.use_reserved:
+                RESERVED = 65
+                used = this_data[prefix+'_flag'] & ~RESERVED == 0
+            else:
+                used = this_data[prefix+'_flag'] == 0
 
-        if args.use_reserved:
-            RESERVED = 65
-            used = this_data[prefix+'_flag'] & ~RESERVED == 0
-        else:
-            used = this_data[prefix+'_flag'] == 0
+            print('used = ',used)
+            print('unique used = ',np.unique(used))
 
-        print('used = ',used)
-        print('unique used = ',np.unique(used))
+            ra = this_data['ra']
+            dec = this_data['dec']
+            x = this_data['x']
+            y = this_data['y']
+            m = this_data['mag']
+            print('full mag range = ',np.min(m),np.max(m))
+            print('used mag range = ',np.min(m[used]),np.max(m[used]))
 
-        #airmass = this_data['airmass']
-        #sky = this_data['sky']
-        #sigsky = this_data['sigsky']
-        #fwhm = this_data['fwhm']
+            e1 = this_data['obs_e1']
+            print('mean e1 = ',np.mean(e1))
+            e2 = this_data['obs_e2']
+            print('mean e2 = ',np.mean(e2))
+            T = this_data['obs_T']
+            print('mean s = ',np.mean(T))
+            pe1 = this_data[prefix+'_e1']
+            print('mean pe1 = ',np.mean(pe1))
+            pe2 = this_data[prefix+'_e2']
+            print('mean pe2 = ',np.mean(pe2))
+            pT = this_data[prefix+'_T']
+            print('mean pT = ',np.mean(pT))
 
-        #med_airmass = np.median(airmass)
-        #med_sky = np.median(sky)
-        #med_sigsky = np.median(sigsky)
-        #med_fwhm = np.median(fwhm)
-        #print('airmass: ',min(airmass),med_airmass,max(airmass))
-        #print('sky: ',min(sky),med_sky,max(sky))
-        #print('sigsky: ',min(sigsky),med_sigsky,max(sigsky))
-        #print('fwhm: ',min(fwhm),med_fwhm,max(fwhm))
-
-        ra = this_data['ra']
-        dec = this_data['dec']
-        x = this_data['x']
-        y = this_data['y']
-        m = this_data['mag']
-        print('full mag range = ',np.min(m),np.max(m))
-        print('used mag range = ',np.min(m[used]),np.max(m[used]))
-
-        e1 = this_data['obs_e1']
-        print('mean e1 = ',np.mean(e1))
-        e2 = this_data['obs_e2']
-        print('mean e2 = ',np.mean(e2))
-        T = this_data['obs_T']
-        print('mean s = ',np.mean(T))
-        pe1 = this_data[prefix+'_e1']
-        print('mean pe1 = ',np.mean(pe1))
-        pe2 = this_data[prefix+'_e2']
-        print('mean pe2 = ',np.mean(pe2))
-        pT = this_data[prefix+'_T']
-        print('mean pT = ',np.mean(pT))
-
-        print('min mag = ',np.min(m))
-        print('max mag = ',np.max(m))
-        print('mean T (used) = ',np.mean(T[used]))
-        print('mean e1 (used) = ',np.mean(e1[used]))
-        print('mean e2 (used) = ',np.mean(e2[used]))
-        print('mean pT (used) = ',np.mean(pT[used]))
-        print('mean pe1 (used) = ',np.mean(pe1[used]))
-        print('mean pe2 (used) = ',np.mean(pe2[used]))
-        de1 = e1 - pe1
-        de2 = e2 - pe2
-        dT = T - pT
-        print('mean dT (used) = ',np.mean(dT[used]))
-        print('mean de1 (used) = ',np.mean(de1[used]))
-        print('mean de2 (used) = ',np.mean(de2[used]))
+            print('min mag = ',np.min(m))
+            print('max mag = ',np.max(m))
+            print('mean T (used) = ',np.mean(T[used]))
+            print('mean e1 (used) = ',np.mean(e1[used]))
+            print('mean e2 (used) = ',np.mean(e2[used]))
+            print('mean pT (used) = ',np.mean(pT[used]))
+            print('mean pe1 (used) = ',np.mean(pe1[used]))
+            print('mean pe2 (used) = ',np.mean(pe2[used]))
+            de1 = e1 - pe1
+            de2 = e2 - pe2
+            dT = T - pT
+            print('mean dT (used) = ',np.mean(dT[used]))
+            print('mean de1 (used) = ',np.mean(de1[used]))
+            print('mean de2 (used) = ',np.mean(de2[used]))
 
         if args.use_psfex:
             min_mused = 0
+        elif args.use_dat:
+            # Save these by hand.  TODO: put this in output file?
+            d = { 'r' : 15.0976,
+                  'i' : 15.2468,
+                  'z' : 14.8781,
+                  'riz' : 14.8781 }
+            if not bands in d: continue
+            min_mused = d[bands]
         else:
             min_mused = np.min(m[used])
         print('min_mused = ',min_mused)
-        bin_by_mag(m, dT, de1, de2, min_mused, bands)
-        bin_by_mag(m[used], dT[used], de1[used], de2[used], min_mused, bands+'_used')
 
-        make_hist(dT, T, de1, de2, bands)
-        make_hist(dT[used], T[used], de1[used], de2[used], bands+'_used')
+        if args.use_dat:
+            infile1 = 'dpsf_mag_' + bands + '.dat'
+            bin_data1 = read_bins(infile1)
+
+            infile2 = 'dpsf_mag_' + bands + '_used.dat'
+            bin_data2 = read_bins(infile2)
+        else:
+            bin_data1 = bin_by_mag(m, dT, de1, de2, min_mused)
+            outfile1 = 'dpsf_mag_' + bands + '.dat'
+            write_bins(bin_data1, outfile1)
+
+            bin_data2 = bin_by_mag(m[used], dT[used], de1[used], de2[used], min_mused)
+            outfile2 = 'dpsf_mag_' + bands + '_used.dat'
+            write_bins(bin_data2, outfile2)
+
+        pdffile1 = 'dpsf_mag_' + bands + '.pdf'
+        plot_bins(bin_data1, pdffile1)
+
+        pdffile2 = 'dpsf_mag_' + bands + '_used.pdf'
+        plot_bins(bin_data2, pdffile2, min_mused)
+
+        #make_hist(dT, T, de1, de2, bands)
+        #make_hist(dT[used], T[used], de1[used], de2[used], bands+'_used')
 
         #bin_by_mag(m, T, e1, e2, min_mused, bands+'_orig')
         #bin_by_mag(m, pT, pe1, pe2, min_mused, bands+'_model')

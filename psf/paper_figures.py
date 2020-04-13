@@ -655,13 +655,13 @@ def make_whiskers(x, y, e1, e2, s, filename, scale=1, auto_size=False, title=Non
 
 def psf_whiskers(ccd, x, y, e1, e2, T, de1, de2, dT):
     psf_binned_data = bin_by_fov(ccd, x, y, e1, e2, T, nwhisk=4)
-    make_whiskers(*psf_binned_data, filename='psf_whiskers.eps', scale=3, title='PSF',
+    make_whiskers(*psf_binned_data, filename='psf_whiskers.pdf', scale=3, title='PSF',
                   ref=0.01, alt_ref=0.03)
     resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, dT, nwhisk=4)
-    make_whiskers(*resid_binned_data, filename='resid_whiskers.eps', scale=0.3, title='PSF residual',
+    make_whiskers(*resid_binned_data, filename='resid_whiskers.pdf', scale=0.3, title='PSF residual',
                   ref=0.01, alt_ref=0.03, ref_name=r'$\delta e$')
     resid_binned_data = bin_by_fov(ccd, x, y, de1, de2, dT, nwhisk=4)
-    make_whiskers(*resid_binned_data, filename='sm_resid_whiskers.eps', scale=3, title='PSF residual',
+    make_whiskers(*resid_binned_data, filename='sm_resid_whiskers.pdf', scale=3, title='PSF residual',
                   ref=0.01, alt_ref=0.03, ref_name=r'$\delta e$')
     #make_psf_whiskers(x,y,e1,e2,T,de1,de2,dT)
 

@@ -54,9 +54,9 @@ def parse_file_name(file_name):
     return root, ccdnum
 
 def plot_rho(meanr, rhop, sigp, sqrtn, rhom=None, sigm=None):
-    print 'meanr = ',meanr
-    print 'rhop = ',rhop
-    print 'sigp = ',sigp
+    #print 'meanr = ',meanr
+    #print 'rhop = ',rhop
+    #print 'sigp = ',sigp
     plt.plot(meanr, rhop, color='blue')
     plt.plot(meanr, -rhop, color='blue', ls=':')
     plt.errorbar(meanr[rhop>0], rhop[rhop>0], yerr=sigp[rhop>0]/sqrtn, color='blue', ls='')
@@ -83,7 +83,7 @@ def plot_rho(meanr, rhop, sigp, sqrtn, rhom=None, sigm=None):
     else:
         return [ lp ]
 
-def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=None):
+def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=None, gband=False):
     import matplotlib.patches as mp
     if False:
         # This is all handwavy arguments about what the requirements are.  
@@ -139,9 +139,15 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=No
         rho4_line = plt.errorbar(-meanr, rho4, yerr=sig4, color='red', marker='^')
     #sv_req = mp.Patch(color='#FFFF82')
     if rho3 is not None and rho4 is not None:
+        if gband:
+            loc = 'upper right'
+            fontsize = 18
+        else:
+            loc = 'upper right'
+            fontsize = 24
         plt.legend([rho1_line, rho3_line, rho4_line],
                    [r'$\rho_1(\theta)$', r'$\rho_3(\theta)$', r'$\rho_4(\theta)$'],
-                   loc='upper right', fontsize=24)
+                   loc=loc, fontsize=fontsize)
         #plt.ylim( [1.e-9, 5.e-6] )
         #plt.ylim( [1.e-9, 2.e-5] )
         plt.ylim( [1.e-10, 1.e-5] )
@@ -164,7 +170,7 @@ def pretty_rho1(meanr, rho, sig, sqrtn, rho3=None, sig3=None, rho4=None, sig4=No
     plt.yscale('log', nonposy='clip')
     plt.tight_layout()
 
-def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None):
+def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None, gband=False):
     import matplotlib.patches as mp
     # The requirements on rho2 are less stringent.  They are larger by a factor 1/alpha.
     # Let's use alpha = 0.03.
@@ -214,9 +220,15 @@ def pretty_rho2(meanr, rho, sig, sqrtn, rho5=None, sig5=None):
         rho5_line = plt.errorbar(-meanr, rho5, yerr=sig5, color='green', marker='s')
     #sv_req = mp.Patch(color='#FFFF82')
     if rho5 is not None:
+        if gband:
+            loc = 'lower right'
+            fontsize = 18
+        else:
+            loc = 'upper right'
+            fontsize = 24
         plt.legend([rho2_line, rho5_line],
                    [r'$\rho_2(\theta)$', r'$\rho_5(\theta)$'],
-                   loc='upper right', fontsize=24)
+                   loc=loc, fontsize=fontsize)
         #plt.ylim( [1.e-7, 5.e-4] )
         plt.ylim( [1.e-8, 1.e-5] )
     elif True: # For paper
@@ -374,6 +386,7 @@ def plot_single_rho(args,work):
                 print stat_file,' not found'
                 print 'No JSON file for this exposure.  Skipping.'
                 continue
+            print('Read %s'%stat_file)
             with open(stat_file,'r') as f:
                 stats = json.load(f)
 
@@ -771,10 +784,10 @@ def plot_overall_rho(work):
 
     print 'Plot overall rho stats'
 
-    #base_keys = ['riz', 'g', 'r', 'i', 'z', 'Y']
-    base_keys = ['riz', 'r', 'i', 'z']
+    base_keys = ['riz', 'g', 'r', 'i', 'z', 'Y']
+    #base_keys = ['riz', 'r', 'i', 'z']
     #base_keys = ['ri']
-    #base_keys = ['r']
+    #base_keys = ['g']
 
     # Build full key from these for the three kinds
     keys = [ 'all_' + k for k in base_keys ]
@@ -793,10 +806,11 @@ def plot_overall_rho(work):
             continue
 
         # Read the json file 
+        print('Read %s'%stat_file)
         with open(stat_file,'r') as f:
             stats = json.load(f)
 
-        print' stats = ',stats
+        #print' stats = ',stats
         if len(stats) == 1:  # I used to save a list of length 1 that in turn was a list
             stats = stats[0]
 
@@ -852,7 +866,7 @@ def plot_overall_rho(work):
         sig_rho5 = numpy.sqrt(var5p)
         sqrtn = 1
 
-        print 'meanr = ',meanr
+        #print 'meanr = ',meanr
 
         cols = [meanr,
                 rho1p, rho1m, sig_rho1,
@@ -886,11 +900,13 @@ def plot_overall_rho(work):
         print 'wrote',outfile
  
         plt.clf()
-        pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, sig_rho3, rho4p, sig_rho4)
+        pretty_rho1(meanr, rho1p, sig_rho1, sqrtn, rho3p, sig_rho3, rho4p, sig_rho4,
+                    gband=(key.endswith('g')))
         plt.savefig('rho1_' + key + '.pdf')
 
         plt.clf()
-        pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p, sig_rho5)
+        pretty_rho2(meanr, rho2p, sig_rho2, sqrtn, rho5p, sig_rho5,
+                    gband=(key.endswith('g')))
         plt.savefig('rho2_' + key + '.pdf')
 
         if len(stats) > 31:

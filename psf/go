@@ -3,13 +3,17 @@
 #FILE=zone033.riz
 #FILE=ten_zones.z
 #FILE=zone001.z
-#FILE=ally3.riz
-FILE=redo_exp
-#FILE=zones01.riz
-TAG=y3a1-v30
+FILE=ally3.riz
+#FILE=redo_exp
+#FILE=niall.txt
+#FILE=zones21.riz
+#FILE=unique-elist.exp
+#FILE=test.exp
+TAG=y3a1-v29
 
 #/bin/rm -f $DESDATA/EXTRA/blacklists/psfex-$TAG.txt
 #/bin/rm -rf ~/work/y3_piff/$TAG/*
-./run_wq_exp.py --njobs=250 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_piff.py --mag_cut=1.2 --max_mag=21 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=1 --reserve=0.2 --use_ngmix --blacklist=1 --clear_output=0"
+./run_wq_exp.py --njobs=500 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_piff.py --mag_cut=1.2 --max_mag=21 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=1 --reserve=0.2 --use_ngmix --blacklist=1 --clear_output=0"
 #./run_wq_exp.py --njobs=120 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_piff.py --mag_cut=1.2 --max_mag=21 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=0 --reserve=0.2 --use_ngmix --blacklist=0 --clear_output=0 --plot_fs --scratch=~/work/y3_piff/$TAG"
 #./run_condor.py --file=$FILE --tag=$TAG 
+#./run_wq_exp.py --njobs=1300 --cores_per_job=1 --file=$FILE --tag=go --cmd="./run_piff.py --mag_cut=1.2 --max_mag=21 --work=~/work/y3_piff/$TAG --tag=$TAG --rm_files=1 --reserve=0.2 --use_ngmix --blacklist=0 --clear_output=0 --pixmappy_dir=/gpfs/mnt/gpfs02/astro/workarea/mjarvis/Y6A1_ASTROMETRY --piff_config=/astro/u/mjarvis/rmjarvis/DESWL/psf/piff_y6.yaml"

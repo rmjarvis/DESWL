@@ -34,8 +34,8 @@ def parse_args():
                         help='Limit to the given bands')
     parser.add_argument('--frac', default=1., type=float,
                         help='Choose a random fraction of the input stars')
-    parser.add_argument('--lucas', default=False, action='store_const', const=True,
-                        help='Use 20 bins in [2.5, 250] arcmin (for Lucus)')
+    parser.add_argument('--opt', default=None, type=str,
+                        help='option to change binning [lucas, fine_bin]')
     parser.add_argument('--write_data', default=False, action='store_const', const=True,
                         help='Write out a psf_tag.fits file with the catalog info')
     parser.add_argument('--subtract_mean', default=False, action='store_const', const=True,
@@ -50,7 +50,7 @@ def parse_args():
 
 
 def measure_rho(data, max_sep, max_mag, tag=None, use_xy=False, prefix='piff',
-                alt_tt=False, lucas=False, subtract_mean=False, do_rho0=False):
+                alt_tt=False, opt=None, subtract_mean=False, do_rho0=False):
     """Compute the rho statistics
     """
     import treecorr
@@ -136,11 +136,17 @@ def measure_rho(data, max_sep, max_mag, tag=None, use_xy=False, prefix='piff',
         bin_size = 0.2,
     )
 
-    if lucas:
+    if opt == 'lucas':
         bin_config['min_sep'] = 2.5
         bin_config['max_sep'] = 250.
         bin_config['nbins'] = 20
         del bin_config['bin_size']
+
+    if opt == 'fine_bin':
+        bin_config['min_sep'] = 0.1
+        bin_config['max_sep'] = 2000.
+        bin_config['bin_size'] = 0.01
+
 
     pairs = [ (qcat, qcat),
               (ecat, qcat),
@@ -173,7 +179,7 @@ def measure_rho(data, max_sep, max_mag, tag=None, use_xy=False, prefix='piff',
     return results
 
 
-def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False):
+def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', opt=None):
     """Compute the rho statistics
     """
     import treecorr
@@ -214,11 +220,16 @@ def measure_cross_rho(tile_data, max_sep, tags=None, prefix='piff', lucas=False)
         bin_size = 0.2,
     )
 
-    if lucas:
+    if opt == 'lucas':
         bin_config['min_sep'] = 2.5
         bin_config['max_sep'] = 250.
         bin_config['nbins'] = 20
         del bin_config['bin_size']
+
+    if opt == 'fine_bin':
+        bin_config['min_sep'] = 0.1
+        bin_config['max_sep'] = 2000.
+        bin_config['bin_size'] = 0.01
 
     results = []
     for (catlist1, catlist2) in [ (qcats, qcats),
@@ -303,7 +314,7 @@ def write_stats(stat_file, rho1, rho2, rho3, rho4, rho5, rho0=None, corr_tt=None
 
 
 def do_canonical_stats(data, bands, tilings, work, max_mag, prefix='piff', name='all',
-                       alt_tt=False, lucas=False, subtract_mean=False, do_rho0=False):
+                       alt_tt=False, opt=None, subtract_mean=False, do_rho0=False):
     print('Start CANONICAL: ',prefix,name)
     # Measure the canonical rho stats using all pairs:
     use_bands = band_combinations(bands)
@@ -315,7 +326,7 @@ def do_canonical_stats(data, bands, tilings, work, max_mag, prefix='piff', name=
         print('len(data[mask]) = ',len(data[mask]))
         tag = ''.join(band)
         stats = measure_rho(data[mask], max_sep=300, max_mag=max_mag, tag=tag, prefix=prefix,
-                            alt_tt=alt_tt, lucas=lucas, subtract_mean=subtract_mean,
+                            alt_tt=alt_tt, opt=opt, subtract_mean=subtract_mean,
                             do_rho0=do_rho0)
         stat_file = os.path.join(work, "rho_%s_%s.json"%(name,tag))
         write_stats(stat_file,*stats)
@@ -508,7 +519,7 @@ def main():
     #bands = ['r', 'i']
 
     do_canonical_stats(data, bands, tilings, work,
-                       max_mag=args.max_mag, prefix=prefix, lucas=args.lucas,
+                       max_mag=args.max_mag, prefix=prefix, opt=args.opt,
                        subtract_mean=args.subtract_mean, do_rho0=args.do_rho0)
 
     #do_cross_tiling_stats(data, bands, tilings, work, prefix=prefix)

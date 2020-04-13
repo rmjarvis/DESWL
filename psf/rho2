@@ -6,12 +6,12 @@
 #TAG=y3a1-v16
 #FILE=ten_zones.riz
 #FILE=zones01.riz
-#FILE=ally3.riz
-FILE=ally3.Y
+#FILE=ally3.g
+FILE=ally3.grizY
 TAG=y3a1-v29
 
-#./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --bands=riz --do_rho0"
-./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --write_data --bands=Y"
+./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --bands=grizY --do_rho0"
+#./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --write_data --use_reserved --bands=riz --opt=fine_bin"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_reserved --subtract_mean --bands=riz --do_rho0 --max_mag=25"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG"
 #./run_wq_exp.py --njobs=1 --cores_per_job=12 --file=$FILE --tag=rho2 --cmd="./run_rho2.py --tag=$TAG --work=~/work/y3_piff/$TAG --use_psfex --use_reserved --do_rho0"

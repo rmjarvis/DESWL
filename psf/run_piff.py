@@ -599,15 +599,17 @@ def run_piff(df, img_file, cat_file, psf_file, piff_exe, piff_config,
     logger.info('   running piff')
     piff_cmd = '{piff_exe} {config} input.image_file_name={image} input.cat_file_name={cat} output.file_name={psf}'.format(
         piff_exe=piff_exe, config=piff_config, image=img_file, cat=piff_cat_file, psf=psf_file)
-    piff_cmd += ' input.wcs.file_name={pixmappy} input.wcs.exp={exp} input.wcs.ccdnum={ccdnum}'.format(
-        pixmappy=pixmappy, exp=exp, ccdnum=ccdnum)
+    if 'Y6' not in pixmappy:
+        piff_cmd += ' input.wcs.file_name={pixmappy}'.format(pixmappy=pixmappy)
+    piff_cmd += ' input.wcs.exp={exp} input.wcs.ccdnum={ccdnum}'.format(exp=exp, ccdnum=ccdnum)
     logger.info(piff_cmd)
     if True:
         config = piff.read_config(piff_config)
         config['input']['image_file_name'] = img_file
         config['input']['cat_file_name'] = piff_cat_file
         config['output']['file_name'] = psf_file
-        config['input']['wcs']['file_name'] = pixmappy
+        if 'Y6' not in pixmappy:
+            config['input']['wcs']['file_name'] = pixmappy
         config['input']['wcs']['exp'] = exp
         config['input']['wcs']['ccdnum'] = ccdnum
         piff.piffify(config, logger)
@@ -1281,22 +1283,31 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         fwhm = star_fwhm[3]
 
         # Get the pixmappy wcs for this ccd for correcting the shapes
-        dp = detpos[ccdnum]
-        wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0]
-        if len(wz) == 0:
-            logger.info('     -- Exposure not in which_zone file.  No Pixmappy solution.')
-            flag |= NO_PIXMAPPY
-            raise CatastrophicFailure()
+        if 'Y6' in args.pixmappy_dir:
+            pixmappy_file = args.pixmappy_dir
+            wcs = pixmappy.GalSimWCS(dir=args.pixmappy_dir,
+                                     file_name='y6a1.guts.astro',
+                                     exposure_file='y6a1.exposureinfo.fits',
+                                     affine_file='y6a1.affine.fits',
+                                     resids_file='y6a1.astroresids.fits',
+                                     exp=expnum, ccdnum=ccdnum, default_color=0)
         else:
-            wz = wz[0]
-        logger.info('row in which_zone is %s',wz)
-        #print('  ',which_zone[wz])
-        zone = which_zone['zone'][wz]
-        logger.info('zone = %s',zone)
-        row['zone'] = zone
-        pixmappy_file = os.path.join(args.pixmappy_dir, 'zone%03d.astro'%zone)
-        logger.info('pixmappy_file = %s',pixmappy_file)
-        wcs = pixmappy.GalSimWCS(pixmappy_file, exp=expnum, ccdnum=ccdnum, default_color=0)
+            dp = detpos[ccdnum]
+            wz = np.where((which_zone['expnum'] == expnum) & (which_zone['detpos'] == dp))[0]
+            if len(wz) == 0:
+                logger.info('     -- Exposure not in which_zone file.  No Pixmappy solution.')
+                flag |= NO_PIXMAPPY
+                raise CatastrophicFailure()
+            else:
+                wz = wz[0]
+            logger.info('row in which_zone is %s',wz)
+            #print('  ',which_zone[wz])
+            zone = which_zone['zone'][wz]
+            logger.info('zone = %s',zone)
+            row['zone'] = zone
+            pixmappy_file = os.path.join(args.pixmappy_dir, 'zone%03d.astro'%zone)
+            logger.info('pixmappy_file = %s',pixmappy_file)
+            wcs = pixmappy.GalSimWCS(pixmappy_file, exp=expnum, ccdnum=ccdnum, default_color=0)
         wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
 
         # Measure the shpes and sizes of the stars
@@ -1534,10 +1545,13 @@ def main():
         exps = list(set(all_exp['expnum']))
         logger.info('There are a total of %d exposures',len(exps))
 
-    which_zone = fitsio.read(os.path.join(args.pixmappy_dir, 'which_zone.fits'))
-    which_zone = pandas.DataFrame(which_zone)
-    if sys.version_info >= (3,):
-        which_zone['detpos'] = which_zone['detpos'].str.decode("utf-8")
+    if 'Y6' in args.pixmappy_dir:
+        which_zone = None
+    else:
+        which_zone = fitsio.read(os.path.join(args.pixmappy_dir, 'which_zone.fits'))
+        which_zone = pandas.DataFrame(which_zone)
+        if sys.version_info >= (3,):
+            which_zone['detpos'] = which_zone['detpos'].str.decode("utf-8")
 
     exps = sorted(exps)
     logger.info('exps = %s',exps)

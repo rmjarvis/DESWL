@@ -48,7 +48,7 @@ psf:
 
     outliers:
         type: Chisq
-        nsigma: 4
+        nsigma: 5.5
         max_remove: 0.01
 
 verbose: 2

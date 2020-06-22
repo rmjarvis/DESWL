@@ -203,7 +203,7 @@ def psf_hex(ccd, x, y, e1, e2, T, de1, de2, dT):
     fig.subplots_adjust(hspace=0.5, left=0.07, right=0.93)
     ax = axs[0]
     hb = ax.hexbin(u, v, de1, gridsize=ngrid, cmap='inferno', vmin=-vmax, vmax=vmax)
-    ax.set_title(r'$\Delta e1$')
+    ax.set_title(r'$\delta e_1$')
     ax.set_aspect('equal')
     ax.set_xlim(-75, 75)
     ax.set_ylim(-75, 75)
@@ -212,7 +212,7 @@ def psf_hex(ccd, x, y, e1, e2, T, de1, de2, dT):
 
     ax = axs[1]
     hb = ax.hexbin(u, v, de2, gridsize=ngrid, cmap='inferno', vmin=-vmax, vmax=vmax)
-    ax.set_title(r'$\Delta e2$')
+    ax.set_title(r'$\delta e_2$')
     ax.set_aspect('equal')
     ax.set_xlim(-75, 75)
     ax.set_ylim(-75, 75)
@@ -220,7 +220,7 @@ def psf_hex(ccd, x, y, e1, e2, T, de1, de2, dT):
 
     ax = axs[2]
     hb = ax.hexbin(u, v, dT, gridsize=ngrid, cmap='inferno', vmin=-vmax, vmax=vmax)
-    ax.set_title(r'$\Delta T/T$')
+    ax.set_title(r'$\delta T/T$')
     ax.set_aspect('equal')
     ax.set_xlim(-75, 75)
     ax.set_ylim(-75, 75)

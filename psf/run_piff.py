@@ -6,6 +6,7 @@ from __future__ import print_function
 import os
 import sys
 import shutil
+import socket
 import logging
 import datetime
 import traceback
@@ -102,6 +103,8 @@ def parse_args():
                         help='location of intermediate outputs')
     parser.add_argument('--scratch', default='/data/mjarvis/y3_piff',
                         help='location of intermediate outputs')
+    parser.add_argument('--noscratch', default=False, action='store_const', const=True,
+                        help='Use the regular work directory for everything.  No scratch.')
     parser.add_argument('--pixmappy_dir', default='/astro/u/mjarvis/work/y3_piff/astro',
                         help='location of pixmappy astrometric solutions')
     parser.add_argument('--tag', default=None,
@@ -257,9 +260,9 @@ def read_image_header(row, img_file, logger):
     #h = fitsio.read_header(img_file, hdu)
     # I don't  care about any of the lines the sometimes use CONITNUE (e.g. OBSERVER), so I
     # just remove them and make the header with the rest of the entries.
-    f = fitsio.FITS(img_file)
-    header_list = f[hdu].read_header_list()
-    header_list = [ d for d in header_list if 'CONTINUE' not in d['name'] ]
+    with fitsio.FITS(img_file) as f:
+        header_list = f[hdu].read_header_list()
+    header_list = [ d for d in header_list if d['name'] is not None and 'CONTINUE' not in d['name'] ]
     h = fitsio.FITSHDR(header_list)
     try:
         date = h['DATE-OBS']
@@ -485,6 +488,8 @@ def remove_bad_stars(df, ccdnum, tbdata,
         use = use & ~reserve
         #print('   final ids = ',df['id'][use].values)
         logger.info('   after reserve: nstars = %s',use.sum())
+    else:
+        df['reserve'] = np.zeros_like(use, dtype=bool)
 
     df['use'] = use
     return use.sum(), len(use)
@@ -1266,7 +1271,10 @@ def run_single_ccd(row, args, wdir, sdir, tbdata, which_zone, logger):
         row['ntot'] = ntot
         row['nstars'] = df['star_flag'].sum()
         row['nstars_piff'] = nstars
-        row['nreserve'] = np.sum(df['reserve'])
+        if 'reserve' in df:
+            row['nreserve'] = np.sum(df['reserve'])
+        else:
+            row['nreserve'] = 0
 
         # Get the median fwhm of the given stars
         # Returns min, max, mean, median.  We use median, which is index 3.
@@ -1512,6 +1520,8 @@ def main():
     if args.blacklist:
         logger.info('Logging blacklisted chips to %s',blacklist_file)
 
+    logger.info('Running on %s',socket.gethostname())
+
     # Make the work directory if it does not exist yet.
     work = os.path.expanduser(args.work)
     logger.info('work dir = %s',work)
@@ -1520,13 +1530,16 @@ def main():
             os.makedirs(work)
     except OSError:
         if not os.path.exists(work): raise
-    scratch = os.path.expanduser(args.scratch)
-    logger.info('scratch dir = %s',scratch)
-    try:
-        if not os.path.exists(scratch):
-            os.makedirs(scratch)
-    except OSError:
-        if not os.path.exists(scratch): raise
+    if args.noscratch:
+        scratch = work
+    else:
+        scratch = os.path.expanduser(args.scratch)
+        logger.info('scratch dir = %s',scratch)
+        try:
+            if not os.path.exists(scratch):
+                os.makedirs(scratch)
+        except OSError:
+            if not os.path.exists(scratch): raise
 
     # A listing Erin made of all the exposures in Y3 used in meds files
     all_exp = fitsio.read(args.base_exposures)

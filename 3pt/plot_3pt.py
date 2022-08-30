@@ -2,36 +2,52 @@ import treecorr
 import numpy as np
 import matplotlib.pyplot as plt
 
-wide = dict(min_sep=1, max_sep=5, sep_units='arcmin', nbins=5,
-            min_u=0.9, max_u=1, nubins=1,
-            min_v=0.0, max_v=1.0, nvbins=50, verbose=2)
+rmin = 1
+rmax = 25
+nr = 10
 
-narrow = dict(min_sep=1, max_sep=5, sep_units='arcmin', nbins=5,
+narrow = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
               min_u=0.0, max_u=1, nubins=20,
               min_v=0.0, max_v=0.1, nvbins=1, verbose=2)
 
+wide = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+            min_u=0.9, max_u=1, nubins=1,
+            min_v=0.0, max_v=0.8, nvbins=20, verbose=2)
 
-ggg_w = treecorr.GGGCorrelation(wide)
-ggg_w.read('wide.hdf')
-ggg_n = treecorr.GGGCorrelation(narrow)
-ggg_n.read('narrow.hdf')
+wider = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+             min_u=0.9, max_u=1, nubins=1,
+             min_v=0.8, max_v=0.95, nvbins=20, verbose=2)
+
+widest = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+              min_u=0.9, max_u=1, nubins=1,
+              min_v=0.95, max_v=1.0, nvbins=20, verbose=2)
+
+ggg1 = treecorr.GGGCorrelation(narrow)
+ggg1.read('narrow.hdf')
+ggg2 = treecorr.GGGCorrelation(wide)
+ggg2.read('wide.hdf')
+ggg3 = treecorr.GGGCorrelation(wider)
+ggg3.read('wider.hdf')
+ggg4 = treecorr.GGGCorrelation(widest)
+ggg4.read('widest.hdf')
 
 all_g_ttt = []
 all_sig_ttt = []
 all_meanr = []
 all_phi = []
 
-for ggg in [ggg_n, ggg_w]:
+for ggg in [ggg1, ggg2, ggg3, ggg4]:
 
     g_ttt = -0.25 * (ggg.gam0 + ggg.gam1 + ggg.gam2 + ggg.gam3).real
     var_ttt = 0.25**2 * (ggg.vargam0 + ggg.vargam1 + ggg.vargam2 + ggg.vargam3)
 
-    nr, nu, nv = g_ttt.shape
+    _nr, nu, nv = g_ttt.shape
     print(nr,nu,nv)
+    assert _nr == nr
     assert nv % 2 == 0
     nv //= 2
-
     assert nu == 1 or nv == 1
+
     d1 = ggg.meand1
     d2 = ggg.meand2
     d3 = ggg.meand3

@@ -16,18 +16,38 @@ cats_2 = [treecorr.Catalog(f, params_cat, patch=p) for p,f in enumerate(zbin2_fi
 cats_3 = [treecorr.Catalog(f, params_cat, patch=p) for p,f in enumerate(zbin3_files)]
 cats_4 = [treecorr.Catalog(f, params_cat, patch=p) for p,f in enumerate(zbin4_files)]
 
-wide = dict(min_sep=1, max_sep=5, sep_units='arcmin', nbins=5,
-            min_u=0.9, max_u=1, nubins=1,
-            min_v=0.0, max_v=1.0, nvbins=50, verbose=2)
+rmin = 1
+rmax = 5
+nr = 5
 
-narrow = dict(min_sep=1, max_sep=5, sep_units='arcmin', nbins=5,
+narrow = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
               min_u=0.0, max_u=1, nubins=20,
               min_v=0.0, max_v=0.1, nvbins=1, verbose=2)
 
-ggg1 = treecorr.GGGCorrelation(wide, var_method='bootstrap')
-ggg1.process(cats_4)
-ggg1.write('wide.hdf', write_patch_results=True)
+wide = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+            min_u=0.9, max_u=1, nubins=1,
+            min_v=0.0, max_v=0.8, nvbins=20, verbose=2)
 
-ggg2 = treecorr.GGGCorrelation(narrow, var_method='bootstrap')
+wider = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+             min_u=0.9, max_u=1, nubins=1,
+             min_v=0.8, max_v=0.95, nvbins=20, verbose=2)
+
+widest = dict(min_sep=rmin, max_sep=rmax, sep_units='arcmin', nbins=nr,
+              min_u=0.9, max_u=1, nubins=1,
+              min_v=0.95, max_v=1.0, nvbins=20, verbose=2)
+
+#ggg1 = treecorr.GGGCorrelation(narrow, var_method='bootstrap')
+#ggg1.process(cats_4)
+#ggg1.write('narrow.hdf', write_patch_results=True)
+
+ggg2 = treecorr.GGGCorrelation(wide, var_method='bootstrap')
 ggg2.process(cats_4)
-ggg2.write('narrow.hdf', write_patch_results=True)
+ggg2.write('wide.hdf', write_patch_results=True)
+
+ggg3 = treecorr.GGGCorrelation(wider, var_method='bootstrap')
+ggg3.process(cats_4)
+ggg3.write('wider.hdf', write_patch_results=True)
+
+ggg4 = treecorr.GGGCorrelation(widest, var_method='bootstrap')
+ggg4.process(cats_4)
+ggg4.write('widest.hdf', write_patch_results=True)
